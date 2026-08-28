@@ -1,12 +1,11 @@
 import { Button } from "@/components/ui/button";
 import { ConnectionPill, InstallSavannaButton, PwaStatusBanner } from "@/components/PwaExperience";
 import { MobileStoriesHeader } from "@/components/StoriesPanel";
-import { MobileNavIcon, type MobileNavIconName } from "@/components/AnimatedNavIcons";
+import { AnimatedPlusIcon, MobileNavIcon, type MobileNavIconName } from "@/components/AnimatedNavIcons";
 import { cn } from "@/lib/utils";
 import {
   ChevronDown,
   Command,
-  Plus,
   Search,
 } from "lucide-react";
 import { type ReactNode } from "react";
@@ -50,7 +49,7 @@ export function SavannaShell({ children, context }: SavannaShellProps) {
                 return <Link href={item.href} key={item.href} title={item.label} aria-label={item.label} className={cn("grid size-11 place-items-center rounded-2xl transition-all duration-200", active ? "bg-[#D9A441]/20 text-[#A87820] dark:text-[#D9A441]" : "text-[#8a765d]")}><MobileNavIcon name={item.label as MobileNavIconName} active={active} size={22} /><span className="sr-only">{item.label}</span></Link>;
               })}
             </nav>
-            <div className="mt-auto"><Button size="icon" className="size-11 rounded-2xl bg-[#e3a43c] text-[#3a260e] shadow-none hover:bg-[#cd8520]" aria-label="Open creator menu"><Plus className="size-5" /></Button></div>
+            <div className="mt-auto"><Button size="icon" className="savanna-brand-token size-11 rounded-2xl shadow-none" aria-label="Open creator menu"><AnimatedPlusIcon size={20} /></Button></div>
           </> : <>
           <Link href="/" aria-label="Savanna home" className="mb-11 px-3 text-[32px]">
             <span className="savanna-wordmark">Savanna</span>
@@ -78,8 +77,8 @@ export function SavannaShell({ children, context }: SavannaShellProps) {
           </nav>
 
           <div className="mt-auto space-y-4">
-            <Button className="h-12 w-full rounded-2xl bg-[#e3a43c] text-[#3a260e] shadow-none hover:bg-[#cd8520]" aria-label="Open creator menu">
-              <Plus className="mr-2 size-4" /> Create
+            <Button className="savanna-brand-token h-12 w-full rounded-2xl shadow-none" aria-label="Open creator menu">
+              <AnimatedPlusIcon size={16} className="mr-2" /> Create
             </Button>
             <InstallSavannaButton />
             <button className="flex w-full items-center gap-3 rounded-2xl p-2 text-left transition-colors hover:bg-[#f1dfbf]" aria-label="Open account menu">
@@ -105,8 +104,8 @@ export function SavannaShell({ children, context }: SavannaShellProps) {
               </span>
             </button>
             <div className="flex items-center gap-2">
-              <Button className="rounded-xl bg-[#5d3a0c] px-4 text-white shadow-none hover:bg-[#412607]">
-                <Plus className="mr-1.5 size-4" /> Create
+              <Button className="savanna-brand-token rounded-xl px-4 shadow-none">
+                <AnimatedPlusIcon size={16} className="mr-1.5" /> Create
               </Button>
             </div>
           </div> : null}
@@ -126,10 +125,10 @@ export function SavannaShell({ children, context }: SavannaShellProps) {
           const active = location === item.href;
           return (
             <Link href={item.href} key={item.href} className="flex min-w-0 flex-1 flex-col items-center gap-1 rounded-xl px-1 py-1.5 text-[10px] font-medium">
-              <span className={cn("grid h-9 place-items-center transition-[width,background-color] duration-200", active ? "w-14 rounded-full bg-[#D9A441]/20 text-[#A87820] dark:text-[#D9A441]" : "w-9 rounded-xl text-[#8a765d]")}>
+              <span className={cn("grid h-9 place-items-center transition-[width,background-color] duration-200", active ? "w-14 rounded-full bg-[#D9A441]/20 text-[#D9A441] dark:text-[#D9A441]" : "w-9 rounded-xl text-[#8a765d]")}>
                 <MobileNavIcon name={item.label as MobileNavIconName} active={active} size={22} />
               </span>
-              <span className={cn("truncate", active ? "text-[#A87820] dark:text-[#D9A441]" : "text-[#8a765d]")}>{item.label}</span>
+              <span className={cn("truncate", active ? "text-[#D9A441] dark:text-[#D9A441]" : "text-[#8a765d]")}>{item.label}</span>
             </Link>
           );
         })}

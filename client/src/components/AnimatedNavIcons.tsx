@@ -188,7 +188,7 @@ export function AnimatedSendIcon({ size = 18, pulse = 0, ...props }: AnimatedIco
     icon.current?.startAnimation();
   }, [pulse]);
 
-  return <SendHorizontalIcon ref={icon} size={size} className={props.className} />;
+  return <SendHorizontalIcon ref={icon} size={size} {...props} />;
 }
 
 export function AnimatedMenuIcon({ size = 20, pulse = 0, ...props }: AnimatedIconProps) {

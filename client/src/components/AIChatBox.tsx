@@ -2,7 +2,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { Loader2, Send, User, Sparkles } from "lucide-react";
+import { Loader2, User, Sparkles } from "lucide-react";
+import { AnimatedSendIcon } from "@/components/AnimatedNavIcons";
 import { useState, useEffect, useRef } from "react";
 import { Streamdown } from "streamdown";
 
@@ -321,12 +322,13 @@ export function AIChatBox({
           type="submit"
           size="icon"
           disabled={!input.trim() || isLoading}
-          className="shrink-0 h-[38px] w-[38px]"
+          aria-label="Send message"
+          className="savanna-send-button shrink-0 h-[38px] w-[38px] rounded-xl border-0 bg-[#D9A441]/20 text-[#D9A441] shadow-none hover:bg-[#D9A441]/30 hover:text-[#D9A441]"
         >
           {isLoading ? (
             <Loader2 className="size-4 animate-spin" />
           ) : (
-            <Send className="size-4" />
+            <AnimatedSendIcon size={18} />
           )}
         </Button>
       </form>
