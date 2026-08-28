@@ -1,0 +1,177 @@
+# Project TODO
+
+- [x] Establish Savanna’s desktop-first visual system, global navigation, responsive breakpoints, and accessibility baseline.
+- [x] Configure Progressive Web App metadata, manifest, install prompt, service worker, offline shell, and offline fallback states.
+- [x] Implement Savanna’s browser-supported install prompt and platform-specific installation guidance.
+- [x] Add explicit offline and reconnect states that prevent live payment actions while connectivity is unavailable.
+- [x] Implement a reusable network-state guard that blocks payment actions while offline and communicates a reconnect-required state.
+- [x] Implement authenticated account profiles, privacy settings, session/device controls, block controls, and report flows.
+- [x] Implement unique session identifiers, current-session awareness, and enforced session revocation in the authenticated request path.
+- [x] Add contextual block/report controls with scoped evidence selection and confirmation on profile, conversation, Story, storefront, and course surfaces.
+- [x] Implement direct and group conversation records, media attachment metadata, conversation search, and sent/delivered/read message states.
+- [x] Implement a Telegram-inspired Stories surface with a pull/overscroll expansion interaction and a compact-on-scroll header state.
+- [x] Implement public story publishing, viewer controls, expiry, reporting, and separate privacy rules from private chat.
+- [x] Implement Instagram-style business profiles with biography, verification state, contact actions, product grid, product detail, transparent pricing, and order actions.
+- [x] Implement merchant onboarding for business profiles, verification state, catalogs, products, pricing, inventory, and payment-settlement configuration.
+- [x] Implement creator storefronts, course publishing, lesson modules, video lesson metadata, purchase gating, and learner progress tracking.
+- [x] Implement partner-led checkout and country-specific payment adapter contracts with amount, fee, recipient confirmation, receipts, and payment status handling.
+- [x] Implement customer order history, seller order-status updates, and a merchant conversation entry point for product questions and support.
+- [x] Define and migrate relational database tables for users, profiles, privacy, conversations, messages, stories, storefronts, products, courses, lessons, enrollments, orders, payment intents, receipts, reports, and audit events using UTC timestamps.
+- [x] Establish distinct data-access policies for encrypted private chat, public stories, storefronts, courses, and payment records, including consent boundaries for payment partners.
+- [x] Add typed tRPC procedures, authorization checks, and server-side validation for every initial domain module.
+- [x] Write Vitest coverage for core authorization, privacy, order, course-access, and payment-state rules.
+- [x] Validate desktop and mobile-responsive interaction flows, keyboard navigation, offline states, and screen-reader semantics.
+- [x] Create final technical documentation, verify the TODO status, save a checkpoint, and present the first build milestone.
+- [ ] Configure live mobile-money provider credentials, approved callbacks, signed-webhook verification, and country-specific compliance checks before allowing real transactions.
+- [ ] Add production real-time message fan-out and direct/resumable media uploads before supporting high-volume chat or long-form course video.
+- [x] Add Flutterwave to the country-aware payment-provider catalog and disabled-by-default adapter contract, including its callback verification boundary.
+- [x] Update checkout and merchant settlement selection so Flutterwave coverage is available wherever its country, currency, and merchant eligibility rules allow it.
+- [x] Superseded the temporary Ember header experiment in favor of the confirmed Savanna brand.
+- [x] Apply Savanna’s amber accent system consistently across navigation, primary actions, highlights, focus states, and responsive surfaces.
+- [x] Audit all remaining client pages and components for residual Ember copy and direct green utilities, retaining Savanna naming and amber accents without relying solely on partial global overrides.
+- [x] Verify explicit Savanna hover, focus, active, selected, dark-mode, and responsive states across every major route before completing the visual-system milestone.
+- [x] Replace the Ember wordmark with an all-caps Monoton SAVANNA wordmark in the shared desktop and mobile headers.
+- [x] Implement black SAVANNA wordmark rendering in light mode and white SAVANNA wordmark rendering in dark mode, retaining amber only for interface accents.
+- [x] Restore Savanna naming in browser and PWA install metadata while preserving the amber interface visual system.
+- [x] Show the course-unavailable state when course detail retrieval fails instead of leaving the route on a loading spinner.
+- [x] Move Telegram-style Stories into the mobile header and make the strip expand on top-of-page pull/overscroll before collapsing as content scrolls.
+- [x] Rebuild the mobile Messages list with a WhatsApp-familiar header, search, chat filters, user-managed tabs, and an enhanced Savanna chat-list experience.
+- [x] Make mobile Story creation and Story viewing functional from the shared header strip.
+- [x] Enable opening and using a conversation from Savanna’s mobile chat list.
+- [x] Persist user-managed mobile chat-tab membership and filter chats by the selected tab.
+- [x] Switch the SAVANNA wordmark to Ramabhadra while preserving solid black light-mode and white dark-mode rendering.
+- [x] Make mobile Stories collapse immediately into a compact header strip when the page begins to scroll.
+- [x] Remove surplus mobile Messages copy and outer list containers for a clean edge-to-edge chat-list hierarchy.
+- [x] Move new-chat account entry into an accessible modal opened from the mobile Messages plus FAB.
+- [x] Rework mobile Stories collapse behavior to use a compact, Telegram-inspired avatar rail when scrolling, rather than only shrinking the current header block.
+- [x] Add a mobile hamburger menu to the left of the SAVANNA wordmark that opens profile navigation.
+- [x] Remove the Home item from desktop and mobile primary navigation.
+- [x] Remove the mobile Messages title and place its create-chat FAB above the bottom navigation.
+- [x] Implement the mobile profile-navigation drawer opened by the hamburger control.
+- [x] Rebuild the mobile header and Stories rail using the supplied collapsible-header interaction model, including distinct expanded and compact visual states.
+- [x] Match the compact Stories rail to the supplied reference with an avatar-first horizontal strip and no expanded Stories label during scroll.
+- [x] Translate the supplied collapsible-header model into distinct Savanna mobile Stories heights, with labeled circular Stories when expanded and a short unlabeled avatar rail when collapsed.
+- [x] Replace the separate mobile header and Stories presentations with one shared Stories component that owns expanded strip and collapsed avatar-cluster states.
+- [x] Adapt the supplied Stories component’s accessible viewer, author grouping, and expanded/collapsed Story affordances to Savanna’s existing tRPC Story APIs without copying incompatible application modules.
+- [x] Group Savanna mobile Stories by author for both the expanded strip and collapsed avatar cluster while retaining tRPC-backed Story access.
+- [x] Replace the single-Story mobile modal with an accessible per-author Story viewer featuring progress indicators and previous/next navigation.
+- [x] Implement a distinct overlapping collapsed avatar cluster for scrolled mobile Stories, driven by the grouped author data.
+- [x] Add regression coverage and visual verification for the grouped compact cluster independently of the expanded Stories strip.
+- [x] Move the collapsed grouped Stories cluster into the same mobile app-bar row as the hamburger and SAVANNA wordmark, removing the separate collapsed Stories row.
+- [x] Restyle only the expanded mobile Stories strip to use the same surface color as Savanna’s application header, with the supplied add-story tile and circular Story presentation.
+- [x] Add development-only preview Stories for mobile UX review without inserting sample records into Savanna’s database or presenting them as user content.
+- [x] Keep the full SAVANNA wordmark visible beside the compact Story cluster at the mobile breakpoint.
+- [x] Label development-only preview Stories visibly so they cannot be mistaken for live user content, while retaining their existing development-only and no-real-Stories gate.
+- [x] Remove the expanded mobile Stories preview text and the visual divider between the mobile app bar and Stories strip.
+- [x] Replace the expanded “Your Story” tile treatment with the viewer’s avatar plus a 5 o’clock edge-aligned add control, without a dotted tile border.
+- [x] Simplify the compact mobile Stories header to three slightly larger overlapping author avatars with no add control.
+- [x] Apply the supplied Ivory–Obsidian–Gold semantic theme palette across Savanna’s global light/dark tokens and shared component surfaces without changing existing behaviors.
+- [x] Render the signed-in user’s saved profile avatar in the expanded “Your Story” control, retaining initials only when no avatar is available, and cover the avatar-plus-edge-badge structure with regression checks.
+- [x] Resolve development preview Story colors safely for negative review-only IDs so author initials remain visible in light and dark mobile headers.
+- [x] Replace or explicitly map every remaining user-facing direct green utility to the supplied Gold palette, then re-audit source and visual output for unintended green styling.
+- [x] Verify navigation, primary actions, highlights, hover, focus, active, selected, dark-mode, and responsive states on every major Savanna route before completing the visual-system milestone.
+- [x] Audit route-specific detail and checkout surfaces in light/dark desktop and responsive mobile viewports, correcting any remaining semantic palette or contrast issues.
+- [x] Remove the expanded mobile Stories label and tighten the spacing between the SAVANNA wordmark and the Stories strip.
+- [x] Remove Gold borders from cards and the mobile bottom navigation while preserving accessible focus visibility.
+- [x] Align the mobile dark theme with the supplied reference palette: #111B21 background, #202C33 panels, #2A3942 bubbles, #25D366 action green replaced by Savanna Gold, and #E9EDEF text where applicable; retain the user’s Ivory light theme.
+- [x] Correct mobile Messages chat-list padding and add clearly labeled development-only dummy chats that are not persisted or sent to chat APIs.
+- [x] Add regression coverage for the Stories label removal, border-free cards/navigation, theme mappings, and ephemeral dummy-chat gate.
+- [x] Audit mobile card-like surfaces, drawers, and detail forms for remaining decorative Gold or brown borders; remove them while keeping focus indication on actual interactive controls.
+- [x] Re-run mobile light/dark visual verification for Messages list/detail, new-chat drawer, and bottom navigation after the complete decorative-border cleanup.
+- [x] Remove decorative border widths from portal-rendered mobile drawers and any remaining mobile detail/form chrome, while preserving focus rings on actual interactive controls.
+- [x] Re-run mobile light/dark visual verification specifically for the Messages conversation detail view after the complete border cleanup, alongside the list, drawer, and bottom navigation states.
+- [x] Reduce expanded mobile Stories header height and eliminate excess vertical space between the top application row and Story avatars.
+- [x] Route the mobile hamburger directly to the Savanna profile page and move the light/dark appearance control into the Profile screen.
+- [x] Remove the mobile header bell and appearance-toggle icons while preserving the search control and compact Stories cluster.
+- [x] Match mobile dark chat presentation to the supplied reference with Savanna Gold for brand actions, reference-aligned neutral icons, and blue delivered/read ticks.
+- [x] Extend regression coverage and verify expanded/compact mobile headers, profile appearance control, and chat status treatment in both themes.
+- [x] Refine mobile Messages icon colors across chat rows, the conversation header, attachment/send controls, and status affordances to match the supplied dark reference, then visually verify both themes.
+- [x] Render blue double-ticks only for delivered/read message statuses, with non-blue sent and failed affordances, including explicit development preview status data.
+- [x] Add deterministic regression coverage for status-specific message tick behavior and verify the status affordances in light and dark mobile views.
+- [x] Apply the supplied #0A1014 / #050A0E / #131A1E / #23282C / #2C3336 / #5C6366 / #9AA1A6 / #F0F2F5 dark chat roles across Savanna’s dark mobile surfaces.
+- [x] Replace the supplied reference’s green active states with Savanna Gold and Deep Gold while retaining #53BDEB read receipts and #FF5B6B alerts.
+- [x] Remove Profile from the mobile bottom navigation while retaining Profile access through the hamburger route.
+- [x] Add regression coverage and visually verify the supplied dark palette, Gold substitutions, blue receipt/alert colors, and reduced mobile navigation in both themes.
+- [x] Apply Deep Gold (#A87820) to the darker active and selected mobile chat-state treatment, then verify it in light and dark themes.
+- [x] Assert Savanna’s actual Gold and Deep Gold active-state mappings in regression coverage alongside preserved blue delivered/read ticks and red failed indicators.
+- [x] Match the dark mobile bottom-navigation background to Savanna’s mobile header and use the chat-list primary-text color for inactive icons and labels.
+- [x] Style the active mobile filter tab with a 20% Gold surface and 0.5px Gold border, preserving readable Gold text.
+- [x] Style inactive mobile filter tabs with the dark chat background and a 0.5px quiet border.
+- [x] Add regression coverage and verify the adjusted mobile dark filter/navigation hierarchy in light and dark themes.
+- [x] Render the active mobile bottom-navigation item with a 20% Gold surface and Gold icon/label rather than a solid Gold fill.
+- [x] Increase mobile chat search-field rounding and match its icon and placeholder to the chat-list Preview secondary-text tone.
+- [x] Match inactive mobile filter-tab text and expanded Story labels to the chat-list Preview secondary-text tone.
+- [x] Add regression coverage and visually verify the revised mobile navigation, search, filter, and Story-label hierarchy in light and dark themes.
+- [x] Match the mobile search icon to the chat-list Preview secondary-text tone in both themes, then protect the rounded search, placeholder, and icon mappings in regression coverage.
+- [x] Replace the four mobile bottom-navigation icons with larger animated message, store, learn, and shopping-bag icons based on the user-supplied designs.
+- [x] Trigger the mobile navigation icon animation on navigation activation while respecting reduced-motion preferences and preserving existing route behavior.
+- [x] Add regression coverage and verify the animated icons, sizing, active/inactive hierarchy, and responsive mobile navigation rendering.
+- [x] Replace chat-list delivered/read double ticks with the supplied activation-animated check icon while preserving blue delivered/read semantics only.
+- [x] Match all mobile chat-row message preview text to the existing Preview secondary-text hierarchy in light and dark themes.
+- [x] Replace mobile header search and chat-search icons with the supplied animated search treatment, retaining correct accessible labels and Preview-tone styling.
+- [x] Use the supplied animated plus treatment for the mobile Messages FAB and chat-filter add control without changing their current actions.
+- [x] Restore full activation animation for the Learn and Orders mobile navigation icons and cover the new animated control mappings with regression checks and mobile visual verification.
+- [x] Replace the mobile Profile hamburger with the supplied staggered animated menu icon while retaining its direct Profile navigation and compact Stories-header layout.
+- [x] Apply the established #0A1014 / #131A1E / #23282C dark mobile surface hierarchy to Shops, Learn, and Orders without changing domain behavior.
+- [x] Align mobile Shops, Learn, and Orders text, controls, empty states, filters, and primary actions to Savanna’s Gold, Preview-secondary, primary-text, blue-info, and red-alert hierarchy.
+- [x] Add context-appropriate animated icons within the mobile Shops, Learn, and Orders screens, preserving accessible labels and reduced-motion preferences.
+- [x] Add regression coverage and verify mobile light/dark Shops, Learn, and Orders visual states alongside active navigation styling.
+- [x] Upload and integrate the supplied shopping_banner.png and learn_banner.png as responsive Shops and Learn hero banners, replacing the specified text-only hero headings.
+- [x] Add a truthful featured-product discovery section and filter tabs to Shops using existing storefront and product data, without paid-placement claims or fabricated merchandise.
+- [x] Add truthful featured, top, and paid-course discovery sections and course/lesson filters to Learn using existing course and lesson data, without fabricated enrollment or popularity claims.
+- [x] Extend mobile dark-mode banner, tab, empty-state, and discovery-card styling to the established Savanna chat visual hierarchy.
+- [x] Add regression coverage and visually verify mobile and desktop Shops/Learn banner, filter, and discovery states in both themes.
+- [x] Bring the mobile Profile screen’s surfaces, text hierarchy, controls, and appearance toggle into Savanna’s established dark chat palette.
+- [x] Bring the new-chat modal opened from the mobile Messages FAB into the established dark chat palette, including inputs, controls, and focus states.
+- [x] Apply the refined Messages chat-list hierarchy, filters, animated controls, status affordances, and dark palette consistently to the desktop web Messages experience.
+- [x] Add regression coverage and verify mobile Profile/modal plus desktop Messages views in light and dark themes.
+- [x] Remove remaining legacy green and Obsidian-tone desktop dark-theme mappings so desktop Messages uses the established #0A1014 / #131A1E / #23282C chat roles with Gold accents.
+- [x] Replace the wide desktop text navigation with a narrow icon-only primary rail while preserving accessible labels, routes, Profile access, and active-state hierarchy.
+- [x] Rebuild desktop Messages as a mobile-style SAVANNA conversation panel with search, Stories, filters, and chat rows beside a persistent selected-conversation panel.
+- [x] Preserve protected data behavior, development-only chat previews, animated icon behavior, blue delivered/read receipts, red failures, and keyboard access in the desktop redesign.
+- [x] Add regression coverage and verify the three-column desktop Messages workspace and mobile non-regression in both themes.
+- [x] Set the desktop Messages conversation-list panel to 470px while preserving the narrow icon rail and responsive mobile breakpoint.
+- [x] Match desktop Messages list-panel canvas, chat rows, search field, Story labels, filters, and text hierarchy precisely to the established mobile dark chat roles.
+- [x] Add the requested quiet right border to the desktop chat-list panel and retain the #0A1014 conversation canvas.
+- [x] Add regression coverage and visually verify desktop/mobile dark palette parity, 470px panel width, row treatment, and divider rendering.
+- [x] Restore compact edge-to-edge mobile chat rows with the reference-aligned avatar, name, preview, timestamp, and vertical density treatment instead of raised dark cards.
+- [x] Correct mobile Messages spacing from Stories through filters and chat rows, retaining the rounded search field and clear primary/Preview text hierarchy.
+- [x] Ensure the message-list content and compose FAB clear the four-item mobile bottom navigation at short mobile viewport heights without creating excess empty space.
+- [x] Add regression coverage and verify reference-aligned mobile light/dark Messages layouts at 375px, including expanded and compact Stories states.
+- [x] Pin the mobile Messages header/Stories control and four-item bottom navigation to the viewport without obscuring scrollable list content or the FAB.
+- [x] Move the mobile Messages search field down slightly and add horizontal insets while retaining its rounded Preview-tone treatment.
+- [x] Add the requested left inset to the horizontally scrollable mobile chat-filter tab menu without clipping its content.
+- [x] Change the selected mobile bottom-navigation treatment from a circular icon badge to a restrained 20% Gold pill while retaining Gold icon/label semantics.
+- [x] Add regression coverage and verify mobile light/dark scroll behavior, fixed chrome, control spacing, and navigation-pill rendering at 375px.
+- [x] Restore the mobile Messages dark list canvas to #0A1014, reserving #131A1E for the intended raised surfaces only.
+- [x] Correct mobile header and bottom-navigation fixed positioning so both remain anchored to the browser preview viewport as well as on-device scrolling.
+- [x] Preserve scroll-safe content offsets, the 20% Gold active navigation pill, Stories compaction, FAB clearance, and mobile dark text/status hierarchy after the correction.
+- [x] Add regression coverage and verify the corrected browser-preview/mobile dark Messages canvas and fixed-chrome behavior at 375px.
+- [x] Set the mobile Savanna header and expanded Stories surface to the exact #0A1014 chat-list canvas in dark mode, removing all legacy green/raised-surface tint.
+- [x] Add regression coverage and visually verify exact dark header-to-chat-canvas color parity without changing the established mobile layout or interaction behavior.
+- [x] Set expanded mobile Story author labels to the exact same secondary color as the mobile Messages search placeholder in light and dark themes.
+- [x] Add regression coverage and verify Story-label/search-placeholder color parity without altering the current header or list layout.
+- [x] Route Savanna’s default application entry to Messages while retaining access to the existing Home experience through a deliberate route or navigation path.
+- [x] Apply the supplied enlarged animated Menu and Search behaviors to the mobile header while preserving labels, Profile routing, search behavior, and reduced-motion preferences.
+- [x] Use Savanna’s shared animated Messages, Shops, Learn, Orders, and Profile icons in desktop icon rails and expanded sidebar navigation with equivalent activation and hover motion.
+- [x] Add regression coverage and verify default routing plus mobile/desktop animated icon behavior in light and dark themes.
+- [x] Make the mobile header Menu and Search icons visibly run their supplied animation on press, tap, focus, and hover while respecting reduced-motion preferences.
+- [x] Increase the mobile header Menu and Search control and icon dimensions to make the requested scale change clear without disturbing the Story rail.
+- [x] Make desktop icon-rail and expanded-sidebar navigation symbols animate on pointer hover as well as active-route changes.
+- [x] Add regression coverage and verify mobile press motion, desktop hover motion, and enlarged mobile header control dimensions.
+- [x] Increase the desktop Messages-panel SAVANNA wordmark without changing mobile wordmark typography or spacing.
+- [x] Make the selected desktop chat-list row use the same #23282C search-surface color in dark mode, retaining mobile’s 20% Gold selection behavior.
+- [x] Increase desktop Messages search-field rounding without changing the mobile search control.
+- [x] Make development-only desktop preview chats open a non-persistent preview conversation with no database mutation, real chat API calls, or production exposure.
+- [x] Add regression coverage and verify desktop-only visual and preview behavior plus mobile non-regression.
+- [x] Set the desktop Messages wordmark to 28px without changing mobile typography.
+- [x] Add restrained rounding to the selected desktop chat-list row while retaining the #23282C dark search-surface mapping.
+- [x] Match dark-mode incoming chat bubbles to the selected-tab surface, and match conversation headers and composer containers to the dark desktop sidebar surface.
+- [x] Increase dark chat composer input rounding and replace send controls on web and mobile with the supplied animated send icon rotated 45 degrees counter-clockwise.
+- [x] Allow development-only preview chats to open a non-persistent mobile chat preview, preserving zero API mutation, zero database writes, and production omission.
+- [x] Add regression coverage and verify desktop/mobile conversation visual states, animated send controls, and preview safeguards.
+- [x] Set incoming dark chat bubbles to the exact #23282C input-surface color on desktop and mobile, removing the unintended Gold tint.
+- [x] Replace the current send glyph with the newly supplied animated send icon, rotated 45 degrees counter-clockwise, for both desktop and mobile chat composers.
+- [x] Add regression coverage and visually verify dark preview conversations, the shared input/bubble surface mapping, and the supplied send-icon motion across web and mobile.
+- [ ] Create an initial Git commit containing the verified current Savanna PWA project state.
+- [ ] Push the initial Savanna commit to https://github.com/KudzayiKing/savanna-pwa.git and verify the remote branch.
