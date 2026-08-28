@@ -19,13 +19,15 @@ const navigation = [
   { href: "/profile", label: "Profile" },
 ];
 
+const mobileNavigation = navigation.filter((item) => item.href !== "/profile");
+
 type SavannaShellProps = {
   children: ReactNode;
   context?: ReactNode;
 };
 
 export function SavannaShell({ children, context }: SavannaShellProps) {
-  const [location, setLocation] = useLocation();
+  const [location] = useLocation();
   const isMessagesWorkspace = location === "/messages";
   const usesIconRail = ["/messages", "/shops", "/learn", "/orders", "/profile"].includes(location);
 
@@ -37,7 +39,7 @@ export function SavannaShell({ children, context }: SavannaShellProps) {
 
       <PwaStatusBanner />
 
-      <MobileStoriesHeader onOpenProfile={() => setLocation("/profile")} />
+      <MobileStoriesHeader />
 
       <div className={cn("mx-auto flex min-h-screen", usesIconRail ? "max-w-none" : "max-w-[1720px]")}>
         <aside className={cn("sticky top-0 hidden h-screen shrink-0 flex-col lg:flex", usesIconRail ? "savanna-message-rail w-[84px] items-center border-r px-3 py-5" : "w-[248px] border-r border-[#eadfca] bg-[#f6f0e2] px-4 py-7")}>
@@ -120,12 +122,12 @@ export function SavannaShell({ children, context }: SavannaShellProps) {
         ) : null}
       </div>
 
-      <nav aria-label="Mobile navigation" className="savanna-mobile-bottom-nav savanna-glass-bottom-nav fixed bottom-[max(0.75rem,calc(env(safe-area-inset-bottom)+0.5rem))] left-1/2 z-50 flex h-[60px] w-[min(calc(100vw-1.5rem),430px)] items-center rounded-full px-2 py-1.5 backdrop-blur-xl lg:hidden">
-        {navigation.slice(0, 4).map((item) => {
+      <nav aria-label="Mobile navigation" className="savanna-mobile-bottom-nav savanna-glass-bottom-nav fixed bottom-[max(0.75rem,calc(env(safe-area-inset-bottom)+0.5rem))] left-1/2 z-50 flex h-[60px] w-[min(calc(100vw-1.5rem),430px)] items-center rounded-[34px] px-4 py-1.5 backdrop-blur-xl lg:hidden">
+        {mobileNavigation.map((item) => {
           const active = location === item.href;
           return (
-            <Link href={item.href} key={item.href} className="grid h-full min-w-0 flex-1 place-items-center rounded-full px-1 text-xs font-semibold">
-              <span className={cn("grid h-11 place-items-center transition-[width,background-color] duration-200", active ? "inline-flex w-auto min-w-[92px] gap-2 rounded-full bg-[#D9A441]/20 px-3 text-[#D9A441] dark:text-[#D9A441]" : "w-11 rounded-full text-[#8a765d]")}>
+            <Link href={item.href} key={item.href} className="grid h-full min-w-0 flex-1 place-items-center rounded-[28px] px-1 text-xs font-semibold">
+              <span className={cn("grid h-12 place-items-center transition-[width,background-color] duration-200", active ? "inline-flex w-auto min-w-[92px] gap-2 rounded-[28px] bg-[#D9A441]/20 px-3 text-[#D9A441] dark:text-[#D9A441]" : "w-11 rounded-[28px] text-[#8a765d]")}>
                 <MobileNavIcon name={item.label as MobileNavIconName} active={active} size={23} />
                 {active ? <span className="truncate leading-none text-[#D9A441] dark:text-[#D9A441]">{item.label}</span> : null}
               </span>

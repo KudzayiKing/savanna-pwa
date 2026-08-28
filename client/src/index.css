@@ -153,11 +153,11 @@ button:not(:disabled), a {
   letter-spacing: -0.02em;
   line-height: 1;
   text-transform: none;
-  color: #151A17;
+  color: var(--gold);
 }
 
 .dark .savanna-wordmark {
-  color: #FDFBF5;
+  color: var(--chat-gold);
 }
 
 .dark .savanna-app {
@@ -441,7 +441,6 @@ button:not(:disabled), a {
   --muted-foreground: var(--muted-ivory);
 }
 
-.dark .savanna-wordmark,
 .dark .savanna-app {
   color: #E9EDEF !important;
 }
@@ -1003,7 +1002,7 @@ button:not(:disabled), a {
 }
 
 :root:not(.dark) .savanna-app .savanna-wordmark {
-  color: #151A17 !important;
+  color: var(--gold) !important;
 }
 
 :root:not(.dark) .savanna-app .savanna-message-rail {
@@ -1084,7 +1083,7 @@ button:not(:disabled), a {
 
 :root:not(.dark) .savanna-app .savanna-mobile-messages-canvas,
 :root:not(.dark) .savanna-app .savanna-desktop-messages {
-  background: #F6F7F4 !important;
+  background: #FFFFFF !important;
   color: #151A17 !important;
 }
 
@@ -1101,14 +1100,21 @@ button:not(:disabled), a {
   border-right: 1px solid #DDE3DC !important;
 }
 
-:root:not(.dark) .savanna-app .savanna-desktop-message-thread {
+:root:not(.dark) .savanna-app .savanna-desktop-message-thread,
+:root:not(.dark) .savanna-app .savanna-mobile-message-thread {
   background: #F6F7F4 !important;
 }
 
+/* Light-mode surfaces that are intentionally the warm-ivory tone.
+ *
+ * The mobile chat search sits in this group so it matches the desktop
+ * `.savanna-desktop-chat-search` cream pill — a soft field on the white
+ * messages canvas, identical to the web layout.
+ */
 :root:not(.dark) .savanna-app .savanna-desktop-chat-search,
+:root:not(.dark) .savanna-app .savanna-mobile-chat-search,
 :root:not(.dark) .savanna-app .savanna-desktop-composer > div,
-:root:not(.dark) .savanna-app .savanna-mobile-composer-field,
-:root:not(.dark) .savanna-app label:has(input[aria-label="Search chats or people"]) {
+:root:not(.dark) .savanna-app .savanna-mobile-composer-field {
   background: #F6F5F5 !important;
   color: #5F6861 !important;
 }
@@ -1152,6 +1158,13 @@ button:not(:disabled), a {
 :root:not(.dark) .savanna-app .savanna-desktop-chat-rows .savanna-chat-row[data-active="true"],
 :root:not(.dark) .savanna-app .savanna-chat-row[data-active="true"] {
   background: #F6F5F5 !important;
+}
+
+@media (min-width: 1024px) {
+  .savanna-app .savanna-desktop-chat-rows .savanna-chat-row {
+    padding-left: 0 !important;
+    padding-right: 0.75rem !important;
+  }
 }
 
 :root:not(.dark) .savanna-app .savanna-send-button {
@@ -1771,6 +1784,10 @@ button:not(:disabled), a {
     margin-left: 3px !important;
   }
 
+  .savanna-app .savanna-mobile-header .savanna-wordmark {
+    font-size: 0.9em;
+  }
+
   .savanna-app .savanna-collapsed-story-cluster button {
     width: 1.875rem;
     height: 1.875rem;
@@ -1810,8 +1827,11 @@ button:not(:disabled), a {
     height: 60px !important;
     width: min(calc(100vw - 1.5rem), 430px) !important;
     max-width: calc(100vw - 1.5rem) !important;
-    border-radius: 9999px !important;
+    border-radius: 34px !important;
+    clip-path: inset(0 round 34px);
     overflow: hidden;
+    padding-right: 1rem !important;
+    padding-left: 1rem !important;
     translate: none !important;
     transform: translate3d(-50%, 0, 0);
     backface-visibility: hidden;
@@ -1951,9 +1971,7 @@ button:not(:disabled), a {
 }
 
 .savanna-app .savanna-glass-header {
-  box-shadow:
-    0 16px 44px rgba(21, 26, 23, 0.1),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.62) !important;
+  box-shadow: none !important;
 }
 
 .savanna-app .savanna-mobile-header.savanna-glass-header {
@@ -1974,17 +1992,13 @@ button:not(:disabled), a {
   background-color: color-mix(in srgb, #FFFFFF 50%, transparent) !important;
   -webkit-backdrop-filter: saturate(190%) blur(28px);
   backdrop-filter: saturate(190%) blur(28px);
-  box-shadow:
-    0 -18px 48px rgba(21, 26, 23, 0.13),
-    inset 0 1px 0 rgba(255, 255, 255, 0.66) !important;
+  box-shadow: none !important;
 }
 
 .savanna-app nav.savanna-mobile-bottom-nav.savanna-glass-bottom-nav {
   background: color-mix(in srgb, #FFFFFF 50%, #F6F7F4 8%, transparent) !important;
   background-color: color-mix(in srgb, #FFFFFF 50%, transparent) !important;
-  box-shadow:
-    0 -18px 48px rgba(21, 26, 23, 0.13),
-    inset 0 1px 0 rgba(255, 255, 255, 0.66) !important;
+  box-shadow: none !important;
 }
 
 :root:not(.dark) .savanna-app .savanna-mobile-header.savanna-glass-header,
@@ -1992,10 +2006,7 @@ button:not(:disabled), a {
   background: color-mix(in srgb, #FFFFFF 52%, #F6F7F4 8%, transparent) !important;
   background-color: color-mix(in srgb, #FFFFFF 52%, transparent) !important;
   border-color: color-mix(in srgb, #FFFFFF 50%, #DDE3DC) !important;
-  box-shadow:
-    0 18px 48px rgba(21, 26, 23, 0.14),
-    inset 0 1px 0 rgba(255, 255, 255, 0.78),
-    inset 0 -1px 0 rgba(21, 26, 23, 0.08) !important;
+  box-shadow: none !important;
 }
 
 :root:not(.dark) .savanna-app .savanna-mobile-header.savanna-glass-header > .savanna-glass-stories-row,
@@ -2007,13 +2018,18 @@ button:not(:disabled), a {
 }
 
 :root:not(.dark) .savanna-app nav.savanna-mobile-bottom-nav.savanna-glass-bottom-nav {
-  background: color-mix(in srgb, #FFFFFF 42%, #F6F7F4 8%, transparent) !important;
-  background-color: color-mix(in srgb, #FFFFFF 42%, transparent) !important;
-  box-shadow:
-    0 18px 38px rgba(21, 26, 23, 0.16),
-    0 -10px 34px rgba(21, 26, 23, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.76),
-    inset 0 -1px 0 rgba(21, 26, 23, 0.07) !important;
+  background: color-mix(in srgb, #F6F7F4 62%, transparent) !important;
+  background-color: color-mix(in srgb, #F6F7F4 62%, transparent) !important;
+  box-shadow: none !important;
+}
+
+/* Mobile messages search is handled by the cream group above; no
+ * mobile-specific override is needed. The dark-mode rule below keeps the
+ * pill on the dark surface when the user toggles to dark.
+ */
+.dark .savanna-app .savanna-mobile-messages-canvas .savanna-mobile-chat-search {
+  background: #23282C !important;
+  background-color: #23282C !important;
 }
 
 .dark .savanna-app .savanna-glass-header,
@@ -2024,9 +2040,7 @@ button:not(:disabled), a {
 }
 
 .dark .savanna-app .savanna-glass-header {
-  box-shadow:
-    0 16px 44px rgba(5, 10, 14, 0.42),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.08) !important;
+  box-shadow: none !important;
 }
 
 .dark .savanna-app .savanna-mobile-header .savanna-glass-stories-row {
@@ -2041,15 +2055,11 @@ button:not(:disabled), a {
   background-color: color-mix(in srgb, var(--chat-surface) 54%, transparent) !important;
   -webkit-backdrop-filter: saturate(190%) blur(28px);
   backdrop-filter: saturate(190%) blur(28px);
-  box-shadow:
-    0 -18px 48px rgba(5, 10, 14, 0.48),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+  box-shadow: none !important;
 }
 
 .dark .savanna-app nav.savanna-mobile-bottom-nav.savanna-glass-bottom-nav {
   background: color-mix(in srgb, var(--chat-surface) 54%, var(--chat-bg) 6%, transparent) !important;
   background-color: color-mix(in srgb, var(--chat-surface) 54%, transparent) !important;
-  box-shadow:
-    0 -18px 48px rgba(5, 10, 14, 0.48),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+  box-shadow: none !important;
 }

@@ -1,4 +1,4 @@
-const CACHE_NAME = "savanna-shell-v2";
+const CACHE_NAME = "savanna-shell-v8";
 const SHELL_URLS = ["/", "/manifest.webmanifest"];
 
 self.addEventListener("install", event => {
@@ -41,7 +41,22 @@ self.addEventListener("fetch", event => {
     return;
   }
 
-  if (["style", "script", "font", "image"].includes(request.destination)) {
+  if (["style", "script", "image"].includes(request.destination)) {
+    event.respondWith(
+      fetch(request)
+        .then(response => {
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
+          }
+          return response;
+        })
+        .catch(() => caches.match(request))
+    );
+    return;
+  }
+
+  if (request.destination === "font") {
     event.respondWith(
       caches.match(request).then(cached =>
         cached ||

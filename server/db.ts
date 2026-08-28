@@ -70,7 +70,13 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       updateSet[field] = user[field] ?? null;
     }
   }
-  values.role = user.role ?? (user.openId === ENV.ownerOpenId ? "admin" : "user");
+  // Owner bootstrap: the Supabase user id named by OWNER_SUPABASE_USER_ID is
+  // promoted to admin on its first sign-in. Leave the variable empty to disable.
+  const ownerOpenId = ENV.ownerSupabaseUserId
+    ? `supabase:${ENV.ownerSupabaseUserId}`
+    : "";
+  values.role =
+    user.role ?? (ownerOpenId && user.openId === ownerOpenId ? "admin" : "user");
   updateSet.role = values.role;
   await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
 }
@@ -247,7 +253,7 @@ async function logAuditEvent(actorUserId: number | null, action: string, domain:
   await db.insert(auditEvents).values({ actorUserId, action, domain, targetId, metadata: JSON.stringify(metadata) });
 }
 
-async function requireConversationMember(userId: number, conversationId: number) {
+export async function requireConversationMember(userId: number, conversationId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable");
   const [member] = await db
@@ -866,7 +872,7 @@ export async function createCourseEnrollment(userId: number, courseId: number) {
   return { id: Number(result[0].insertId), reference, accessState: "pending_payment" as const };
 }
 
-async function requireLessonAccess(userId: number, lessonId: number) {
+export async function requireLessonAccess(userId: number, lessonId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable");
   const [lesson] = await db.select().from(courseLessons).where(eq(courseLessons.id, lessonId)).limit(1);

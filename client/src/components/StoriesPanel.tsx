@@ -1,6 +1,6 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { AnimatedMenuIcon, AnimatedPlusIcon, AnimatedSearchIcon } from "@/components/AnimatedNavIcons";
+import { AnimatedPlusIcon, AnimatedSearchIcon, UserIcon } from "@/components/AnimatedNavIcons";
 import { Textarea } from "@/components/ui/textarea";
 import { SafetyActions } from "@/components/SafetyActions";
 import { trpc } from "@/lib/trpc";
@@ -76,7 +76,7 @@ export function StoriesPanel() {
   </>;
 }
 
-export function MobileStoriesHeader({ onOpenProfile }: { onOpenProfile: () => void }) {
+export function MobileStoriesHeader() {
   const { isAuthenticated, user } = useAuth();
   const utils = trpc.useUtils();
   const stories = trpc.stories.list.useQuery(undefined, { enabled: isAuthenticated });
@@ -88,7 +88,6 @@ export function MobileStoriesHeader({ onOpenProfile }: { onOpenProfile: () => vo
   const [draft, setDraft] = useState("");
   const [activeGroupIndex, setActiveGroupIndex] = useState<number | null>(null);
   const [activeStoryIndex, setActiveStoryIndex] = useState(0);
-  const [menuPulse, setMenuPulse] = useState(0);
   const [searchPulse, setSearchPulse] = useState(0);
   const storyPreviewParams = new URLSearchParams(window.location.search);
   const previewCompact = import.meta.env.DEV && storyPreviewParams.get("stories") === "compact";
@@ -113,7 +112,7 @@ export function MobileStoriesHeader({ onOpenProfile }: { onOpenProfile: () => vo
     return () => { window.removeEventListener("scroll", sync); window.removeEventListener("hashchange", sync); window.cancelAnimationFrame(settledSync); if (frame) window.cancelAnimationFrame(frame); };
   }, [previewCompact]);
 
-  const expandedHeight = Math.min(126, 88 + pull);
+  const expandedHeight = Math.min(116, 78 + pull);
   type MobileStory = NonNullable<typeof stories.data>[number];
   const previewStories: MobileStory[] = previewStoriesEnabled ? [
     { id: -101, authorUserId: -101, authorName: "Ayo", textBody: "Fresh produce is in today.", audience: "public", createdAt: new Date(), publishedAt: new Date(), expiresAt: new Date(Date.now() + 86_400_000), deletedAt: null },
@@ -159,7 +158,7 @@ export function MobileStoriesHeader({ onOpenProfile }: { onOpenProfile: () => vo
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [activeGroup, activeStoryIndex]);
   const collapsedStoriesCluster = compact ? <div aria-label="Collapsed Stories cluster" className="savanna-collapsed-story-cluster flex shrink-0 items-center">{stories.isLoading ? <div className="savanna-brand-token grid size-8 shrink-0 place-items-center rounded-full"><Loader2 className="size-3 animate-spin" /></div> : groupedStories.slice(0, 3).map((group, groupIndex) => <button key={group.authorUserId} onClick={() => openGroup(groupIndex)} aria-label={`Open ${group.authorName}'s Stories`} className={`savanna-brand-token grid size-8 shrink-0 place-items-center rounded-full text-[10px] font-semibold transition-transform hover:scale-105 focus-visible:z-20 ${groupIndex ? "-ml-1.5" : ""}`} style={{ zIndex: groupIndex + 1 }}>{group.authorName.slice(0, 1).toUpperCase()}</button>)}</div> : null;
-  return <><header className="savanna-mobile-header savanna-glass-header fixed inset-x-0 top-0 z-40 bg-[#f7f6f1]/92 backdrop-blur-xl dark:bg-[#0A1014]/95 lg:hidden"><div className="flex h-[68px] items-center justify-between gap-3 px-4"><div className="flex min-w-0 -translate-x-5 items-center gap-0"><Button variant="ghost" size="icon" onPointerDown={() => setMenuPulse(current => current + 1)} onClick={onOpenProfile} aria-label="Open profile" className="h-14 w-11 shrink-0 rounded-xl text-[#3d2d1a] dark:text-[#fff8ed]"><AnimatedMenuIcon className="size-5" size={20} pulse={menuPulse} /></Button>{collapsedStoriesCluster}<Link href="/" aria-label="Savanna messages" className="-ml-2 flex shrink-0 items-center whitespace-nowrap text-2xl leading-none"><span className="savanna-wordmark">Savanna</span></Link></div><div className="flex shrink-0 translate-x-5 items-center"><Button variant="ghost" size="icon" onPointerDown={() => setSearchPulse(current => current + 1)} aria-label="Search Savanna" className="size-14 rounded-full"><AnimatedSearchIcon className="size-5" size={20} pulse={searchPulse} /></Button></div></div><section
+  return <><header className="savanna-mobile-header savanna-glass-header fixed inset-x-0 top-0 z-40 bg-[#f7f6f1]/92 backdrop-blur-xl dark:bg-[#0A1014]/95 lg:hidden"><div className="flex h-[68px] items-center justify-between gap-3 px-4"><div className="flex min-w-0 items-center gap-0">{collapsedStoriesCluster}<Link href="/" aria-label="Savanna messages" className="flex shrink-0 items-center whitespace-nowrap text-2xl leading-none"><span className="savanna-wordmark">Savanna</span></Link></div><div className="flex shrink-0 items-center gap-1"><Button variant="ghost" size="icon" onPointerDown={() => setSearchPulse(current => current + 1)} aria-label="Search Savanna" className="size-11 rounded-full"><AnimatedSearchIcon className="size-5" size={20} pulse={searchPulse} /></Button><Link href="/profile" aria-label="Open profile" className="savanna-mobile-profile-trigger grid size-10 shrink-0 place-items-center overflow-hidden rounded-full text-[#151A17] dark:text-[#E9EDEF]">{ownStoryAvatarUrl ? <img src={ownStoryAvatarUrl} alt="" className="size-full rounded-full object-cover" /> : <UserIcon size={21} />}</Link></div></div><section
     aria-label="Stories"
     className={`savanna-glass-stories-row overflow-hidden bg-[#f7f6f1]/92 px-4 backdrop-blur-xl transition-[height,background-color] duration-300 ease-out dark:bg-[#0A1014]/95 ${compact ? "hidden" : "block"}`}
     style={{ height: expandedHeight }}
@@ -168,7 +167,7 @@ export function MobileStoriesHeader({ onOpenProfile }: { onOpenProfile: () => vo
     onPointerUp={() => { setStartY(null); setPull(0); }}
     onPointerCancel={() => { setStartY(null); setPull(0); }}
   >
-    <div className={`flex h-full ${compact ? "items-center gap-1.5" : "flex-col justify-start gap-0 pt-1"}`}>
+    <div className={`flex h-full ${compact ? "items-center gap-1.5" : "flex-col justify-start gap-0 pt-0"}`}>
       <div className={`story-rail flex min-w-0 flex-1 items-center overflow-x-auto ${compact ? "py-1" : "w-full flex-none gap-3 py-0"}`}>
         {compact ? <div aria-label="Collapsed Stories cluster" className="flex min-w-0 items-center">{stories.isLoading ? <div className="savanna-brand-token grid size-10 shrink-0 place-items-center rounded-full"><Loader2 className="size-3.5 animate-spin" /></div> : <div className="flex min-w-0 items-center">{groupedStories.slice(0, 3).map((group, groupIndex) => <button key={group.authorUserId} onClick={() => openGroup(groupIndex)} aria-label={`Open ${group.authorName}'s Stories`} className={`savanna-brand-token grid size-10 shrink-0 place-items-center rounded-full text-xs font-semibold transition-transform hover:scale-105 focus-visible:z-20 ${groupIndex ? "-ml-2" : ""}`} style={{ zIndex: groupIndex + 1 }}>{group.authorName.slice(0, 1).toUpperCase()}</button>)}</div>}</div> : <><div className="flex shrink-0 flex-col items-center gap-1"><button onClick={() => isAuthenticated ? setComposing(true) : toast.error("Sign in to share a Story")} aria-label="Add to your Story" className="savanna-brand-token relative grid size-14 shrink-0 place-items-center overflow-visible rounded-full p-0.5 transition-transform active:scale-95">{ownStoryAvatarUrl ? <img src={ownStoryAvatarUrl} alt="" className="size-full rounded-full object-cover" /> : <span className="grid size-full place-items-center rounded-full text-xs font-semibold">{ownStoryInitial}</span>}<span aria-hidden="true" className="savanna-brand-token absolute -bottom-0.5 -right-0.5 grid size-5 place-items-center rounded-full"><AnimatedPlusIcon size={12} /></span></button><span className="whitespace-nowrap text-[10px] font-medium text-[#5f6861] dark:text-[#9AA1A6]">Your Story</span></div>{stories.isLoading ? <div className="savanna-brand-token grid size-14 shrink-0 place-items-center rounded-full"><Loader2 className="size-3.5 animate-spin" /></div> : groupedStories.slice(0, 8).map((group, groupIndex) => <div key={group.authorUserId} className="flex shrink-0 flex-col items-center gap-1"><button onClick={() => openGroup(groupIndex)} aria-label={`Open ${group.authorName}'s Stories`} className="savanna-brand-token grid size-14 shrink-0 place-items-center rounded-full text-xs font-semibold transition-all duration-300">{group.authorName.slice(0, 1).toUpperCase()}</button><span className="max-w-14 truncate text-center text-[10px] font-medium text-[#5f6861] dark:text-[#9AA1A6]">{group.authorName.split(" ")[0]}</span></div>)}</>}
       </div>

@@ -36,7 +36,7 @@ describe("Savanna PWA assets", () => {
     expect(source).toContain("payments and live updates are paused");
   });
 
-  it("keeps the SAVANNA Ramabhadra wordmark in the supplied Ink and Warm White colors", async () => {
+  it("keeps the SAVANNA Ramabhadra wordmark in the supplied Gold color", async () => {
     const [shell, styles, html, db, orders, paymentCatalog, merchantStudio] = await Promise.all([
       readFile(resolve(projectRoot, "client/src/components/SavannaShell.tsx"), "utf8"),
       readFile(resolve(projectRoot, "client/src/index.css"), "utf8"),
@@ -50,9 +50,9 @@ describe("Savanna PWA assets", () => {
     expect(shell).toContain('className="savanna-wordmark"');
     expect(shell).toContain(">Savanna</span>");
     expect(styles).toContain(".savanna-wordmark");
-    expect(styles).toContain("color: #151A17;");
+    expect(styles).toContain("color: var(--gold);");
     expect(styles).toContain(".dark .savanna-wordmark");
-    expect(styles).toContain("color: #FDFBF5;");
+    expect(styles).toContain("color: var(--chat-gold);");
     expect(styles).not.toContain(".ember-wordmark");
     expect(styles).toContain('"Ramabhadra"');
     expect(html).toContain("family=Ramabhadra");
@@ -107,9 +107,10 @@ describe("Savanna PWA assets", () => {
       readFile(resolve(projectRoot, "client/src/App.tsx"), "utf8"),
     ]);
 
-    expect(shell).toContain("MobileStoriesHeader onOpenProfile");
-    expect(shell).toContain('MobileStoriesHeader onOpenProfile={() => setLocation("/profile")}');
-    expect(shell).toContain("navigation.slice(0, 4)");
+    expect(shell).toContain("<MobileStoriesHeader />");
+    expect(shell).toContain('const mobileNavigation = navigation.filter((item) => item.href !== "/profile");');
+    expect(shell).toContain("navigation.map((item) =>");
+    expect(shell).toContain("mobileNavigation.map((item) =>");
     expect(shell).toContain('{ href: "/profile", label: "Profile" }');
     expect(shell).toContain('import { AnimatedPlusIcon, MobileNavIcon, type MobileNavIconName } from "@/components/AnimatedNavIcons";');
     expect(shell).toContain('<MobileNavIcon name={item.label as MobileNavIconName} active={active} size={22} />');
@@ -131,21 +132,23 @@ describe("Savanna PWA assets", () => {
     expect(stories).toContain('const previewStoriesEnabled = import.meta.env.DEV && !stories.data?.length');
     expect(stories).toContain('compact ? "hidden" : "block"');
     expect(stories).not.toContain('text-[10px] font-semibold uppercase tracking-[0.16em] text-[#9a6410]">Stories</p>');
-    expect(stories).toContain("const expandedHeight = Math.min(126, 88 + pull)");
+    expect(stories).toContain("const expandedHeight = Math.min(116, 78 + pull)");
     expect(stories).toContain("<header className=\"savanna-mobile-header savanna-glass-header fixed inset-x-0 top-0 z-40");
-    expect(stories).toContain("className={`savanna-glass-header overflow-hidden");
+    expect(stories).toContain("className={`savanna-glass-stories-row overflow-hidden");
     expect(shell).toContain("savanna-glass-header hidden h-[76px]");
     expect(shell).toContain("savanna-mobile-bottom-nav savanna-glass-bottom-nav");
     expect(styles).toContain(".savanna-app .savanna-glass-header");
     expect(styles).toContain(".savanna-app .savanna-glass-bottom-nav");
     expect(styles).toContain("backdrop-filter: saturate(180%) blur(24px);");
-    expect(styles).toContain("inset 0 1px 0 rgba(255, 255, 255, 0.66)");
+    expect(styles).not.toContain("inset 0 1px 0 rgba(255, 255, 255, 0.66)");
     expect(stories).toContain("savanna-mobile-header-spacer lg:hidden");
-    expect(stories).toContain('aria-label="Open profile"');
-    expect(stories).toContain('const [menuPulse, setMenuPulse] = useState(0);');
+    expect(stories).toContain('href="/profile" aria-label="Open profile"');
+    expect(stories).toContain("{ownStoryAvatarUrl ? <img src={ownStoryAvatarUrl}");
+    expect(stories).toContain("<UserIcon size={21} />");
+    expect(stories).not.toContain('const [menuPulse, setMenuPulse] = useState(0);');
     expect(stories).toContain('const [searchPulse, setSearchPulse] = useState(0);');
-    expect(stories).toContain('onPointerDown={() => setMenuPulse(current => current + 1)}');
-    expect(stories).toContain('AnimatedMenuIcon className="size-5" size={20} pulse={menuPulse}');
+    expect(stories).not.toContain('onPointerDown={() => setMenuPulse(current => current + 1)}');
+    expect(stories).not.toContain('AnimatedMenuIcon className="size-5" size={20} pulse={menuPulse}');
     expect(stories).not.toContain('aria-label="Notifications"');
     expect(stories).not.toContain('Switch to ${theme');
     expect(stories).toContain("flex shrink-0 flex-col items-center gap-1");
@@ -199,8 +202,14 @@ describe("Savanna PWA assets", () => {
     expect(animatedIcons).toContain("export function AnimatedSearchIcon");
     expect(animatedIcons).toContain("export function AnimatedMenuIcon");
     expect(animatedIcons).toContain("export function AnimatedStoreIcon");
+    expect(animatedIcons).toContain("const UserIcon = forwardRef");
+    expect(animatedIcons).toContain("const ShoppingBasketIcon = forwardRef");
+    expect(animatedIcons).toContain("const BookTextIcon = forwardRef");
     expect(animatedIcons).toContain("export function AnimatedBookOpenTextIcon");
     expect(animatedIcons).toContain("export function AnimatedShoppingBagIcon");
+    expect(animatedIcons).toContain('export { ShoppingBasketIcon, UserIcon };');
+    expect(animatedIcons).toContain('export { BookTextIcon };');
+    expect(animatedIcons).toContain('return <BookTextIcon size={size} {...props} />;');
     expect(animatedIcons).toContain('if (name === "Learn")');
     expect(animatedIcons).toContain('if (name === "Profile")');
     expect(animatedIcons).toContain('useAnimationControls');
@@ -226,9 +235,9 @@ describe("Savanna PWA assets", () => {
     expect(styles).toContain("border: 0.5px solid color-mix(in srgb, var(--chat-gold) 50%, transparent) !important;");
     expect(styles).toContain("border: 0.5px solid var(--chat-border) !important;");
     expect(shell).toContain('active ? "bg-[#D9A441]/20 text-[#A87820] dark:text-[#D9A441]"');
-    expect(shell).toContain('active ? "text-[#D9A441] dark:text-[#D9A441]"');
-    expect(shell).toContain('savanna-mobile-bottom-nav savanna-glass-bottom-nav fixed inset-x-0 bottom-0 z-50');
-    expect(shell).toContain('active ? "w-14 rounded-full bg-[#D9A441]/20 text-[#D9A441] dark:text-[#D9A441]"');
+    expect(shell).toContain('active ? "inline-flex w-auto min-w-[92px] gap-2 rounded-[28px] bg-[#D9A441]/20 px-3 text-[#D9A441] dark:text-[#D9A441]"');
+    expect(shell).toContain('savanna-mobile-bottom-nav savanna-glass-bottom-nav fixed bottom-[max(0.75rem,calc(env(safe-area-inset-bottom)+0.5rem))] left-1/2 z-50 flex h-[60px] w-[min(calc(100vw-1.5rem),430px)] items-center rounded-[34px] px-4');
+    expect(shell).toContain(': "w-11 rounded-[28px] text-[#8a765d]"');
     expect(styles).toContain('.dark .savanna-app .savanna-mobile-messages-canvas');
     expect(styles).toContain('.dark .savanna-app .savanna-mobile-header,\n  .dark .savanna-app .savanna-mobile-header > section');
     expect(styles).toContain('.savanna-app .savanna-mobile-header {\n    position: fixed !important;');
@@ -307,5 +316,106 @@ describe("Savanna PWA assets", () => {
     expect(animatedIcons).toContain('style={{ color, transform: "rotate(-45deg)", ...style }}');
     expect(animatedIcons).toContain('onMouseEnter={handleEnter}');
     expect(animatedIcons).toContain('x: [0, 6, 20, -20, 0]');
+  });
+
+  // Regression guard: the mobile /messages layout must mirror the desktop
+  // web layout in light mode — white list surface, cream search pill, warm
+  // bottom-nav tint, and a glass bottom nav that actually reads as colored.
+  it("renders mobile /messages surfaces the same way as the desktop web version", async () => {
+    const [styles, messages] = await Promise.all([
+      readFile(resolve(projectRoot, "client/src/index.css"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/pages/MessagesPage.tsx"), "utf8"),
+    ]);
+
+    // Both list surfaces are white in light mode (desktop chat-list panel
+    // and the mobile messages canvas share the same rule).
+    expect(styles).toMatch(
+      /:root:not\(\.dark\) \.savanna-app \.savanna-mobile-messages-canvas,[\s\S]*?\{[\s\S]*?background:\s*#FFFFFF\s*!important/
+    );
+
+    // The mobile search sits in the cream group next to the desktop search
+    // — same color, no mobile-specific override that would deviate from web.
+    const creamGroup = styles.match(
+      /:root:not\(\.dark\) \.savanna-app \.savanna-desktop-chat-search,[\s\S]*?\{[\s\S]*?\}/
+    );
+    expect(creamGroup).not.toBeNull();
+    expect(creamGroup?.[0]).toContain(".savanna-mobile-chat-search");
+    expect(creamGroup?.[0]).toContain("background: #F6F5F5 !important");
+
+    // The label and input must not carry hard-coded white that would override
+    // the cream group (the earlier regression did exactly this).
+    const mobileSearch = messages.match(
+      /<input[\s\S]*?aria-label="Search chats or people"[\s\S]*?className="([^"]+)"/
+    );
+    expect(mobileSearch).not.toBeNull();
+    expect(mobileSearch?.[1]).not.toContain("bg-white");
+    expect(mobileSearch?.[1]).toContain("bg-transparent");
+    // No inline style either.
+    const mobileLabel = messages.match(
+      /<label className="savanna-mobile-chat-search[^"]*" style=\{\{[^}]*\}\}>/
+    );
+    expect(mobileLabel).toBeNull();
+
+    // Bottom nav has a clearly tinted, *visible* warm surface in light mode
+    // (not a transparent near-white that disappears on the white canvas).
+    expect(styles).toMatch(
+      /:root:not\(\.dark\) \.savanna-app nav\.savanna-mobile-bottom-nav\.savanna-glass-bottom-nav \{[\s\S]*?background:\s*color-mix\(in srgb,\s*#F6F7F4 [^,]+,\s*transparent\)/
+    );
+
+    // The mobile message thread sits on the same warm-ivory surface as the
+    // desktop message thread — header/composer stay white, the thread itself
+    // gets the `#F6F7F4` ivory wash to match the web conversation view.
+    expect(styles).toMatch(
+      /:root:not\(\.dark\) \.savanna-app \.savanna-desktop-message-thread,[\s\S]*?savanna-mobile-message-thread\s*\{[\s\S]*?background:\s*#F6F7F4\s*!important/
+    );
+
+    // No rule may lump the bottom nav together with the chat search.
+    expect(styles).not.toMatch(
+      /:is\(\s*[^)]*savanna-mobile-bottom-nav[^)]*savanna-mobile-chat-search/s
+    );
+  });
+
+  // Regression guard: the glass header and glass bottom nav must stay flat in
+  // BOTH themes — no drop shadow, no inset highlight. Split the stylesheet into
+  // rule blocks and assert every glass-chrome rule is explicitly shadow-free.
+  it("keeps the glass header and bottom nav free of box-shadow in both themes", async () => {
+    const styles = await readFile(resolve(projectRoot, "client/src/index.css"), "utf8");
+
+    const glassRules = [...styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .map(match => ({ selector: match[1].trim(), body: match[2] }))
+      .filter(rule => /savanna-glass-(header|bottom-nav)/.test(rule.selector));
+
+    expect(glassRules.length).toBeGreaterThan(0);
+
+    for (const rule of glassRules) {
+      const shadow = rule.body.match(/box-shadow:\s*([^;]+)/);
+      if (!shadow) continue;
+      expect(
+        shadow[1].trim(),
+        `glass chrome rule must not cast a shadow: ${rule.selector}`
+      ).toBe("none !important");
+    }
+
+    // Belt and braces: none of the old shadow values may survive anywhere.
+    for (const value of [
+      "0 16px 44px rgba(21, 26, 23, 0.1)",
+      "0 -18px 48px rgba(21, 26, 23, 0.13)",
+      "0 18px 48px rgba(21, 26, 23, 0.14)",
+      "0 18px 38px rgba(21, 26, 23, 0.16)",
+      "0 16px 44px rgba(5, 10, 14, 0.42)",
+      "0 -18px 48px rgba(5, 10, 14, 0.48)",
+    ]) {
+      expect(styles).not.toContain(value);
+    }
+
+    // The blur/tint treatment itself must survive — we removed shadows, not glass.
+    expect(styles).toContain("backdrop-filter: saturate(180%) blur(24px);");
+    expect(styles).toContain("backdrop-filter: saturate(190%) blur(28px);");
+    expect(styles).toMatch(
+      /:root:not\(\.dark\) \.savanna-app nav\.savanna-mobile-bottom-nav\.savanna-glass-bottom-nav \{[\s\S]*?box-shadow:\s*none\s*!important/
+    );
+    expect(styles).toMatch(
+      /\.dark \.savanna-app nav\.savanna-mobile-bottom-nav\.savanna-glass-bottom-nav \{[\s\S]*?box-shadow:\s*none\s*!important/
+    );
   });
 });

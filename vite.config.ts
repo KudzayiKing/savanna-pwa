@@ -5,13 +5,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { defineConfig, type Plugin, type ViteDevServer } from "vite";
 import { vitePluginManusRuntime } from "vite-plugin-manus-runtime";
+// Vite-free path constants, shared with the Express dev-server integration so
+// the two cannot drift. See vite.shared.ts for why it must not import `vite`.
+import { buildOutDir, clientPublicDir, clientRoot, projectRoot as PROJECT_ROOT, resolveAliases } from "./vite.shared";
 
 // =============================================================================
 // Manus Debug Collector - Vite Plugin
 // Writes browser logs directly to files, trimmed when exceeding size limit
 // =============================================================================
 
-const PROJECT_ROOT = import.meta.dirname;
 const LOG_DIR = path.join(PROJECT_ROOT, ".manus-logs");
 const MAX_LOG_SIZE_BYTES = 1 * 1024 * 1024; // 1MB per log file
 const TRIM_TARGET_BYTES = Math.floor(MAX_LOG_SIZE_BYTES * 0.6); // Trim to 60% to avoid constant re-trimming
@@ -150,22 +152,51 @@ function vitePluginManusDebugCollector(): Plugin {
   };
 }
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector()];
+/**
+ * Resolves the `%VITE_ANALYTICS_*%` placeholders in client/index.html.
+ *
+ * Without this, an unset analytics endpoint ships the literal string
+ * `%VITE_ANALYTICS_ENDPOINT%/umami` into the built HTML, so every production
+ * page load fires a bogus request to `https://<own-origin>/umami` and pollutes
+ * the network log with a 404. When the variables are absent we drop the tag
+ * entirely instead of degrading into a broken request.
+ */
+function vitePluginAnalyticsTag(): Plugin {
+  const ANALYTICS_BLOCK =
+    /[ \t]*<script\s+defer\s+src="%VITE_ANALYTICS_ENDPOINT%\/umami"\s+data-website-id="%VITE_ANALYTICS_WEBSITE_ID%"><\/script>\s*/;
+
+  return {
+    name: "savanna-analytics-tag",
+    transformIndexHtml: {
+      order: "post",
+      handler(html) {
+        const endpoint = process.env.VITE_ANALYTICS_ENDPOINT;
+        const websiteId = process.env.VITE_ANALYTICS_WEBSITE_ID;
+
+        if (!endpoint || !websiteId) {
+          return html.replace(ANALYTICS_BLOCK, "\n");
+        }
+
+        return html
+          .replace("%VITE_ANALYTICS_ENDPOINT%", endpoint.replace(/\/+$/, ""))
+          .replace("%VITE_ANALYTICS_WEBSITE_ID%", websiteId);
+      },
+    },
+  };
+}
+
+const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector(), vitePluginAnalyticsTag()];
 
 export default defineConfig({
   plugins,
   resolve: {
-    alias: {
-      "@": path.resolve(import.meta.dirname, "client", "src"),
-      "@shared": path.resolve(import.meta.dirname, "shared"),
-      "@assets": path.resolve(import.meta.dirname, "attached_assets"),
-    },
+    alias: resolveAliases,
   },
-  envDir: path.resolve(import.meta.dirname),
-  root: path.resolve(import.meta.dirname, "client"),
-  publicDir: path.resolve(import.meta.dirname, "client", "public"),
+  envDir: PROJECT_ROOT,
+  root: clientRoot,
+  publicDir: clientPublicDir,
   build: {
-    outDir: path.resolve(import.meta.dirname, "dist/public"),
+    outDir: buildOutDir,
     emptyOutDir: true,
   },
   server: {

@@ -22,6 +22,16 @@ export interface SendHorizontalIconHandle {
   stopAnimation: () => void;
 }
 
+export interface UserIconHandle {
+  startAnimation: () => void;
+  stopAnimation: () => void;
+}
+
+export interface ShoppingBasketIconHandle {
+  startAnimation: () => void;
+  stopAnimation: () => void;
+}
+
 interface SendHorizontalIconProps extends Omit<
   HTMLAttributes<HTMLDivElement>,
   | "color"
@@ -37,6 +47,12 @@ interface SendHorizontalIconProps extends Omit<
   isAnimated?: boolean;
   color?: string;
 }
+
+interface UserIconProps extends SendHorizontalIconProps {}
+
+interface ShoppingBasketIconProps extends SendHorizontalIconProps {}
+
+interface BookTextIconProps extends SendHorizontalIconProps {}
 
 const iconTransition = { duration: 0.42, ease: [0.23, 1, 0.32, 1] as const };
 
@@ -180,6 +196,250 @@ SendHorizontalIcon.displayName = "SendHorizontalIcon";
 
 export { SendHorizontalIcon };
 
+const UserIcon = forwardRef<UserIconHandle, UserIconProps>(
+  (
+    {
+      onMouseEnter,
+      onMouseLeave,
+      className,
+      size = 24,
+      duration = 1,
+      isAnimated = true,
+      color,
+      style,
+      ...props
+    },
+    ref
+  ) => {
+    const controls = useAnimation();
+    const reduced = useReducedMotion();
+    const isControlled = useRef(false);
+
+    useImperativeHandle(ref, () => {
+      isControlled.current = true;
+      return {
+        startAnimation: () => reduced ? controls.start("normal") : controls.start("animate"),
+        stopAnimation: () => controls.start("normal"),
+      };
+    });
+
+    const handleEnter = useCallback((event?: MouseEvent<HTMLDivElement>) => {
+      if (!isAnimated || reduced) return;
+      if (!isControlled.current) controls.start("animate");
+      else onMouseEnter?.(event as MouseEvent<HTMLDivElement>);
+    }, [controls, isAnimated, onMouseEnter, reduced]);
+
+    const handleLeave = useCallback((event: MouseEvent<HTMLDivElement>) => {
+      if (!isControlled.current) {
+        controls.start("normal");
+      } else {
+        onMouseLeave?.(event);
+      }
+    }, [controls, onMouseLeave]);
+
+    const bodyVariants: Variants = {
+      normal: { strokeDashoffset: 0, opacity: 1 },
+      animate: {
+        strokeDashoffset: [40, 0],
+        opacity: [0.3, 1],
+        transition: { duration: 0.6 * duration, ease: "easeInOut" },
+      },
+    };
+
+    const headVariants: Variants = {
+      normal: { scale: 1, opacity: 1 },
+      animate: {
+        scale: [0.6, 1.2, 1],
+        opacity: [0, 1],
+        transition: { duration: 0.5 * duration, ease: "easeOut", delay: 0.2 },
+      },
+    };
+
+    return (
+      <LazyMotion features={domMin} strict>
+        <m.div
+          className={cn("inline-flex items-center justify-center", className)}
+          onMouseEnter={handleEnter}
+          onMouseLeave={handleLeave}
+          {...props}
+          style={{ color, ...style }}
+        >
+          <m.svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-user-icon lucide-user">
+            <m.path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" strokeDasharray="40" strokeDashoffset="0" variants={bodyVariants} initial="normal" animate={controls} />
+            <m.circle cx="12" cy="7" r="4" variants={headVariants} initial="normal" animate={controls} />
+          </m.svg>
+        </m.div>
+      </LazyMotion>
+    );
+  }
+);
+
+UserIcon.displayName = "UserIcon";
+
+const ShoppingBasketIcon = forwardRef<ShoppingBasketIconHandle, ShoppingBasketIconProps>(
+  (
+    {
+      onMouseEnter,
+      onMouseLeave,
+      className,
+      size = 24,
+      duration = 1,
+      isAnimated = true,
+      color,
+      style,
+      ...props
+    },
+    ref
+  ) => {
+    const controls = useAnimation();
+    const reduced = useReducedMotion();
+    const isControlled = useRef(false);
+
+    useImperativeHandle(ref, () => {
+      isControlled.current = true;
+      return {
+        startAnimation: () => reduced ? controls.start("normal") : controls.start("animate"),
+        stopAnimation: () => controls.start("normal"),
+      };
+    });
+
+    const handleEnter = useCallback((event?: MouseEvent<HTMLDivElement>) => {
+      if (!isAnimated || reduced) return;
+      if (!isControlled.current) controls.start("animate");
+      else onMouseEnter?.(event as MouseEvent<HTMLDivElement>);
+    }, [controls, isAnimated, onMouseEnter, reduced]);
+
+    const handleLeave = useCallback((event: MouseEvent<HTMLDivElement>) => {
+      if (!isControlled.current) {
+        controls.start("normal");
+      } else {
+        onMouseLeave?.(event);
+      }
+    }, [controls, onMouseLeave]);
+
+    const bodyVariants: Variants = {
+      normal: { pathLength: 1, opacity: 1 },
+      animate: (index: number) => ({
+        pathLength: [0, 1],
+        opacity: [0, 1],
+        transition: {
+          duration: 0.5 * duration,
+          delay: index * 0.08 * duration,
+          ease: [0.16, 1, 0.3, 1],
+        },
+      }),
+    };
+
+    return (
+      <LazyMotion features={domMin} strict>
+        <m.div
+          className={cn("inline-flex items-center justify-center", className)}
+          onMouseEnter={handleEnter}
+          onMouseLeave={handleLeave}
+          {...props}
+          style={{ color, ...style }}
+        >
+          <m.svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" animate={controls} initial="normal">
+            <m.path d="M2 11h20" custom={0} variants={bodyVariants} />
+            <m.path d="m3.5 11 1.6 7.4a2 2 0 0 0 2 1.6h9.8a2 2 0 0 0 2-1.6l1.7-7.4" custom={0} variants={bodyVariants} />
+            <m.path d="m5 11 4-7" custom={1} variants={bodyVariants} />
+            <m.path d="m19 11-4-7" custom={1} variants={bodyVariants} />
+            <m.path d="m9 11 1 9" custom={2} variants={bodyVariants} />
+            <m.path d="m15 11-1 9" custom={2} variants={bodyVariants} />
+            <m.path d="M4.5 15.5h15" custom={3} variants={bodyVariants} />
+          </m.svg>
+        </m.div>
+      </LazyMotion>
+    );
+  }
+);
+
+ShoppingBasketIcon.displayName = "ShoppingBasketIcon";
+
+export { ShoppingBasketIcon, UserIcon };
+
+const BookTextIcon = forwardRef<SendHorizontalIconHandle, BookTextIconProps>(
+  (
+    {
+      onMouseEnter,
+      onMouseLeave,
+      className,
+      size = 28,
+      isAnimated = true,
+      color,
+      style,
+      ...props
+    },
+    ref
+  ) => {
+    const controls = useAnimation();
+    const reduced = useReducedMotion();
+    const isControlled = useRef(false);
+
+    useImperativeHandle(ref, () => {
+      isControlled.current = true;
+      return {
+        startAnimation: () => reduced ? controls.start("normal") : controls.start("animate"),
+        stopAnimation: () => controls.start("normal"),
+      };
+    });
+
+    const handleEnter = useCallback((event?: MouseEvent<HTMLDivElement>) => {
+      if (!isAnimated || reduced) return;
+      if (!isControlled.current) controls.start("animate");
+      else onMouseEnter?.(event as MouseEvent<HTMLDivElement>);
+    }, [controls, isAnimated, onMouseEnter, reduced]);
+
+    const handleLeave = useCallback((event: MouseEvent<HTMLDivElement>) => {
+      if (!isControlled.current) {
+        controls.start("normal");
+      } else {
+        onMouseLeave?.(event);
+      }
+    }, [controls, onMouseLeave]);
+
+    const variants: Variants = {
+      normal: {
+        scale: 1,
+        rotate: 0,
+        y: 0,
+      },
+      animate: {
+        scale: [1, 1.04, 1],
+        rotate: [0, -8, 8, -8, 0],
+        y: [0, -2, 0],
+        transition: {
+          duration: 0.6,
+          ease: "easeInOut",
+          times: [0, 0.2, 0.5, 0.8, 1],
+        },
+      },
+    };
+
+    return (
+      <LazyMotion features={domMin} strict>
+        <m.div
+          className={cn("inline-flex items-center justify-center", className)}
+          onMouseEnter={handleEnter}
+          onMouseLeave={handleLeave}
+          {...props}
+          style={{ color, ...style }}
+        >
+          <m.svg animate={controls} fill="none" height={size} stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" variants={variants} viewBox="0 0 24 24" width={size} xmlns="http://www.w3.org/2000/svg" initial="normal" style={{ overflow: "visible" }}>
+            <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20" />
+            <path d="M8 11h8" />
+            <path d="M8 7h6" />
+          </m.svg>
+        </m.div>
+      </LazyMotion>
+    );
+  }
+);
+
+BookTextIcon.displayName = "BookTextIcon";
+
+export { BookTextIcon };
+
 export function AnimatedSendIcon({ size = 18, pulse = 0, ...props }: AnimatedIconProps) {
   const icon = useRef<SendHorizontalIconHandle>(null);
 
@@ -210,32 +470,12 @@ export function AnimatedMenuIcon({ size = 20, pulse = 0, ...props }: AnimatedIco
   );
 }
 
-export function AnimatedStoreIcon({ size = 18, ...props }: AnimatedIconProps) {
-  const reducedMotion = useReducedMotion();
-  const interactiveMotion = reducedMotion ? {} : { whileHover: "active", whileFocus: "active", whileTap: "active" };
-
-  return (
-    <motion.svg {...iconAccessibilityProps(props)} {...props} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" initial="idle" {...interactiveMotion}>
-      <motion.path d="M17.75 10.3a1.12 1.12 0 0 0-1.55 0 2.5 2.5 0 0 1-3.45 0 1.12 1.12 0 0 0-1.55 0 2.5 2.5 0 0 1-3.45 0 1.12 1.12 0 0 0-1.55 0 2.5 2.5 0 0 1-3.77-3.25l2.89-4.18A2 2 0 0 1 7 2h10a2 2 0 0 1 1.65.87l2.9 4.19a2.5 2.5 0 0 1-3.8 3.24" variants={{ idle: { pathLength: 1, opacity: 1 }, active: { pathLength: [0, 1], opacity: [0.3, 1] } }} transition={iconTransition} />
-      <motion.path d="M4 10.95V19a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8.05" variants={{ idle: { pathLength: 1, opacity: 1 }, active: { pathLength: [0.15, 1], opacity: [0.4, 1] } }} transition={{ ...iconTransition, delay: 0.07 }} />
-      <motion.path d="M15 21v-5a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v5" variants={{ idle: { scaleY: 1, opacity: 1 }, active: { scaleY: [0, 1.12, 1], opacity: [0, 1, 1] } }} transition={{ ...iconTransition, delay: 0.18 }} style={{ transformBox: "view-box", transformOrigin: "12px 21px" }} />
-    </motion.svg>
-  );
+export function AnimatedStoreIcon({ size = 18, pulse: _pulse, ...props }: AnimatedIconProps) {
+  return <ShoppingBasketIcon size={size} {...props} />;
 }
 
-export function AnimatedBookOpenTextIcon({ size = 18, ...props }: AnimatedIconProps) {
-  const reducedMotion = useReducedMotion();
-  const interactiveMotion = reducedMotion ? {} : { whileHover: "active", whileFocus: "active", whileTap: "active" };
-
-  return (
-    <motion.svg {...iconAccessibilityProps(props)} {...props} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" initial="idle" {...interactiveMotion}>
-      <motion.g variants={{ idle: { scale: 1, rotate: 0 }, active: { scale: [1, 1.04, 0.98, 1], rotate: [0, -2, 2, 0] } }} transition={{ duration: 0.5, ease: [0.23, 1, 0.32, 1] }} style={{ transformBox: "view-box", transformOrigin: "12px 12px" }}>
-        <motion.path d="M12 7v14" variants={{ idle: { pathLength: 1, opacity: 1 }, active: { pathLength: [0.45, 1], opacity: [0.6, 1] } }} transition={iconTransition} />
-        {[[16, 12], [16, 8], [6, 12], [6, 8]].map(([x, y], index) => <motion.path key={`${x}-${y}`} d={`M${x} ${y}h2`} variants={{ idle: { opacity: 1, y: 0, scaleX: 1 }, active: { opacity: [0.55, 1], y: [1, -0.75, 0], scaleX: [0.9, 1.05, 1] } }} transition={{ ...iconTransition, delay: 0.08 + index * 0.04 }} style={{ transformBox: "view-box", transformOrigin: `${x + 1}px ${y}px` }} />)}
-        <motion.path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z" variants={{ idle: { pathLength: 1, opacity: 1 }, active: { pathLength: [0.75, 1], opacity: [0.6, 1] } }} transition={{ ...iconTransition, delay: 0.05 }} />
-      </motion.g>
-    </motion.svg>
-  );
+export function AnimatedBookOpenTextIcon({ size = 18, pulse: _pulse, ...props }: AnimatedIconProps) {
+  return <BookTextIcon size={size} {...props} />;
 }
 
 export function AnimatedShoppingBagIcon({ size = 18, ...props }: AnimatedIconProps) {
@@ -261,7 +501,7 @@ export function MobileNavIcon({ name, active, size = 22 }: MobileNavIconProps) {
 
   if (name === "Messages") {
     return (
-      <motion.svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...hoverMotion}>
+      <motion.svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ overflow: "visible" }} {...hoverMotion}>
         <motion.path d="M3.2 16.2a2 2 0 0 1 .1 1.15l-1.05 3.25a1 1 0 0 0 1.23 1.17l3.38-1a2 2 0 0 1 1.1.1 10 10 0 1 0-4.75-4.67" initial="idle" animate={state} variants={{ idle: { pathLength: 1, opacity: 1 }, active: { pathLength: [0.28, 1], opacity: [0.35, 1] } }} transition={iconTransition} />
         {[8, 12, 16].map((x, index) => <motion.path key={x} d={`M${x} 12h.01`} initial="idle" animate={state} variants={{ idle: { scale: 1, opacity: 1 }, active: { scale: [0, 1.28, 1], opacity: [0, 1, 1] } }} transition={{ ...iconTransition, delay: 0.12 + index * 0.08 }} style={{ transformBox: "view-box", transformOrigin: `${x}px 12px` }} />)}
       </motion.svg>
@@ -270,21 +510,27 @@ export function MobileNavIcon({ name, active, size = 22 }: MobileNavIconProps) {
 
   if (name === "Shops") {
     return (
-      <motion.svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...hoverMotion}>
-        <motion.path d="M17.75 10.3a1.12 1.12 0 0 0-1.55 0 2.5 2.5 0 0 1-3.45 0 1.12 1.12 0 0 0-1.55 0 2.5 2.5 0 0 1-3.45 0 1.12 1.12 0 0 0-1.55 0 2.5 2.5 0 0 1-3.77-3.25l2.89-4.18A2 2 0 0 1 7 2h10a2 2 0 0 1 1.65.87l2.9 4.19a2.5 2.5 0 0 1-3.8 3.24" initial="idle" animate={state} variants={{ idle: { pathLength: 1, opacity: 1 }, active: { pathLength: [0, 1], opacity: [0.3, 1] } }} transition={iconTransition} />
-        <motion.path d="M4 10.95V19a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8.05" initial="idle" animate={state} variants={{ idle: { pathLength: 1, opacity: 1 }, active: { pathLength: [0.15, 1], opacity: [0.4, 1] } }} transition={{ ...iconTransition, delay: 0.07 }} />
-        <motion.path d="M15 21v-5a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v5" initial="idle" animate={state} variants={{ idle: { scaleY: 1, opacity: 1 }, active: { scaleY: [0, 1.12, 1], opacity: [0, 1, 1] } }} transition={{ ...iconTransition, delay: 0.18 }} style={{ transformBox: "view-box", transformOrigin: "12px 21px" }} />
+      <motion.svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ overflow: "visible" }} {...hoverMotion}>
+        {[
+          "M2 11h20",
+          "m3.5 11 1.6 7.4a2 2 0 0 0 2 1.6h9.8a2 2 0 0 0 2-1.6l1.7-7.4",
+          "m5 11 4-7",
+          "m19 11-4-7",
+          "m9 11 1 9",
+          "m15 11-1 9",
+          "M4.5 15.5h15",
+        ].map((path, index) => <motion.path key={path} d={path} initial="idle" animate={state} variants={{ idle: { pathLength: 1, opacity: 1 }, active: { pathLength: [0, 1], opacity: [0, 1] } }} transition={{ duration: 0.5, delay: Math.min(index, 3) * 0.08, ease: [0.16, 1, 0.3, 1] }} />)}
       </motion.svg>
     );
   }
 
   if (name === "Learn") {
     return (
-      <motion.svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...hoverMotion}>
-        <motion.g initial="idle" animate={state} variants={{ idle: { scale: 1, rotate: 0 }, active: { scale: [1, 1.05, 0.98, 1], rotate: [0, -2, 2, 0] } }} transition={{ duration: 0.52, ease: [0.23, 1, 0.32, 1] }} style={{ transformBox: "view-box", transformOrigin: "12px 12px" }}>
-          <motion.path d="M12 7v14" variants={{ idle: { pathLength: 1, opacity: 1 }, active: { pathLength: [0.45, 1], opacity: [0.6, 1] } }} transition={iconTransition} />
-          {[[16, 12], [16, 8], [6, 12], [6, 8]].map(([x, y], index) => <motion.path key={`${x}-${y}`} d={`M${x} ${y}h2`} variants={{ idle: { opacity: 1, y: 0, scaleX: 1 }, active: { opacity: [0.55, 1], y: [1, -0.75, 0], scaleX: [0.9, 1.05, 1] } }} transition={{ ...iconTransition, delay: 0.08 + index * 0.04 }} style={{ transformBox: "view-box", transformOrigin: `${x + 1}px ${y}px` }} />)}
-          <motion.path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z" variants={{ idle: { pathLength: 1, opacity: 1 }, active: { pathLength: [0.75, 1], opacity: [0.6, 1] } }} transition={{ ...iconTransition, delay: 0.05 }} />
+      <motion.svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ overflow: "visible" }} {...hoverMotion}>
+        <motion.g initial="idle" animate={state} variants={{ idle: { scale: 1, rotate: 0, y: 0 }, active: { scale: [1, 1.04, 1], rotate: [0, -8, 8, -8, 0], y: [0, -2, 0] } }} transition={{ duration: 0.6, ease: "easeInOut", times: [0, 0.2, 0.5, 0.8, 1] }} style={{ transformBox: "view-box", transformOrigin: "12px 12px" }}>
+          <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20" />
+          <path d="M8 11h8" />
+          <path d="M8 7h6" />
         </motion.g>
       </motion.svg>
     );
@@ -293,8 +539,8 @@ export function MobileNavIcon({ name, active, size = 22 }: MobileNavIconProps) {
   if (name === "Profile") {
     return (
       <motion.svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...hoverMotion}>
-        <motion.circle cx="12" cy="8" r="4" initial="idle" animate={state} variants={{ idle: { scale: 1, opacity: 1 }, active: { scale: [0.5, 1.14, 1], opacity: [0.25, 1, 1] } }} transition={iconTransition} style={{ transformBox: "view-box", transformOrigin: "12px 8px" }} />
-        <motion.path d="M4 21a8 8 0 0 1 16 0" initial="idle" animate={state} variants={{ idle: { pathLength: 1, opacity: 1 }, active: { pathLength: [0, 1], opacity: [0.25, 1] } }} transition={{ ...iconTransition, delay: 0.12 }} />
+        <motion.path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" strokeDasharray="40" initial="idle" animate={state} variants={{ idle: { strokeDashoffset: 0, opacity: 1 }, active: { strokeDashoffset: [40, 0], opacity: [0.3, 1] } }} transition={{ duration: 0.6, ease: "easeInOut" }} />
+        <motion.circle cx="12" cy="7" r="4" initial="idle" animate={state} variants={{ idle: { scale: 1, opacity: 1 }, active: { scale: [0.6, 1.2, 1], opacity: [0, 1] } }} transition={{ duration: 0.5, ease: "easeOut", delay: 0.2 }} style={{ transformBox: "view-box", transformOrigin: "12px 7px" }} />
       </motion.svg>
     );
   }
