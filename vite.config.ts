@@ -3,7 +3,7 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import fs from "node:fs";
 import path from "node:path";
-import { defineConfig, type Plugin, type ViteDevServer } from "vite";
+import { defineConfig, type Plugin, type PluginOption, type ViteDevServer } from "vite";
 import { vitePluginManusRuntime } from "vite-plugin-manus-runtime";
 // Vite-free path constants, shared with the Express dev-server integration so
 // the two cannot drift. See vite.shared.ts for why it must not import `vite`.
@@ -185,10 +185,79 @@ function vitePluginAnalyticsTag(): Plugin {
   };
 }
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector(), vitePluginAnalyticsTag()];
+/**
+ * Builds the plugin list for the requested mode.
+ *
+ * The Manus-specific plugins are development conveniences that were being
+ * bundled into production. `vitePluginManusRuntime` alone inlined ~367 kB of
+ * JavaScript into index.html — 99.6% of the document — which the browser had to
+ * download and evaluate before the app could render. `jsxLocPlugin` and the
+ * debug collector are Manus-IDE tooling with no production role.
+ *
+ * `mode` comes from `defineConfig` rather than `process.env.NODE_ENV`, which is
+ * not reliably set at config-evaluation time.
+ *
+ * `vitePluginAnalyticsTag` runs in both modes: it is what strips the
+ * `%VITE_ANALYTICS_*%` placeholders from the built HTML.
+ */
+/**
+ * Deletes `__manus__/` from the built output.
+ *
+ * The directory holds the Manus debug collector, which `publicDir` copies
+ * verbatim into `dist/public` on every build. The `<script>` tag that loads it
+ * is dev-only, so in production the files are ~25 kB of unreachable JavaScript
+ * sitting on a public URL. They stay in `client/public` because the dev server
+ * serves them from there.
+ */
+function vitePluginStripDevAssets(): Plugin {
+  return {
+    name: "savanna-strip-dev-assets",
+    apply: "build",
+    closeBundle() {
+      const target = path.join(buildOutDir, "__manus__");
+      fs.rmSync(target, { recursive: true, force: true });
+    },
+  };
+}
 
-export default defineConfig({
-  plugins,
+/**
+ * Hosts the dev server is allowed to answer on.
+ *
+ * Vite 6+ rejects requests whose `Host` header is not on this list, which is
+ * what stops a public preview URL from being used as an open proxy. The
+ * previous value hard-coded the Manus sandbox domains; those are irrelevant to
+ * this deployment, and listing third-party hosts here means a takeover of that
+ * domain is also a way in. Anything genuinely needed (a tunnel, a staging
+ * preview) is opt-in through `VITE_ALLOWED_HOSTS`, comma-separated.
+ *
+ * Note this only affects `vite dev`; the production build never sees it.
+ */
+function devAllowedHosts(): string[] {
+  const base = ["localhost", "127.0.0.1"];
+  const extra = (process.env.VITE_ALLOWED_HOSTS ?? "")
+    .split(",")
+    .map(host => host.trim().toLowerCase())
+    .filter(Boolean);
+  // `Array.from` rather than a spread: this file is compiled with a target
+  // older than ES2015, where spreading a `Set` needs --downlevelIteration.
+  return Array.from(new Set(base.concat(extra)));
+}
+
+// `PluginOption` rather than `Plugin[]`: `react()` and `tailwindcss()` each
+// return arrays of plugins, so a flat `Plugin[]` does not describe the result.
+function buildPlugins(mode: string): PluginOption[] {
+  const isDev = mode === "development";
+  return [
+    react(),
+    tailwindcss(),
+    ...(isDev ? [jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector()] : []),
+    vitePluginAnalyticsTag(),
+    vitePluginStripDevAssets(),
+  ];
+}
+
+export default defineConfig(({ mode }) => ({
+  plugins: buildPlugins(mode),
   resolve: {
     alias: resolveAliases,
   },
@@ -201,18 +270,10 @@ export default defineConfig({
   },
   server: {
     host: true,
-    allowedHosts: [
-      ".manuspre.computer",
-      ".manus.computer",
-      ".manus-asia.computer",
-      ".manuscomputer.ai",
-      ".manusvm.computer",
-      "localhost",
-      "127.0.0.1",
-    ],
+    allowedHosts: devAllowedHosts(),
     fs: {
       strict: true,
       deny: ["**/.*"],
     },
   },
-});
+}));

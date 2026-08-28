@@ -1,4 +1,4 @@
-import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
+import { COOKIE_NAME } from "@shared/const";
 import { ForbiddenError } from "@shared/_core/errors";
 import { parse as parseCookieHeader } from "cookie";
 import type { Request } from "express";
@@ -123,15 +123,23 @@ class SessionService {
   }
 
   /**
-   * Resolves the caller from the session cookie, falling back to an
-   * `Authorization: Bearer <session>` header for clients that cannot send
-   * cookies (embedded webviews, Safari ITP).
+   * Resolves the caller from the session cookie.
+   *
+   * An `Authorization: Bearer <session>` fallback used to exist for clients
+   * that cannot send cookies (embedded webviews, Safari ITP). It is disabled in
+   * production: the header is readable by any script that can reach it, so a
+   * single leaked token bypassed every cookie protection (HttpOnly, SameSite,
+   * Secure) that makes the cookie path safe. The storage proxy also accepts
+   * this method, so a stolen token granted access to private media too.
+   *
+   * Set `ALLOW_BEARER_AUTH=true` to re-enable it for a deployment that
+   * genuinely needs it — and only behind a client you control.
    */
   async authenticateRequest(req: Request): Promise<User> {
     const cookies = this.parseCookies(req.headers.cookie);
     let sessionToken = cookies.get(COOKIE_NAME);
 
-    if (!sessionToken) {
+    if (!sessionToken && process.env.ALLOW_BEARER_AUTH === "true") {
       const authHeader = req.headers.authorization;
       if (typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
         sessionToken = authHeader.slice(7);
@@ -171,4 +179,3 @@ class SessionService {
 }
 
 export const sdk = new SessionService();
-export { ONE_YEAR_MS };

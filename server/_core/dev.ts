@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { createServer } from "http";
+import { assertRuntimeConfig } from "../db";
 import { createApp } from "./app";
 import { startListening } from "./listen";
 import { setupVite } from "./vite";
@@ -12,6 +13,7 @@ import { setupVite } from "./vite";
  * its plugins stay out of the production bundle.
  */
 async function startServer() {
+  assertRuntimeConfig();
   const app = await createApp();
   const server = createServer(app);
   await setupVite(app, server);

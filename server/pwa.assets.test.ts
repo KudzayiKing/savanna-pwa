@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -12,7 +12,7 @@ describe("Savanna PWA assets", () => {
       short_name: string;
       start_url: string;
       display: string;
-      icons: Array<{ src: string; sizes: string }>;
+      icons: Array<{ src: string; sizes: string; purpose?: string }>;
     };
 
     expect(manifest.name).toContain("Savanna");
@@ -20,13 +20,44 @@ describe("Savanna PWA assets", () => {
     expect(manifest.start_url).toBe("/");
     expect(manifest.display).toBe("standalone");
     expect(manifest.icons.map(icon => icon.sizes)).toEqual(expect.arrayContaining(["192x192", "512x512"]));
-    expect(manifest.icons.every(icon => icon.src.startsWith("/manus-storage/"))).toBe(true);
+
+    // Icons must ship with the app. They used to point at /manus-storage/...,
+    // an external host, which meant an install showed a broken icon whenever
+    // that host was unreachable and the mark could not be rebranded locally.
+    for (const icon of manifest.icons) {
+      expect(icon.src.startsWith("/"), `icon must be a root-relative path: ${icon.src}`).toBe(true);
+      expect(icon.src).not.toContain("manus-storage");
+      const onDisk = resolve(projectRoot, "client/public", icon.src.replace(/^\//, ""));
+      await expect(access(onDisk), `icon missing from client/public: ${icon.src}`).resolves.toBeUndefined();
+    }
+
+    // Without a maskable icon Android crops the mark to an arbitrary shape.
+    expect(manifest.icons.some(icon => (icon.purpose ?? "").includes("maskable"))).toBe(true);
   });
 
   it("keeps the offline service worker away from sensitive API traffic", async () => {
     const worker = await readFile(resolve(projectRoot, "client/public/service-worker.js"), "utf8");
+
+    // Only same-origin GETs are cacheable; API traffic and mutations always go
+    // to the network so no response carrying user data is ever written to disk.
     expect(worker).toContain('url.pathname.startsWith("/api/")');
-    expect(worker).toContain('request.method !== "GET"');
+    expect(worker).toMatch(/request\.method\s*(?:===|!==)\s*"GET"/);
+
+    // A response body can only be consumed once, so the copy that goes to the
+    // cache has to be a clone — otherwise caching silently swallows the body.
+    expect(worker).toContain("response.clone()");
+  });
+
+  it("applies service worker updates only after the page agrees", async () => {
+    const worker = await readFile(resolve(projectRoot, "client/public/service-worker.js"), "utf8");
+
+    // Activating during install swaps the cached shell out from under code that
+    // is still running, so lazily-loaded chunks 404. The worker waits for the
+    // page to opt in instead.
+    expect(worker).toContain('addEventListener("message"');
+    expect(worker).toContain("SKIP_WAITING");
+    expect(worker).toMatch(/addEventListener\("message"[\s\S]{0,400}SKIP_WAITING/);
+    expect(worker).not.toMatch(/addEventListener\("install"[\s\S]{0,400}self\.skipWaiting\(\)/);
   });
 
   it("provides both browser install handling and an explicit offline status surface", async () => {
@@ -56,7 +87,7 @@ describe("Savanna PWA assets", () => {
     expect(styles).not.toContain(".ember-wordmark");
     expect(styles).toContain('"Ramabhadra"');
     expect(html).toContain("family=Ramabhadra");
-    expect(styles).toContain("--ivory: #F6F7F4;");
+    expect(styles).toContain("--ivory: #FFFFFF;");
     expect(styles).toContain("--obsidian: #111B21;");
     expect(styles).toContain("--obsidian-surface: #202C33;");
     expect(styles).toContain("--warm-white: #E9EDEF;");
@@ -356,17 +387,14 @@ describe("Savanna PWA assets", () => {
     );
     expect(mobileLabel).toBeNull();
 
-    // Bottom nav has a clearly tinted, *visible* warm surface in light mode
-    // (not a transparent near-white that disappears on the white canvas).
+    // Bottom nav stays glassy while its light-mode base is white.
     expect(styles).toMatch(
-      /:root:not\(\.dark\) \.savanna-app nav\.savanna-mobile-bottom-nav\.savanna-glass-bottom-nav \{[\s\S]*?background:\s*color-mix\(in srgb,\s*#F6F7F4 [^,]+,\s*transparent\)/
+      /:root:not\(\.dark\) \.savanna-app nav\.savanna-mobile-bottom-nav\.savanna-glass-bottom-nav \{[\s\S]*?background:\s*color-mix\(in srgb,\s*#FFFFFF [^,]+,\s*transparent\)/
     );
 
-    // The mobile message thread sits on the same warm-ivory surface as the
-    // desktop message thread — header/composer stay white, the thread itself
-    // gets the `#F6F7F4` ivory wash to match the web conversation view.
+    // The mobile and desktop message threads stay white in light mode.
     expect(styles).toMatch(
-      /:root:not\(\.dark\) \.savanna-app \.savanna-desktop-message-thread,[\s\S]*?savanna-mobile-message-thread\s*\{[\s\S]*?background:\s*#F6F7F4\s*!important/
+      /:root:not\(\.dark\) \.savanna-app \.savanna-desktop-message-thread,[\s\S]*?savanna-mobile-message-thread\s*\{[\s\S]*?background:\s*#FFFFFF\s*!important/
     );
 
     // No rule may lump the bottom nav together with the chat search.
@@ -415,7 +443,13 @@ describe("Savanna PWA assets", () => {
       /:root:not\(\.dark\) \.savanna-app nav\.savanna-mobile-bottom-nav\.savanna-glass-bottom-nav \{[\s\S]*?box-shadow:\s*none\s*!important/
     );
     expect(styles).toMatch(
+      /:root:not\(\.dark\) \.savanna-app nav\.savanna-mobile-bottom-nav\.savanna-glass-bottom-nav \{[\s\S]*?border:\s*1px solid/
+    );
+    expect(styles).toMatch(
       /\.dark \.savanna-app nav\.savanna-mobile-bottom-nav\.savanna-glass-bottom-nav \{[\s\S]*?box-shadow:\s*none\s*!important/
+    );
+    expect(styles).toMatch(
+      /\.dark \.savanna-app nav\.savanna-mobile-bottom-nav\.savanna-glass-bottom-nav \{[\s\S]*?border:\s*1px solid/
     );
   });
 });

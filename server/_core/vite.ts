@@ -3,9 +3,30 @@ import fs from "node:fs";
 import { type Server } from "http";
 import { nanoid } from "nanoid";
 import path from "node:path";
-import { createServer as createViteServer } from "vite";
+import { createServer as createViteServer, type ConfigEnv, type UserConfig } from "vite";
 import { clientRoot } from "../../vite.shared";
 import viteConfig from "../../vite.config";
+
+/**
+ * `vite.config.ts` exports the *function* form of `defineConfig` so it can
+ * switch plugins on `mode`. Spreading that default export therefore spreads a
+ * function, which contributes no own properties — silently discarding `root`,
+ * `publicDir`, `resolve.alias` and `envDir`.
+ *
+ * The symptoms are confusing rather than loud: `client/public` stops being
+ * served (so `/manifest.webmanifest` and `/service-worker.js` fall through to
+ * the SPA HTML) and every `@/…` import fails to resolve. Resolve the config
+ * before spreading it.
+ */
+async function resolveViteConfig(): Promise<UserConfig> {
+  const exported = viteConfig as unknown as
+    | UserConfig
+    | ((env: ConfigEnv) => UserConfig | Promise<UserConfig>);
+
+  return typeof exported === "function"
+    ? await exported({ command: "serve", mode: "development" })
+    : exported;
+}
 
 /**
  * Attaches the Vite dev server as Express middleware.
@@ -23,10 +44,15 @@ export async function setupVite(app: Express, server: Server) {
     allowedHosts: true as const,
   };
 
+  const baseConfig = await resolveViteConfig();
+
   const vite = await createViteServer({
-    ...viteConfig,
+    ...baseConfig,
     configFile: false,
-    server: serverOptions,
+    // Merge rather than replace: the config supplies `host` and
+    // `fs.{strict,deny}`, which limit what the dev server will read off disk.
+    // Overwriting `server` wholesale silently disabled both.
+    server: { ...baseConfig.server, ...serverOptions },
     appType: "custom",
   });
 

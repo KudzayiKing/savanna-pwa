@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Savanna">
+  <title>Savanna</title>
+  <defs>
+    <!-- Brand gold ramp: --bright-gold -> --gold -> --deep-gold -->
+    <linearGradient id="savanna-gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#E8B64A" />
+      <stop offset="55%" stop-color="#D9A441" />
+      <stop offset="100%" stop-color="#A87820" />
+    </linearGradient>
+  </defs>
+
+  <!-- --obsidian -->
+  <rect width="512" height="512" rx="112" fill="#111B21" />
+
+  <path
+    d="M 364 148
+       C 364 102, 323 72, 256 72
+       C 175 72, 134 110, 134 167
+       C 134 224, 202 237, 256 253
+       C 315 271, 377 288, 377 345
+       C 377 402, 334 440, 256 440
+       C 188 440, 148 410, 148 359"
+    fill="none"
+    stroke="url(#savanna-gold)"
+    stroke-width="56"
+    stroke-linecap="round"
+  />
+</svg>

@@ -39,7 +39,7 @@
 :root {
   color-scheme: light;
   --radius: 0.75rem;
-  --ivory: #F6F7F4;
+  --ivory: #FFFFFF;
   --ivory-surface: #FFFFFF;
   --soft-surface: #F6F5F5;
   --elevated-surface: #FAFBF8;
@@ -235,7 +235,7 @@ button:not(:disabled), a {
 /* Semantic palette bridge for existing product surfaces that use explicit utility colors. */
 [class*="bg-[#fcfaf4]"],
 [class*="bg-[#f6f0e2]"],
-[class*="bg-[#f7f6f1]"] { background-color: #F6F7F4 !important; }
+[class*="bg-[#f7f6f1]"] { background-color: #FFFFFF !important; }
 [class*="bg-[#faf4e8]"],
 [class*="bg-[#fffaf0]"],
 [class*="bg-[#fffdf8]"],
@@ -537,7 +537,7 @@ button:not(:disabled), a {
   }
 }
 
-/* Mobile reference overrides: no decorative card or bottom-nav borders, with explicit WhatsApp-dark surface roles. */
+/* Mobile reference overrides with explicit WhatsApp-dark surface roles. */
 @media (max-width: 1023px) {
   .dark .savanna-app > header.sticky,
   .dark .savanna-app > header.sticky > section {
@@ -997,7 +997,7 @@ button:not(:disabled), a {
 }
 
 :root:not(.dark) .savanna-app {
-  background: #F6F7F4 !important;
+  background: #FFFFFF !important;
   color: #151A17 !important;
 }
 
@@ -1060,7 +1060,7 @@ button:not(:disabled), a {
 :root:not(.dark) .savanna-app .savanna-mobile-header,
 :root:not(.dark) .savanna-app .savanna-mobile-header > section {
   border-color: #DDE3DC !important;
-  background: color-mix(in srgb, #FFFFFF 92%, #F6F7F4) !important;
+  background: #FFFFFF !important;
 }
 
 :root:not(.dark) .savanna-app nav[aria-label="Mobile navigation"] [class~="text-[#8a765d]"] {
@@ -1102,10 +1102,10 @@ button:not(:disabled), a {
 
 :root:not(.dark) .savanna-app .savanna-desktop-message-thread,
 :root:not(.dark) .savanna-app .savanna-mobile-message-thread {
-  background: #F6F7F4 !important;
+  background: #FFFFFF !important;
 }
 
-/* Light-mode surfaces that are intentionally the warm-ivory tone.
+/* Light-mode field surfaces that intentionally use the soft search tone.
  *
  * The mobile chat search sits in this group so it matches the desktop
  * `.savanna-desktop-chat-search` cream pill — a soft field on the white
@@ -1213,6 +1213,16 @@ button:not(:disabled), a {
   :is([class~="bg-white"], [class*="bg-[#fffaf0]"], [class*="bg-[#fffdf8]"], [class*="bg-[#fbf4e8]"], [class*="bg-[#f5f7f3]"], [class*="bg-[#f5f7f2]"], .savanna-discovery-card, .savanna-discovery-empty) {
   background-color: #FFFFFF !important;
   box-shadow: 0 10px 28px rgba(21, 26, 23, 0.05) !important;
+}
+
+:root:not(.dark) .savanna-app :is(.savanna-route-shops, .savanna-route-learn)
+  :is(.savanna-discovery-card, .savanna-discovery-empty),
+:root:not(.dark) .savanna-app .savanna-route-orders
+  :is(article[class*="rounded"], div[class*="rounded-[24px]"], section[class*="rounded"]) {
+  background: #F6F5F5 !important;
+  background-color: #F6F5F5 !important;
+  border: 1px solid #DDE3DC !important;
+  box-shadow: 0 12px 30px rgba(21, 26, 23, 0.06) !important;
 }
 
 :root:not(.dark) .savanna-app :is(.savanna-route-shops, .savanna-route-learn, .savanna-route-orders, .savanna-profile-page)
@@ -1962,7 +1972,7 @@ button:not(:disabled), a {
 /* Shared glass treatment for persistent navigation chrome in both themes. */
 .savanna-app .savanna-glass-header,
 .savanna-app .savanna-glass-bottom-nav {
-  background: color-mix(in srgb, #FFFFFF 72%, #F6F7F4 12%, transparent) !important;
+  background: color-mix(in srgb, #FFFFFF 84%, transparent) !important;
   background-color: color-mix(in srgb, #FFFFFF 72%, transparent) !important;
   border-color: color-mix(in srgb, #FFFFFF 58%, #DDE3DC) !important;
   -webkit-backdrop-filter: saturate(180%) blur(24px);
@@ -1988,7 +1998,7 @@ button:not(:disabled), a {
 }
 
 .savanna-app .savanna-glass-bottom-nav {
-  background: color-mix(in srgb, #FFFFFF 50%, #F6F7F4 8%, transparent) !important;
+  background: color-mix(in srgb, #FFFFFF 58%, transparent) !important;
   background-color: color-mix(in srgb, #FFFFFF 50%, transparent) !important;
   -webkit-backdrop-filter: saturate(190%) blur(28px);
   backdrop-filter: saturate(190%) blur(28px);
@@ -1996,14 +2006,15 @@ button:not(:disabled), a {
 }
 
 .savanna-app nav.savanna-mobile-bottom-nav.savanna-glass-bottom-nav {
-  background: color-mix(in srgb, #FFFFFF 50%, #F6F7F4 8%, transparent) !important;
+  background: color-mix(in srgb, #FFFFFF 58%, transparent) !important;
   background-color: color-mix(in srgb, #FFFFFF 50%, transparent) !important;
+  border: 1px solid color-mix(in srgb, #DDE3DC 84%, #FFFFFF 16%) !important;
   box-shadow: none !important;
 }
 
 :root:not(.dark) .savanna-app .savanna-mobile-header.savanna-glass-header,
 :root:not(.dark) .savanna-app .savanna-glass-header {
-  background: color-mix(in srgb, #FFFFFF 52%, #F6F7F4 8%, transparent) !important;
+  background: color-mix(in srgb, #FFFFFF 60%, transparent) !important;
   background-color: color-mix(in srgb, #FFFFFF 52%, transparent) !important;
   border-color: color-mix(in srgb, #FFFFFF 50%, #DDE3DC) !important;
   box-shadow: none !important;
@@ -2018,8 +2029,9 @@ button:not(:disabled), a {
 }
 
 :root:not(.dark) .savanna-app nav.savanna-mobile-bottom-nav.savanna-glass-bottom-nav {
-  background: color-mix(in srgb, #F6F7F4 62%, transparent) !important;
-  background-color: color-mix(in srgb, #F6F7F4 62%, transparent) !important;
+  background: color-mix(in srgb, #FFFFFF 62%, transparent) !important;
+  background-color: color-mix(in srgb, #FFFFFF 62%, transparent) !important;
+  border: 1px solid color-mix(in srgb, #DDE3DC 88%, #FFFFFF 12%) !important;
   box-shadow: none !important;
 }
 
@@ -2061,5 +2073,105 @@ button:not(:disabled), a {
 .dark .savanna-app nav.savanna-mobile-bottom-nav.savanna-glass-bottom-nav {
   background: color-mix(in srgb, var(--chat-surface) 54%, var(--chat-bg) 6%, transparent) !important;
   background-color: color-mix(in srgb, var(--chat-surface) 54%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--chat-border) 82%, rgba(255, 255, 255, 0.18)) !important;
   box-shadow: none !important;
+}
+
+/* Light-mode final cascade: pin the discovery search field, the inactive filter
+   tabs, and the discovery-card icon tile to the warm Savanna palette. Scoped to
+   the three discovery routes so the /messages cream pill is untouched. */
+:root:not(.dark) .savanna-app :is(.savanna-route-shops, .savanna-route-learn, .savanna-route-orders)
+  .savanna-route-search {
+  background: #F6F5F5 !important;
+  background-color: #F6F5F5 !important;
+  border-color: #DDE3DC !important;
+  color: #151A17 !important;
+  box-shadow: none !important;
+}
+
+:root:not(.dark) .savanna-app :is(.savanna-route-shops, .savanna-route-learn, .savanna-route-orders)
+  .savanna-route-search input {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: #151A17 !important;
+}
+
+:root:not(.dark) .savanna-app :is(.savanna-route-shops, .savanna-route-learn, .savanna-route-orders)
+  .savanna-route-search svg,
+:root:not(.dark) .savanna-app :is(.savanna-route-shops, .savanna-route-learn, .savanna-route-orders)
+  .savanna-route-search input::placeholder {
+  color: #5F6861 !important;
+  opacity: 1;
+}
+
+/* Inactive filter tabs sit flat on the page background; the muted border keeps
+   them discoverable as tappable chips. */
+:root:not(.dark) .savanna-app :is(.savanna-route-shops, .savanna-route-learn)
+  .savanna-discovery-tabs button:not([data-active="true"]) {
+  background: transparent !important;
+  background-color: transparent !important;
+  border-color: #DDE3DC !important;
+  color: #5F6861 !important;
+}
+
+/* Discovery card icon tile — keep the soft gold tile, even if a product card or
+   section forgets the utility. */
+:root:not(.dark) .savanna-app :is(.savanna-route-shops, .savanna-route-learn, .savanna-route-orders)
+  [class~="bg-[#f7e5bd]"] {
+  background: #FFF4D8 !important;
+  background-color: #FFF4D8 !important;
+}
+
+/* Card icons and card text use the bright brand gold (#D9A441) so they match the
+   route CTA buttons. The global palette bridge maps text-[#9a6410] and
+   text-[#7b4a0d] to the deeper #A87820; this route-scoped rule wins on
+   specificity (0,5,0) and file order.
+   Scoped to the gold icon tile rather than a blanket `.savanna-discovery-card
+   svg` so the Learn course cover icon (white on a gold gradient) is untouched. */
+:root:not(.dark) .savanna-app :is(.savanna-route-shops, .savanna-route-learn, .savanna-route-orders)
+  :is([class~="text-[#9a6410]"], [class~="text-[#7b4a0d]"], [class~="text-[#a4660d]"], [class~="text-[#775b31]"]) {
+  color: #D9A441 !important;
+}
+
+:root:not(.dark) .savanna-app :is(.savanna-route-shops, .savanna-route-learn, .savanna-route-orders)
+  [class~="bg-[#f7e5bd]"] svg {
+  color: #D9A441 !important;
+}
+
+/* /orders safety net: any legacy green tokens inside the orders route collapse
+   to the brand gold so the page can never render green logos again. */
+:root:not(.dark) .savanna-app .savanna-route-orders
+  [class~="text-[#24482f]"],
+:root:not(.dark) .savanna-app .savanna-route-orders
+  [class~="text-[#31583a]"],
+:root:not(.dark) .savanna-app .savanna-route-orders
+  [class~="text-[#5c815d]"] {
+  color: #D9A441 !important;
+}
+
+:root:not(.dark) .savanna-app .savanna-route-orders
+  [class~="bg-[#24482f]"] {
+  background: #D9A441 !important;
+  background-color: #D9A441 !important;
+}
+
+:root:not(.dark) .savanna-app .savanna-route-orders
+  [class~="bg-[#dfe8d9]"],
+:root:not(.dark) .savanna-app .savanna-route-orders
+  [class~="bg-[#e8dfc9]"] {
+  background: #FFF4D8 !important;
+  background-color: #FFF4D8 !important;
+}
+
+:root:not(.dark) .savanna-app .savanna-route-orders
+  [class~="bg-[#f5f7f3]"] {
+  background: #FFFFFF !important;
+  background-color: #FFFFFF !important;
+}
+
+:root:not(.dark) .savanna-app .savanna-route-orders
+  [class~="border-[#dce1d3]"],
+:root:not(.dark) .savanna-app .savanna-route-orders
+  [class~="border-[#cbd6c6]"] {
+  border-color: #DDE3DC !important;
 }

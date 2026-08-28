@@ -14,6 +14,22 @@ import { exportJWK, generateKeyPair, SignJWT, type KeyLike } from "jose";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { HttpError } from "@shared/_core/errors";
 
+/**
+ * `createSessionFromSupabaseToken` looks the user up before minting a session.
+ * This suite is deliberately offline, so the database module is stubbed instead
+ * of connected: `getUserByOpenId` resolving to undefined is the "first sign-in"
+ * path, which is exactly what the assertions below expect.
+ *
+ * `vi.hoisted` is required because `vi.mock` is hoisted above the imports, so
+ * the factory would otherwise run before `vi` exists.
+ */
+const dbStub = vi.hoisted(() => ({
+  getUserByOpenId: async () => undefined,
+  upsertUser: async () => undefined,
+}));
+
+vi.mock("./db", () => dbStub);
+
 // A 64-byte secret base64-encoded, i.e. the same shape Supabase issues. It must
 // be clean base64 for the decoded-key fallback to be exercised (see below).
 const SUPABASE_JWT_SECRET = randomBytes(64).toString("base64");

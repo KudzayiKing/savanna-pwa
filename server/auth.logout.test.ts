@@ -60,7 +60,9 @@ describe("auth.logout", () => {
       expect(cookie.options).toMatchObject({
         maxAge: -1,
         secure: true,
-        sameSite: "none",
+        // `lax`, never `none`: SameSite=None would let any third-party page
+        // attach the session cookie to a cross-site request.
+        sameSite: "lax",
         httpOnly: true,
         path: "/",
       });

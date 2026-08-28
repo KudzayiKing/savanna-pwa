@@ -1,4 +1,4 @@
-export { COOKIE_NAME, ONE_YEAR_MS, REFRESH_COOKIE_NAME } from "@shared/const";
+export { COOKIE_NAME, REFRESH_COOKIE_NAME, THIRTY_DAYS_MS } from "@shared/const";
 
 /**
  * Sends the user to the login page, preserving where they were headed.

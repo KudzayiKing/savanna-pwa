@@ -41,10 +41,21 @@ export function getSessionCookieOptions(
 
   const secure = isSecureRequest(req);
 
+  // Always `lax`, never `none`.
+  //
+  // `SameSite=None` sends the session cookie on every cross-site request, which
+  // turns any third-party page into a CSRF vector — the cookie rides along with
+  // a forged form post or fetch. Savanna's front end is served from the same
+  // origin as its API, so there is no legitimate cross-site caller that needs
+  // the cookie, and the `Authorization: Bearer` fallback that used to cover
+  // embedded webviews is disabled in production (see P1.10).
+  //
+  // `lax` still sends the cookie on top-level GET navigations, so following a
+  // link into the app keeps the user signed in.
   return {
     httpOnly: true,
     path: "/",
-    sameSite: secure ? "none" : "lax",
+    sameSite: "lax",
     secure,
   };
 }

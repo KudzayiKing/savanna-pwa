@@ -62,6 +62,126 @@ export function disableFingerprint(app: Express) {
   app.disable("x-powered-by");
 }
 
+/**
+ * Extra origins allowed to make state-changing API calls, comma-separated.
+ *
+ * Only needed when a browser client is served from a different host than the
+ * API — e.g. a preview deployment. Same-origin deployments (the default) must
+ * leave this empty; every entry here is a host that CSRF protection will trust.
+ */
+function allowedOrigins(): Set<string> {
+  const raw = process.env.ALLOWED_ORIGINS ?? "";
+  return new Set(
+    raw
+      .split(",")
+      .map(hostOf)
+      .filter(Boolean)
+  );
+}
+
+/**
+ * Extracts `host` (including any port) from an origin, referer or allowlist
+ * entry.
+ *
+ * Allowlist entries may be written either as a full origin
+ * (`https://preview.example`) or a bare host (`preview.example`), so a scheme is
+ * added when one is missing. Both sides of the comparison go through this
+ * function, so the two spellings cannot drift apart.
+ */
+function hostOf(value: string): string {
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) return "";
+  const withScheme = /^https?:\/\//.test(trimmed) ? trimmed : `https://${trimmed}`;
+  try {
+    return new URL(withScheme).host.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * CSRF defence for the tRPC endpoint.
+ *
+ * A cookie-only session is forgeable: any page on the internet can issue a
+ * cross-site POST and the browser attaches the session cookie automatically.
+ * `SameSite=Lax` blocks the classic form-post variant, but it does not stop a
+ * cross-site `fetch` from an allowed subdomain, and it is not supported on
+ * every browser we care about. Checking `Origin` is the reliable backstop —
+ * browsers set it on every cross-origin request and it cannot be overwritten
+ * by page script.
+ *
+ * Requests with no `Origin` header are allowed through: those are same-origin
+ * navigations, server-to-server calls and CLI tools, which are not CSRF
+ * vectors. The risk this leaves is a client that never sends `Origin`, and
+ * refusing those would break more than it protects.
+ */
+export function verifyOrigin(req: Request, res: Response, next: NextFunction) {
+  const method = req.method.toUpperCase();
+
+  // Safe methods cannot change state, so there is nothing to forge.
+  if (method === "GET" || method === "HEAD" || method === "OPTIONS") {
+    next();
+    return;
+  }
+
+  const origin = req.headers.origin ?? req.headers.referer;
+  if (typeof origin !== "string" || origin === "") {
+    next();
+    return;
+  }
+
+  const host = hostOf(origin);
+  const expected = hostOf(req.headers.host ?? "");
+
+  if (host && (host === expected || allowedOrigins().has(host))) {
+    next();
+    return;
+  }
+
+  console.warn(`[CSRF] blocked ${method} ${req.path} from origin ${origin || "(empty)"}`);
+  res.status(403).json({ error: "Cross-origin request denied" });
+}
+
+/**
+ * Last-resort error handler.
+ *
+ * Express renders unhandled exceptions as an HTML page containing the message
+ * and, in development, the full stack. Beyond leaking internals, it also
+ * returns `text/html` from endpoints that clients expect to be JSON.
+ *
+ * Anything reaching here is by definition unexpected, so the response is always
+ * a generic 500. `err.status`/`err.statusCode` are honoured when they are 4xx,
+ * because body-parser and multer set them for genuine client mistakes (bad
+ * JSON, payload too large) and those are worth reporting accurately.
+ */
+export function errorHandler(
+  err: unknown,
+  req: Request,
+  res: Response,
+  _next: NextFunction
+) {
+  const status =
+    typeof err === "object" && err !== null
+      ? Number((err as { status?: unknown; statusCode?: unknown }).status ?? (err as { statusCode?: unknown }).statusCode)
+      : NaN;
+
+  // A 4xx from a body parser is a real client error; report it as-is.
+  if (Number.isInteger(status) && status >= 400 && status < 500) {
+    console.warn(`[HTTP ${status}] ${req.method} ${req.path}`);
+    res.status(status).json({ error: "Request could not be processed" });
+    return;
+  }
+
+  console.error(`[Unhandled] ${req.method} ${req.path}`, err);
+
+  if (res.headersSent) {
+    res.end();
+    return;
+  }
+
+  res.status(500).json({ error: "Something went wrong on our end. Please try again." });
+}
+
 type RateLimitOptions = {
   /** Window length in milliseconds. */
   windowMs: number;

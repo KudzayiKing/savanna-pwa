@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, inArray, isNull, or } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   auditEvents,
@@ -38,22 +38,81 @@ import {
   users,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
+import { bytesMatchMimeType } from "./media";
 import { storageGetSignedUrl, storagePut } from "./storage";
 import { createCipheriv, createHash, randomBytes } from "node:crypto";
 import { canAccessLesson, canMerchantAdvanceOrder, canTransitionPaymentIntent, canViewStory, resolveReceiptStatus } from "../shared/domainRules";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
+/**
+ * Fails the process at startup if required configuration is missing.
+ *
+ * Without this the server booted happily with no database and no session
+ * secret: `getDb()` logged a warning and returned null, `upsertUser()` became
+ * a no-op, and every request silently succeeded while persisting nothing. That
+ * is the worst possible failure mode — it looks healthy and loses data.
+ *
+ * Call this from both entry points before listening.
+ */
+export function assertRuntimeConfig(): void {
+  const missing = (
+    [
+      ["DATABASE_URL", process.env.DATABASE_URL],
+      ["JWT_SECRET", ENV.cookieSecret],
+    ] as const
+  )
+    .filter(([, value]) => !value)
+    .map(([name]) => name);
+
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing required environment variables: ${missing.join(", ")}. ` +
+        `Copy .env.example to .env and fill it in.`
+    );
+  }
+}
+
+/**
+ * Returns the database handle, throwing if it cannot be obtained.
+ *
+ * Previously this returned `null` when `DATABASE_URL` was unset, and every
+ * caller had a `if (!db)` branch that turned writes into silent no-ops. Failing
+ * loudly is strictly better: a 500 the operator can see beats a "success" that
+ * persisted nothing.
+ */
 export async function getDb() {
-  if (!_db && process.env.DATABASE_URL) {
+  if (!_db) {
+    if (!process.env.DATABASE_URL) {
+      throw new Error(
+        "DATABASE_URL is not configured. Call assertRuntimeConfig() at startup."
+      );
+    }
     try {
       _db = drizzle(process.env.DATABASE_URL);
     } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
-      _db = null;
+      console.error("[Database] Failed to connect:", error);
+      throw new Error("Database connection could not be established");
     }
   }
   return _db;
+}
+
+/**
+ * Proves the database actually answers, and returns how long it took.
+ *
+ * Drizzle opens its connection lazily, so a process that has never served a
+ * query looks perfectly healthy right up until real traffic arrives. A
+ * readiness probe has to touch the database to mean anything — that is the one
+ * dependency Savanna cannot degrade without.
+ *
+ * Throws on failure; callers decide whether that means 503 or a degraded flag.
+ */
+export async function pingDatabase(): Promise<number> {
+  const startedAt = Date.now();
+  const db = await getDb();
+  await db.execute(sql`select 1`);
+  return Date.now() - startedAt;
 }
 
 export async function upsertUser(user: InsertUser): Promise<void> {
@@ -328,6 +387,9 @@ export async function sendMessageAttachment(input: { userId: number; conversatio
   if (!db) throw new Error("Database is unavailable");
   const bytes = Buffer.from(input.base64Data, "base64");
   if (bytes.byteLength !== input.byteSize || bytes.byteLength > 8 * 1024 * 1024) throw new Error("Attachment size could not be verified");
+  // The declared type is client-supplied; check it against the actual bytes so
+  // a mislabelled file cannot be stored and later served under a type it isn't.
+  if (!bytesMatchMimeType(bytes, input.mimeType)) throw new Error("Attachment contents do not match the declared file type");
   const safeFileName = input.fileName.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120) || "attachment";
   const upload = await storagePut(`private/conversations/${input.conversationId}/${input.userId}/${safeFileName}`, bytes, input.mimeType);
   const result = await db.insert(messages).values({ conversationId: input.conversationId, senderUserId: input.userId, clientMessageId: input.clientMessageId, payload: `Attachment: ${safeFileName}`, contentType: "attachment", status: "sent" });
@@ -460,9 +522,38 @@ export async function getPublicProfile(viewerUserId: number | null, userId: numb
   return { id: profile.id, userId: profile.userId, displayName: profile.displayName, bio: profile.bio, countryCode: profile.countryCode, city: profile.city, profileVisibility: profile.profileVisibility, avatarUrl };
 }
 
-function encryptSettlementReference(value: string) {
+/**
+ * Derives the key used to encrypt merchant settlement references at rest.
+ *
+ * This must NOT be the session secret. Rotating `JWT_SECRET` is a routine
+ * security operation — you do it after any suspicion of compromise — but it
+ * also has to invalidate every live session. Tying settlement encryption to the
+ * same value means that operation silently destroys the ability to decrypt
+ * stored payout details, so the two can never be rotated independently.
+ */
+function settlementKey(): Buffer {
+  const dedicated = process.env.SETTLEMENT_ENCRYPTION_KEY;
+  if (dedicated) return createHash("sha256").update(dedicated).digest();
+
+  // Development convenience only. In production a missing key is a hard error
+  // rather than a silent fallback, so the coupling cannot creep back in.
+  if (ENV.isProduction) {
+    throw new Error(
+      "SETTLEMENT_ENCRYPTION_KEY is required in production. " +
+        "Generate one with `openssl rand -base64 48`."
+    );
+  }
+
   if (!ENV.cookieSecret) throw new Error("Server encryption configuration is unavailable");
-  const key = createHash("sha256").update(ENV.cookieSecret).digest();
+  console.warn(
+    "[Settlement] SETTLEMENT_ENCRYPTION_KEY is unset; falling back to JWT_SECRET. " +
+      "Set a dedicated key before deploying."
+  );
+  return createHash("sha256").update(ENV.cookieSecret).digest();
+}
+
+function encryptSettlementReference(value: string) {
+  const key = settlementKey();
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", key, iv);
   const ciphertext = Buffer.concat([cipher.update(value, "utf8"), cipher.final()]);
@@ -723,6 +814,9 @@ export async function uploadCourseLessonVideo(userId: number, input: { lessonId:
   await requireCourseCreator(userId, lesson.courseId);
   const bytes = Buffer.from(input.base64Data, "base64");
   if (bytes.byteLength !== input.byteSize || bytes.byteLength > 8 * 1024 * 1024) throw new Error("Video size could not be verified");
+  // Paid content is gated on enrollment, so the stored type must be real — a
+  // mislabelled file served as video/mp4 is a stored-XSS vector for learners.
+  if (!bytesMatchMimeType(bytes, "video/mp4")) throw new Error("Video contents are not a valid MP4 file");
   const safeFileName = input.fileName.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120) || "lesson.mp4";
   const upload = await storagePut(`private/courses/${lesson.courseId}/${lesson.id}/${safeFileName}`, bytes, "video/mp4");
   await db.update(courseLessons).set({ videoStorageKey: upload.key, videoMimeType: "video/mp4" }).where(eq(courseLessons.id, lesson.id));
@@ -817,6 +911,19 @@ export async function getPaymentIntentForUser(userId: number, paymentIntentId: n
   return { intent, receipt: receipt ?? null };
 }
 
+/**
+ * True when a write was rejected by a unique index.
+ *
+ * MySQL reports this as `ER_DUP_ENTRY` (errno 1062). Drizzle surfaces the
+ * driver's error object unchanged, so both the string code and the numeric
+ * errno are checked — different mysql2 versions populate them differently.
+ */
+function isDuplicateKeyError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  const candidate = error as { code?: unknown; errno?: unknown };
+  return candidate.code === "ER_DUP_ENTRY" || candidate.errno === 1062;
+}
+
 export async function getPaymentIntentForProviderReference(paymentReference: string) {
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable");
@@ -827,25 +934,54 @@ export async function getPaymentIntentForProviderReference(paymentReference: str
 export async function recordVerifiedProviderResult(input: { providerCode: string; providerEventId: string; paymentIntentId: number; providerTransactionId?: string; state: Extract<PaymentState, "succeeded" | "failed" | "cancelled">; redactedPayload?: string }) {
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable");
+  // Fast path for the common case (a provider retrying after we already
+  // succeeded). This is an optimisation only — the authoritative check below is
+  // the insert, because two concurrent deliveries can both pass this SELECT.
   const [existingEvent] = await db.select().from(paymentProviderEvents).where(and(eq(paymentProviderEvents.providerCode, input.providerCode), eq(paymentProviderEvents.providerEventId, input.providerEventId))).limit(1);
   if (existingEvent) return { replay: true, paymentIntentId: existingEvent.paymentIntentId };
   const [intent] = await db.select().from(paymentIntents).where(and(eq(paymentIntents.id, input.paymentIntentId), eq(paymentIntents.providerCode, input.providerCode))).limit(1);
   if (!intent) throw new Error("Payment intent unavailable for this provider");
   if (!canTransitionPaymentIntent(intent.state, input.state)) throw new Error("Invalid payment state transition");
-  await db.transaction(async tx => {
-    await tx.insert(paymentProviderEvents).values({ providerCode: input.providerCode, providerEventId: input.providerEventId, paymentIntentId: intent.id, eventType: input.state, verificationState: "verified", redactedPayload: input.redactedPayload?.slice(0, 5000) ?? null, processedAt: new Date() });
-    await tx.update(paymentIntents).set({ state: input.state, providerTransactionId: input.providerTransactionId ?? null, completedAt: input.state === "succeeded" ? new Date() : null, failureCode: input.state === "failed" ? "provider_declined" : null }).where(eq(paymentIntents.id, intent.id));
-    if (input.state === "succeeded") {
-      const receiptReference = `RCT-${crypto.randomUUID().split("-")[0]?.toUpperCase()}`;
-      await tx.insert(paymentReceipts).values({ paymentIntentId: intent.id, receiptReference, issuedAt: new Date(), amountMinor: intent.totalMinor, currencyCode: intent.currencyCode, providerCode: intent.providerCode, providerTransactionId: input.providerTransactionId ?? null });
-      if (intent.subjectType === "order") {
-        await tx.update(orders).set({ status: "paid" }).where(eq(orders.id, intent.subjectId));
-        await tx.insert(orderStatusEvents).values({ orderId: intent.subjectId, actorUserId: null, status: "paid", note: "Verified partner payment" });
-      } else {
-        await tx.update(courseEnrollments).set({ accessState: "active", activatedAt: new Date() }).where(eq(courseEnrollments.id, intent.subjectId));
+
+  try {
+    await db.transaction(async tx => {
+      // Insert the event FIRST, inside the transaction. The unique index on
+      // (providerCode, providerEventId) is what actually serialises concurrent
+      // deliveries of the same webhook: the loser gets ER_DUP_ENTRY and its
+      // transaction rolls back, so the order is never marked paid twice and no
+      // second receipt is issued. Checking with a SELECT first cannot do this —
+      // both requests read "absent" and both proceed.
+      await tx.insert(paymentProviderEvents).values({ providerCode: input.providerCode, providerEventId: input.providerEventId, paymentIntentId: intent.id, eventType: input.state, verificationState: "verified", redactedPayload: input.redactedPayload?.slice(0, 5000) ?? null, processedAt: new Date() });
+      await tx.update(paymentIntents).set({ state: input.state, providerTransactionId: input.providerTransactionId ?? null, completedAt: input.state === "succeeded" ? new Date() : null, failureCode: input.state === "failed" ? "provider_declined" : null }).where(eq(paymentIntents.id, intent.id));
+      if (input.state === "succeeded") {
+        const receiptReference = `RCT-${crypto.randomUUID().split("-")[0]?.toUpperCase()}`;
+        await tx.insert(paymentReceipts).values({ paymentIntentId: intent.id, receiptReference, issuedAt: new Date(), amountMinor: intent.totalMinor, currencyCode: intent.currencyCode, providerCode: intent.providerCode, providerTransactionId: input.providerTransactionId ?? null });
+        if (intent.subjectType === "order") {
+          await tx.update(orders).set({ status: "paid" }).where(eq(orders.id, intent.subjectId));
+          await tx.insert(orderStatusEvents).values({ orderId: intent.subjectId, actorUserId: null, status: "paid", note: "Verified partner payment" });
+        } else {
+          await tx.update(courseEnrollments).set({ accessState: "active", activatedAt: new Date() }).where(eq(courseEnrollments.id, intent.subjectId));
+        }
       }
+    });
+  } catch (error) {
+    // Another request committed this provider event while we were working.
+    // Throwing here rolls back our transaction, so the duplicate has no effect.
+    if (isDuplicateKeyError(error)) {
+      const [committed] = await db
+        .select()
+        .from(paymentProviderEvents)
+        .where(
+          and(
+            eq(paymentProviderEvents.providerCode, input.providerCode),
+            eq(paymentProviderEvents.providerEventId, input.providerEventId)
+          )
+        )
+        .limit(1);
+      if (committed) return { replay: true, paymentIntentId: committed.paymentIntentId ?? input.paymentIntentId };
     }
-  });
+    throw error;
+  }
   return { replay: false, paymentIntentId: intent.id };
 }
 

@@ -1,4 +1,4 @@
-import { COOKIE_NAME, ONE_YEAR_MS, REFRESH_COOKIE_NAME } from "@shared/const";
+import { COOKIE_NAME, REFRESH_COOKIE_NAME, THIRTY_DAYS_MS } from "@shared/const";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import type { TrpcContext } from "./_core/context";
@@ -80,7 +80,7 @@ async function establishSession(context: AuthContext, session: SupabaseSession) 
   if (session.refresh_token) {
     context.res.cookie(REFRESH_COOKIE_NAME, session.refresh_token, {
       ...cookieOptions,
-      maxAge: ONE_YEAR_MS,
+      maxAge: THIRTY_DAYS_MS,
     });
   }
 }

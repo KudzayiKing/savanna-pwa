@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { createServer } from "http";
+import { assertRuntimeConfig } from "../db";
 import { createApp } from "./app";
 import { startListening } from "./listen";
 import { serveStatic } from "./static";
@@ -17,6 +18,9 @@ import { serveStatic } from "./static";
  * The dev entry point that does use Vite is `server/_core/dev.ts`.
  */
 async function startServer() {
+  // Fail fast and loudly. A server that boots without a database accepts
+  // traffic and silently discards every write.
+  assertRuntimeConfig();
   const app = await createApp();
   serveStatic(app);
   const server = createServer(app);

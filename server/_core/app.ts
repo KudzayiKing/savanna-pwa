@@ -1,10 +1,10 @@
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import express, { type Request } from "express";
-import { getPaymentIntentForProviderReference, recordVerifiedProviderResult } from "../db";
+import { getPaymentIntentForProviderReference, pingDatabase, recordVerifiedProviderResult } from "../db";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
-import { disableFingerprint, securityHeaders, selectLimiter } from "./security";
+import { disableFingerprint, errorHandler, securityHeaders, selectLimiter, verifyOrigin } from "./security";
 import { registerStorageProxy } from "./storageProxy";
 
 /**
@@ -30,6 +30,37 @@ export async function createApp(): Promise<express.Express> {
 
   disableFingerprint(app);
   app.use(securityHeaders);
+
+  // Health probes go in before the rate limiter: an orchestrator polling every
+  // second from several instances would otherwise spend its time being
+  // throttled, and a probe that is rate-limited reads as an outage.
+  //
+  // Two separate probes on purpose. Liveness (`/healthz`) must stay cheap and
+  // must never depend on the database — if a slow database made liveness fail,
+  // the orchestrator would restart a process that was only waiting on I/O.
+  // Readiness (`/readyz`) is the one that checks dependencies.
+  app.get("/healthz", (_req, res) => {
+    res.set("Cache-Control", "no-store");
+    res.status(200).json({ status: "ok", uptimeSeconds: Math.round(process.uptime()) });
+  });
+
+  app.get("/readyz", async (_req, res) => {
+    res.set("Cache-Control", "no-store");
+    try {
+      const latencyMs = await pingDatabase();
+      res.status(200).json({ status: "ok", database: "up", latencyMs });
+    } catch (error) {
+      console.error("[Health] readiness probe failed:", error);
+      // 503 rather than 200: a load balancer that sees 200 will keep sending
+      // traffic to an instance that cannot reach its database.
+      res.status(503).json({ status: "unavailable", database: "down" });
+    }
+  });
+
+  // Must run after headers (so the 403 carries them) and before body parsing
+  // and rate limiting, so a forged request is rejected before it costs work.
+  app.use("/api", verifyOrigin);
+
   app.use((req, res, next) => selectLimiter(req)(req, res, next));
 
   const captureRawBody = (req: Request, _res: unknown, buffer: Buffer) => {
@@ -92,6 +123,12 @@ export async function createApp(): Promise<express.Express> {
       createContext,
     }),
   );
+
+  // Central error handler. Must be registered last so it catches faults from
+  // every route above, including body-parser failures (malformed JSON) which
+  // would otherwise fall through to Express's default HTML error page — one
+  // that echoes the exception message and stack to the caller.
+  app.use(errorHandler);
 
   return app;
 }
