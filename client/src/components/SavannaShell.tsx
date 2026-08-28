@@ -94,8 +94,8 @@ export function SavannaShell({ children, context }: SavannaShellProps) {
           </>}
         </aside>
 
-        <section className="min-w-0 flex-1 pb-24 lg:pb-0">
-          {!usesIconRail ? <div className="hidden h-[76px] items-center justify-between border-b border-[#eadfca]/70 bg-[#fcfaf4]/72 px-7 backdrop-blur-xl lg:flex xl:px-10">
+        <section className="min-w-0 flex-1 pb-10 lg:pb-0">
+          {!usesIconRail ? <div className="savanna-glass-header hidden h-[76px] items-center justify-between border-b border-[#eadfca]/70 bg-[#fcfaf4]/72 px-7 backdrop-blur-xl lg:flex xl:px-10">
             <button className="group flex h-10 w-[min(440px,42vw)] items-center gap-3 rounded-xl border border-[#d7ddd0] bg-white/65 px-3 text-left text-sm text-[#7a8276] shadow-[0_4px_12px_rgba(39,54,37,0.035)] transition-colors hover:border-[#b7c5b4]" aria-label="Open search and command menu">
               <Search className="size-4" />
               <span className="flex-1">Search Savanna</span>
@@ -120,15 +120,15 @@ export function SavannaShell({ children, context }: SavannaShellProps) {
         ) : null}
       </div>
 
-      <nav aria-label="Mobile navigation" className="savanna-mobile-bottom-nav fixed inset-x-0 bottom-0 z-50 flex border-t border-[#eadfca] bg-[#fcfaf4]/95 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl lg:hidden">
+      <nav aria-label="Mobile navigation" className="savanna-mobile-bottom-nav savanna-glass-bottom-nav fixed bottom-[max(0.75rem,calc(env(safe-area-inset-bottom)+0.5rem))] left-1/2 z-50 flex h-[60px] w-[min(calc(100vw-1.5rem),430px)] items-center rounded-full px-2 py-1.5 backdrop-blur-xl lg:hidden">
         {navigation.slice(0, 4).map((item) => {
           const active = location === item.href;
           return (
-            <Link href={item.href} key={item.href} className="flex min-w-0 flex-1 flex-col items-center gap-1 rounded-xl px-1 py-1.5 text-[10px] font-medium">
-              <span className={cn("grid h-9 place-items-center transition-[width,background-color] duration-200", active ? "w-14 rounded-full bg-[#D9A441]/20 text-[#D9A441] dark:text-[#D9A441]" : "w-9 rounded-xl text-[#8a765d]")}>
-                <MobileNavIcon name={item.label as MobileNavIconName} active={active} size={22} />
+            <Link href={item.href} key={item.href} className="grid h-full min-w-0 flex-1 place-items-center rounded-full px-1 text-xs font-semibold">
+              <span className={cn("grid h-11 place-items-center transition-[width,background-color] duration-200", active ? "inline-flex w-auto min-w-[92px] gap-2 rounded-full bg-[#D9A441]/20 px-3 text-[#D9A441] dark:text-[#D9A441]" : "w-11 rounded-full text-[#8a765d]")}>
+                <MobileNavIcon name={item.label as MobileNavIconName} active={active} size={23} />
+                {active ? <span className="truncate leading-none text-[#D9A441] dark:text-[#D9A441]">{item.label}</span> : null}
               </span>
-              <span className={cn("truncate", active ? "text-[#D9A441] dark:text-[#D9A441]" : "text-[#8a765d]")}>{item.label}</span>
             </Link>
           );
         })}
