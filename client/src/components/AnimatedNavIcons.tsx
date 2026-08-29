@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 import { LazyMotion, domMin, m, motion, type Variants, useAnimation, useAnimationControls, useReducedMotion } from "framer-motion";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type HTMLAttributes, type MouseEvent } from "react";
 
-export type MobileNavIconName = "Messages" | "Shops" | "Learn" | "Orders" | "Profile";
+export type MobileNavIconName = "Home" | "Messages" | "Shops" | "Learn" | "Orders" | "Profile";
 
 type AnimatedIconProps = {
   size?: number;
@@ -166,7 +166,7 @@ const SendHorizontalIcon = forwardRef<SendHorizontalIconHandle, SendHorizontalIc
           onMouseEnter={handleEnter}
           onMouseLeave={handleLeave}
           {...props}
-          style={{ color, transform: "rotate(-45deg)", ...style }}
+          style={{ color, ...style }}
         >
           <m.svg
             xmlns="http://www.w3.org/2000/svg"
@@ -448,7 +448,20 @@ export function AnimatedSendIcon({ size = 18, pulse = 0, ...props }: AnimatedIco
     icon.current?.startAnimation();
   }, [pulse]);
 
-  return <SendHorizontalIcon ref={icon} size={size} {...props} />;
+  // Lucide's send-horizontal glyph points right; the conventional send
+  // affordance is a plane angled up-and-right, so the whole glyph is rotated
+  // 45° anticlockwise.
+  //
+  // The rotation deliberately lives on a plain span wrapper instead of the
+  // motion element's inline style: framer-motion owns and rewrites `transform`
+  // on the elements it controls, so an inline transform there is fragile — it
+  // survives server rendering but can be clobbered on the client. See
+  // `.savanna-send-icon` in index.css.
+  return (
+    <span className="savanna-send-icon">
+      <SendHorizontalIcon ref={icon} size={size} {...props} />
+    </span>
+  );
 }
 
 export function AnimatedMenuIcon({ size = 20, pulse = 0, ...props }: AnimatedIconProps) {
@@ -498,6 +511,16 @@ export function MobileNavIcon({ name, active, size = 22 }: MobileNavIconProps) {
   const [hovered, setHovered] = useState(false);
   const state = !reducedMotion && (active || hovered) ? "active" : "idle";
   const hoverMotion = reducedMotion ? {} : { onPointerEnter: () => setHovered(true), onPointerLeave: () => setHovered(false), onFocus: () => setHovered(true), onBlur: () => setHovered(false) };
+
+  if (name === "Home") {
+    return (
+      <motion.svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ overflow: "visible" }} {...hoverMotion}>
+        <motion.path d="M3 10.8 12 3l9 7.8" initial="idle" animate={state} variants={{ idle: { pathLength: 1, opacity: 1 }, active: { pathLength: [0.2, 1], opacity: [0.35, 1] } }} transition={iconTransition} />
+        <motion.path d="M5.5 10.5V20h13v-9.5" initial="idle" animate={state} variants={{ idle: { y: 0, opacity: 1 }, active: { y: [1.5, 0], opacity: [0.45, 1] } }} transition={{ ...iconTransition, delay: 0.08 }} />
+        <motion.path d="M9.5 20v-5.5h5V20" initial="idle" animate={state} variants={{ idle: { scaleY: 1, opacity: 1 }, active: { scaleY: [0.25, 1], opacity: [0, 1] } }} transition={{ ...iconTransition, delay: 0.16 }} style={{ transformBox: "view-box", transformOrigin: "12px 20px" }} />
+      </motion.svg>
+    );
+  }
 
   if (name === "Messages") {
     return (

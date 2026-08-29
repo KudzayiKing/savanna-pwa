@@ -670,16 +670,17 @@ button:not(:disabled), a {
 /* Mobile Messages mirrors the supplied dark reference: neutral utility icons,
    Gold brand actions, ink iconography on Gold fills, and blue delivery ticks. */
 @media (max-width: 1023px) {
+  /* The conversation header's back arrow is deliberately absent here: it
+     belongs to the title block and takes the title's ink, not the muted
+     utility grey the rest of these controls use. */
   .dark .savanna-app [aria-label="Search chats or people"],
   .dark .savanna-app [role="tablist"] [role="tab"][aria-selected="false"],
-  .dark .savanna-app [aria-label="Back to chats"],
   .dark .savanna-app [aria-label="Save chat to a tab"],
   .dark .savanna-app [aria-label="Attach private media"] {
     color: #AEBAC1 !important;
   }
 
   .dark .savanna-app [aria-label="Search chats or people"] svg,
-  .dark .savanna-app [aria-label="Back to chats"] svg,
   .dark .savanna-app [aria-label="Save chat to a tab"] svg,
   .dark .savanna-app [aria-label="Attach private media"] svg {
     color: #AEBAC1 !important;
@@ -820,7 +821,6 @@ button:not(:disabled), a {
   }
 
   .dark .savanna-app [aria-label="Search chats or people"] svg,
-  .dark .savanna-app [aria-label="Back to chats"] svg,
   .dark .savanna-app [aria-label="Save chat to a tab"] svg,
   .dark .savanna-app [aria-label="Attach private media"] svg {
     color: var(--chat-icon-muted) !important;
@@ -1090,7 +1090,6 @@ button:not(:disabled), a {
 :root:not(.dark) .savanna-app .savanna-desktop-chat-list,
 :root:not(.dark) .savanna-app .savanna-desktop-conversation-panel,
 :root:not(.dark) .savanna-app .savanna-mobile-conversation,
-:root:not(.dark) .savanna-app .savanna-mobile-conversation-header,
 :root:not(.dark) .savanna-app .savanna-mobile-composer {
   border-color: #DDE3DC !important;
   background: #FFFFFF !important;
@@ -1110,11 +1109,12 @@ button:not(:disabled), a {
  * The mobile chat search sits in this group so it matches the desktop
  * `.savanna-desktop-chat-search` cream pill — a soft field on the white
  * messages canvas, identical to the web layout.
+ *
+ * The message composer is deliberately NOT here: it is glass (see
+ * `.savanna-composer-field`), and an opaque background would defeat the blur.
  */
 :root:not(.dark) .savanna-app .savanna-desktop-chat-search,
-:root:not(.dark) .savanna-app .savanna-mobile-chat-search,
-:root:not(.dark) .savanna-app .savanna-desktop-composer > div,
-:root:not(.dark) .savanna-app .savanna-mobile-composer-field {
+:root:not(.dark) .savanna-app .savanna-mobile-chat-search {
   background: #F6F5F5 !important;
   color: #5F6861 !important;
 }
@@ -1176,6 +1176,86 @@ button:not(:disabled), a {
 
 :root:not(.dark) .savanna-app .savanna-send-button svg {
   color: #D9A441 !important;
+}
+
+/* Lucide's send-horizontal glyph points right. Savanna presents it nose-up,
+   so the glyph is rotated a quarter turn anticlockwise (90°).
+   This lives here — not in the icon's inline style — because framer-motion
+   rewrites `transform` on the elements it controls; a plain wrapper is immune. */
+.savanna-app .savanna-send-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transform: rotate(-90deg);
+}
+
+/* Glass message composer.
+ *
+ * One rule for web and mobile in both themes, so the two breakpoints cannot
+ * drift. The field is a frosted pill that picks up whatever sits behind it —
+ * the same language as the glass conversation header — and its radius is a
+ * full pill so the circular mic/send actions nest flush inside it.
+ *
+ * Nothing else may set a background on this element: an opaque fill defeats
+ * the blur, which is why the composer was pulled out of the cream search
+ * group and the dark surface groups above.
+ */
+.savanna-app .savanna-composer-field {
+  border-radius: 9999px !important;
+  border: 1px solid color-mix(in srgb, #FFFFFF 55%, #DDE3DC) !important;
+  background: color-mix(in srgb, #F6F5F5 70%, transparent) !important;
+  background-color: color-mix(in srgb, #F6F5F5 66%, transparent) !important;
+  -webkit-backdrop-filter: saturate(180%) blur(22px);
+  backdrop-filter: saturate(180%) blur(22px);
+  background-clip: padding-box;
+  box-shadow: none !important;
+}
+
+.dark .savanna-app .savanna-composer-field {
+  border: 1px solid color-mix(in srgb, var(--chat-border) 72%, rgba(255, 255, 255, 0.18)) !important;
+  background: color-mix(in srgb, var(--chat-surface) 68%, transparent) !important;
+  background-color: color-mix(in srgb, var(--chat-surface) 64%, transparent) !important;
+}
+
+/* shadcn's Input paints itself with `dark:bg-input/30` so it has a visible
+   surface on dark backgrounds. Inside the composer pill we *want* the input
+   to be transparent — the glass surface behind it is the whole point — so
+   override it here. Specificity (0,3,1) plus !important beats the utility. */
+.dark .savanna-app .savanna-composer-field input {
+  background-color: transparent !important;
+}
+
+/* Composer actions (mic and send) sit on the 20% gold / gold-icon / no-border
+   token and brighten to 30% on hover - the same step the route CTAs use. */
+.savanna-app .savanna-composer-action:hover {
+  background: color-mix(in srgb, var(--gold) 30%, transparent) !important;
+}
+
+.dark .savanna-app .savanna-composer-action:hover {
+  background: color-mix(in srgb, var(--chat-gold) 30%, transparent) !important;
+}
+
+/* Focused search and message fields keep their own surface treatment.
+ *
+ * Two product-wide accessibility rules paint a gold outline on every focused
+ * control: `:where(a, button, input, textarea, select):focus-visible` near the
+ * top of this file, and the `!important` mobile counterpart inside the
+ * `max-width: 1023px` block. On a button that reads as intended. On a search
+ * pill or the message composer it reads as a stray gold halo ringing a field
+ * that already carries its own fill, radius and border, so it is switched off
+ * for exactly those fields - web and mobile alike.
+ *
+ * The field is still unmistakably the focused element: the caret is live and
+ * the pill does not change colour, which is the point of the treatment.
+ */
+.savanna-app :is(
+  .savanna-route-search,
+  .savanna-desktop-chat-search,
+  .savanna-mobile-chat-search,
+  .savanna-composer-field
+) :is(input, textarea):focus-visible {
+  outline: 0 !important;
+  box-shadow: none !important;
 }
 
 :root:not(.dark) .savanna-app .savanna-incoming-message {
@@ -1529,14 +1609,14 @@ button:not(:disabled), a {
     color: var(--chat-text-primary) !important;
   }
 
-  .dark .savanna-app .savanna-desktop-conversation-panel > header,
   .dark .savanna-app .savanna-desktop-composer {
     border-color: var(--chat-border) !important;
     background: var(--chat-bg) !important;
   }
 
-  .dark .savanna-app .savanna-desktop-chat-search,
-  .dark .savanna-app .savanna-desktop-composer > div {
+  /* The composer is excluded — it is glass, and this opaque fill would
+     defeat the blur. See `.savanna-composer-field`. */
+  .dark .savanna-app .savanna-desktop-chat-search {
     background: var(--chat-search) !important;
     color: var(--chat-text-secondary) !important;
   }
@@ -1795,7 +1875,7 @@ button:not(:disabled), a {
   }
 
   .savanna-app .savanna-mobile-header .savanna-wordmark {
-    font-size: 1em;
+    font-size: 26px;
   }
 
   .savanna-app .savanna-collapsed-story-cluster button {
@@ -1840,8 +1920,13 @@ button:not(:disabled), a {
     border-radius: 34px !important;
     clip-path: inset(0 round 34px);
     overflow: hidden;
-    padding-right: 1rem !important;
-    padding-left: 1rem !important;
+    /* Horizontal inset must match the vertical `py-2` (8px) so the active
+       pill's gap to the rail edge equals its gap to the top and bottom.
+       This is `!important` and therefore the value that actually governs —
+       the `px-*` utility on the element in SavannaShell.tsx is overridden
+       here, so change the inset in THIS rule, not in the JSX. */
+    padding-right: 0.5rem !important;
+    padding-left: 0.5rem !important;
     translate: none !important;
     transform: translate3d(-50%, 0, 0);
     backface-visibility: hidden;
@@ -1849,7 +1934,6 @@ button:not(:disabled), a {
   }
 
   .dark .savanna-app .savanna-mobile-conversation,
-  .dark .savanna-app .savanna-mobile-conversation-header,
   .dark .savanna-app .savanna-mobile-composer {
     background: var(--chat-bg) !important;
     border-color: var(--chat-border) !important;
@@ -1860,10 +1944,8 @@ button:not(:disabled), a {
     color: var(--chat-text-primary) !important;
   }
 
-  .dark .savanna-app .savanna-mobile-composer-field {
-    background: var(--chat-search) !important;
-    border-radius: 9999px !important;
-  }
+  /* Background deliberately omitted: `.savanna-composer-field` supplies the
+     glass instead. Radius is handled there too, so web and mobile match. */
 }
 
 
@@ -1969,8 +2051,11 @@ button:not(:disabled), a {
   background-color: #23282C !important;
 }
 
-/* Shared glass treatment for persistent navigation chrome in both themes. */
+/* Shared glass treatment for persistent navigation chrome in both themes.
+ * `.savanna-chat-glass-header` opts the open conversation header into the
+ * exact same treatment as the main app header. */
 .savanna-app .savanna-glass-header,
+.savanna-app .savanna-chat-glass-header,
 .savanna-app .savanna-glass-bottom-nav {
   background: color-mix(in srgb, #FFFFFF 84%, transparent) !important;
   background-color: color-mix(in srgb, #FFFFFF 72%, transparent) !important;
@@ -1980,7 +2065,8 @@ button:not(:disabled), a {
   background-clip: padding-box;
 }
 
-.savanna-app .savanna-glass-header {
+.savanna-app .savanna-glass-header,
+.savanna-app .savanna-chat-glass-header {
   box-shadow: none !important;
 }
 
@@ -2013,7 +2099,8 @@ button:not(:disabled), a {
 }
 
 :root:not(.dark) .savanna-app .savanna-mobile-header.savanna-glass-header,
-:root:not(.dark) .savanna-app .savanna-glass-header {
+:root:not(.dark) .savanna-app .savanna-glass-header,
+:root:not(.dark) .savanna-app .savanna-chat-glass-header {
   background: color-mix(in srgb, #FFFFFF 60%, transparent) !important;
   background-color: color-mix(in srgb, #FFFFFF 52%, transparent) !important;
   border-color: color-mix(in srgb, #FFFFFF 50%, #DDE3DC) !important;
@@ -2045,13 +2132,15 @@ button:not(:disabled), a {
 }
 
 .dark .savanna-app .savanna-glass-header,
+.dark .savanna-app .savanna-chat-glass-header,
 .dark .savanna-app .savanna-glass-bottom-nav {
   background: color-mix(in srgb, var(--chat-surface) 72%, var(--chat-bg) 8%, transparent) !important;
   background-color: color-mix(in srgb, var(--chat-surface) 72%, transparent) !important;
   border-color: color-mix(in srgb, var(--chat-border) 74%, rgba(255, 255, 255, 0.2)) !important;
 }
 
-.dark .savanna-app .savanna-glass-header {
+.dark .savanna-app .savanna-glass-header,
+.dark .savanna-app .savanna-chat-glass-header {
   box-shadow: none !important;
 }
 

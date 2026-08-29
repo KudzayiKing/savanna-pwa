@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { SafetyActions } from "@/components/SafetyActions";
 import { SavannaShell } from "@/components/SavannaShell";
 import { startLogin } from "@/const";
-import { trpc } from "@/lib/trpc";
+import { useFirebaseShopMutations, useFirebaseStorefrontDetail } from "@/lib/firebaseShops";
 import { ArrowLeft, Loader2, MessageCircle, Package, ShoppingBag } from "lucide-react";
 import { toast } from "sonner";
 import { Link, useLocation, useRoute } from "wouter";
@@ -15,11 +15,10 @@ function price(minor: number, currency: string) {
 export default function ProductDetailPage() {
   const [, params] = useRoute("/shops/:slug/products/:productId");
   const [, navigate] = useLocation();
-  const { isAuthenticated } = useAuth();
-  const shop = trpc.commerce.storefronts.detail.useQuery({ slug: params?.slug ?? "" }, { enabled: Boolean(params?.slug) });
-  const createOrder = trpc.commerce.orders.create.useMutation({ onSuccess: () => { toast.success("Order created. Confirm payment next."); navigate("/orders"); }, onError: error => toast.error(error.message) });
-  const support = trpc.commerce.storefronts.supportConversation.useMutation({ onSuccess: () => navigate("/messages"), onError: error => toast.error(error.message) });
-  const productId = Number(params?.productId);
+  const { isAuthenticated, user } = useAuth();
+  const shop = useFirebaseStorefrontDetail(params?.slug, user);
+  const shopMutations = useFirebaseShopMutations();
+  const productId = params?.productId ?? "";
 
   if (shop.isLoading) return <SavannaShell><div className="grid min-h-[60vh] place-items-center"><Loader2 className="size-6 animate-spin text-[#D9A441]" /></div></SavannaShell>;
   const product = shop.data?.products.find(item => item.id === productId);
@@ -45,8 +44,8 @@ export default function ProductDetailPage() {
           <p className="mt-5 text-sm leading-7 text-[#5F6861]">{product.description || "The seller has not added more product details yet. Contact them directly if you have a question."}</p>
           {product.inventoryQuantity !== null ? <p className="mt-5 text-sm text-[#5F6861]">{product.inventoryQuantity > 0 ? `${product.inventoryQuantity} available` : "Currently unavailable"}</p> : null}
           <div className="mt-7 flex flex-wrap gap-3">
-            <Button onClick={() => isAuthenticated ? createOrder.mutate({ items: [{ productId: product.id, quantity: 1 }] }) : startLogin()} disabled={createOrder.isPending || product.status !== "active"} className="rounded-xl bg-[#D9A441] text-[#151A17] shadow-none hover:bg-[#E8B64A]"><ShoppingBag className="mr-2 size-4" />Order now</Button>
-            <Button onClick={() => isAuthenticated ? support.mutate({ storefrontId: storefront.id }) : startLogin()} disabled={support.isPending} variant="outline" className="rounded-xl border-[#DDE3DC] text-[#D9A441]"><MessageCircle className="mr-2 size-4" />Ask a question</Button>
+            <Button onClick={() => isAuthenticated && user ? shopMutations.createOrder.mutate({ user, product }, { onSuccess: () => { toast.success("Order created. Confirm payment next."); navigate("/orders"); }, onError: error => toast.error(error.message) }) : startLogin()} disabled={shopMutations.createOrder.isPending || product.status !== "active"} className="rounded-xl bg-[#D9A441] text-[#151A17] shadow-none hover:bg-[#E8B64A]"><ShoppingBag className="mr-2 size-4" />Order now</Button>
+            <Button onClick={() => isAuthenticated && user ? shopMutations.support.mutate({ user, storefront }, { onSuccess: () => navigate("/messages"), onError: error => toast.error(error.message) }) : startLogin()} disabled={shopMutations.support.isPending} variant="outline" className="rounded-xl border-[#DDE3DC] text-[#D9A441]"><MessageCircle className="mr-2 size-4" />Ask a question</Button>
           </div>
         </div>
       </section>

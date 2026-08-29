@@ -55,26 +55,27 @@ describe("Vite dev-server integration", () => {
     expect(shared).not.toMatch(/from ["']vite["']/);
   });
 
-  it("routes Netlify API traffic to the serverless tRPC function before the SPA fallback", async () => {
-    const [netlify, pkg, adapter] = await Promise.all([
-      readFile(resolve(projectRoot, "netlify.toml"), "utf8"),
+  it("keeps Firebase Hosting wired to the built frontend and Firebase data rules", async () => {
+    const [firebaseConfig, pkg] = await Promise.all([
+      readFile(resolve(projectRoot, "firebase.json"), "utf8"),
       readFile(resolve(projectRoot, "package.json"), "utf8"),
-      readFile(resolve(projectRoot, "server/_core/netlify.ts"), "utf8"),
     ]);
 
-    const apiRedirect = netlify.indexOf('from = "/api/*"');
-    const spaRedirect = netlify.indexOf('from = "/*"');
+    const parsed = JSON.parse(firebaseConfig);
 
-    expect(apiRedirect).toBeGreaterThanOrEqual(0);
-    expect(spaRedirect).toBeGreaterThanOrEqual(0);
-    expect(apiRedirect).toBeLessThan(spaRedirect);
-    expect(netlify).toContain('to = "/.netlify/functions/api/:splat"');
-    expect(netlify).toContain('directory = "netlify/functions"');
-    expect(pkg).toContain("server/_core/netlify.ts");
-    expect(pkg).toContain("netlify/functions/api.mjs");
-    expect(pkg).toContain('"serverless-http"');
-    expect(adapter).toContain("serverless(app)");
-    expect(adapter).toContain('replace(/^\\/\\.netlify\\/functions\\/api/, "/api")');
-    expect(adapter).toContain('headers: { "content-type": "application/json" }');
+    expect(parsed.hosting.public).toBe("dist/public");
+    expect(parsed.hosting.rewrites).toContainEqual({ source: "**", destination: "/index.html" });
+    expect(parsed.hosting.headers).toContainEqual({
+      source: "/service-worker.js",
+      headers: [{ key: "Cache-Control", value: "no-cache" }],
+    });
+    expect(parsed.hosting.headers).toContainEqual({
+      source: "/assets/**",
+      headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
+    });
+    expect(parsed.firestore.rules).toBe("firestore.rules");
+    expect(parsed.firestore.indexes).toBe("firestore.indexes.json");
+    expect(parsed.storage.rules).toBe("storage.rules");
+    expect(pkg).toContain('"firebase"');
   });
 });

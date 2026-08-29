@@ -1,0 +1,264 @@
+rules_version = '2';
+
+// ---------------------------------------------------------------------------
+// Savanna — Firestore security rules
+//
+// These rules ARE the authorisation layer. The browser talks to Firestore
+// directly and the project's web config ships inside the bundle, so there is no
+// server of ours in front of this data to catch a mistake. Anything not
+// explicitly allowed below is denied.
+//
+// Pair this with App Check (see client/src/lib/firebase.ts). Rules decide what a
+// signed-in user may read; App Check decides whether the caller is your app at
+// all. Rules alone still hold, but without App Check anyone can lift the public
+// config from the browser and script against your project on your bill.
+// ---------------------------------------------------------------------------
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // `resource` is null on create, so this helper is only valid for
+    // read/update/delete. Create rules check `request.resource` instead.
+    function isMember(conversation) {
+      return signedIn()
+        && conversation != null
+        && conversation.data.memberIds is list
+        && request.auth.uid in conversation.data.memberIds;
+    }
+
+    function conversationRef(conversationId) {
+      return get(/databases/$(database)/documents/conversations/$(conversationId));
+    }
+
+    // --- Profiles ----------------------------------------------------------
+
+    match /users/{uid} {
+      // Any signed-in user can read a profile: chats, stories and shopfronts
+      // all need to show who someone is. The trade-off is that a signed-in
+      // user can enumerate profiles — normal for a social app, but if that
+      // ever matters, publish a separate public directory collection holding
+      // only the fields worth exposing and lock this one down.
+      allow read: if signedIn();
+
+      // The field whitelist matters. Without it a user could write any
+      // attribute onto their own profile — including anything the app later
+      // learns to trust, such as a role or a verification flag. Adding a field
+      // to the app means adding it here.
+      allow create: if isSelf(uid)
+        && request.resource.data.keys().hasOnly(
+             [
+               'name', 'email', 'phoneNumber', 'photoURL', 'bio', 'city',
+               'countryCode', 'profileVisibility', 'phoneVisibility',
+               'handleDiscoverability', 'storyAudienceDefault',
+               'readReceiptsEnabled', 'lastSeenVisibility',
+               'courseProgressOptIn', 'createdAt', 'updatedAt'
+             ]);
+
+      allow update: if isSelf(uid)
+        && request.resource.data.keys().hasOnly(
+             [
+               'name', 'email', 'phoneNumber', 'photoURL', 'bio', 'city',
+               'countryCode', 'profileVisibility', 'phoneVisibility',
+               'handleDiscoverability', 'storyAudienceDefault',
+               'readReceiptsEnabled', 'lastSeenVisibility',
+               'courseProgressOptIn', 'createdAt', 'updatedAt'
+             ]);
+
+      // Deleting an account has to fan out to Firebase Auth, the user's
+      // messages and their storage objects. That needs a trusted environment,
+      // so it is deliberately impossible from the browser.
+      allow delete: if false;
+
+      match /blockedUsers/{blockedUid} {
+        allow read, delete: if isSelf(uid);
+        allow create, update: if isSelf(uid)
+          && request.resource.data.blockedUserId == blockedUid
+          && request.resource.data.keys().hasOnly(['blockedUserId', 'createdAt']);
+      }
+    }
+
+    // --- Conversations -----------------------------------------------------
+
+    match /conversations/{conversationId} {
+      allow read: if isMember(resource);
+
+      // You may create a conversation only if you put yourself in it —
+      // otherwise a user could add two other people to a chat and read the
+      // transcript they generate.
+      allow create: if signedIn()
+        && request.resource.data.memberIds is list
+        && request.auth.uid in request.resource.data.memberIds;
+
+      allow update: if isMember(resource);
+
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        // Reads the parent conversation to check membership, which costs one
+        // extra document read per operation. Cheaper alternatives (denormalising
+        // memberIds onto every message) go stale the moment someone leaves.
+        allow read: if isMember(conversationRef(conversationId));
+
+        // `senderId == request.auth.uid` is what stops a member of the
+        // conversation posting as somebody else in it.
+        allow create: if isMember(conversationRef(conversationId))
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.keys().hasOnly(
+               [
+                 'senderId', 'body', 'createdAt', 'status', 'attachmentPath',
+                 'attachmentUrl', 'attachmentName', 'attachmentMimeType',
+                 'attachmentSize', 'storyId'
+               ]);
+
+        // Allowed so a recipient can mark a message delivered/read. Tighten
+        // this to only the `status` field once the chat UI settles.
+        allow update: if isMember(conversationRef(conversationId));
+
+        // No delete: "unsend" is a product decision, and implementing it as a
+        // real delete would silently rewrite shared history.
+        allow delete: if false;
+      }
+    }
+
+    // --- Presence ----------------------------------------------------------
+
+    match /presence/{uid} {
+      allow read: if signedIn();
+      allow write: if isSelf(uid)
+        && request.resource.data.keys().hasOnly(['uid', 'state', 'lastChanged']);
+    }
+
+    // --- Stories and Memories --------------------------------------------
+
+    match /stories/{storyId} {
+      allow read: if resource.data.audience == 'public'
+        || (signedIn() && resource.data.authorUserId == request.auth.uid)
+        || (signedIn()
+          && resource.data.audience == 'custom'
+          && request.auth.uid in resource.data.customAudienceUserIds);
+
+      allow create: if signedIn()
+        && request.resource.data.authorUserId == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'authorUserId', 'authorName', 'authorCity', 'authorCountryCode',
+          'textBody', 'audience', 'customAudienceUserIds', 'media',
+          'primaryMediaUrl', 'primaryMediaType', 'isMemory', 'storefrontId',
+          'storefrontSlug', 'storefrontName', 'productName',
+          'productDescription', 'productPriceMinor', 'productCurrencyCode',
+          'createdAt', 'publishedAt', 'expiresAt', 'deletedAt'
+        ]);
+
+      allow update: if signedIn()
+        && resource.data.authorUserId == request.auth.uid
+        && request.resource.data.authorUserId == request.auth.uid;
+
+      allow delete: if false;
+
+      match /views/{uid} {
+        allow create, update: if isSelf(uid);
+        allow read: if signedIn()
+          && get(/databases/$(database)/documents/stories/$(storyId)).data.authorUserId == request.auth.uid;
+      }
+
+      match /reactions/{reactionId} {
+        allow create, update: if signedIn()
+          && request.resource.data.userId == request.auth.uid;
+        allow read: if signedIn();
+      }
+    }
+
+    // --- Shops ------------------------------------------------------------
+
+    match /storefronts/{storefrontId} {
+      allow read: if resource.data.visibility == 'public'
+        || (signedIn() && resource.data.ownerUserId == request.auth.uid);
+
+      allow create: if signedIn()
+        && request.resource.data.ownerUserId == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'ownerUserId', 'name', 'slug', 'bio', 'category', 'contactPhone',
+          'contactEmail', 'visibility', 'verificationState', 'coverUrl',
+          'coverPath', 'ownerCity', 'ownerCountryCode', 'createdAt', 'updatedAt'
+        ]);
+
+      allow update: if signedIn()
+        && resource.data.ownerUserId == request.auth.uid
+        && request.resource.data.ownerUserId == request.auth.uid;
+
+      allow delete: if false;
+
+      match /private/{privateDoc} {
+        allow read, write: if signedIn()
+          && get(/databases/$(database)/documents/storefronts/$(storefrontId)).data.ownerUserId == request.auth.uid;
+      }
+    }
+
+    match /products/{productId} {
+      allow read: if resource.data.status == 'active'
+        || (signedIn() && resource.data.storefrontOwnerUserId == request.auth.uid);
+
+      allow create: if signedIn()
+        && request.resource.data.storefrontOwnerUserId == request.auth.uid
+        && get(/databases/$(database)/documents/storefronts/$(request.resource.data.storefrontId)).data.ownerUserId == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'storefrontId', 'storefrontSlug', 'storefrontName',
+          'storefrontOwnerUserId', 'storefrontCategory', 'ownerCity',
+          'ownerCountryCode', 'title', 'description', 'category',
+          'priceMinor', 'currencyCode', 'inventoryQuantity', 'status',
+          'primaryImageUrl', 'media', 'createdAt', 'updatedAt'
+        ]);
+
+      allow update: if signedIn()
+        && resource.data.storefrontOwnerUserId == request.auth.uid
+        && request.resource.data.storefrontOwnerUserId == request.auth.uid;
+
+      allow delete: if false;
+    }
+
+    match /orders/{orderId} {
+      allow read: if signedIn()
+        && (resource.data.buyerUserId == request.auth.uid
+          || resource.data.storefrontOwnerUserId == request.auth.uid);
+
+      allow create: if signedIn()
+        && request.resource.data.buyerUserId == request.auth.uid;
+
+      // Two very different writers share this collection, so the update rule is
+      // split deliberately rather than opened up:
+      //   - the seller advances the order through its lifecycle;
+      //   - the buyer only records HOW they intend to pay, and only while the
+      //     order is still unpaid. The affectedKeys() guard means the buyer
+      //     cannot touch status, totals or any other field, so this cannot be
+      //     used to self-approve an order or rewrite what they owe.
+      allow update: if signedIn()
+        && (
+          resource.data.storefrontOwnerUserId == request.auth.uid
+          || (
+            resource.data.buyerUserId == request.auth.uid
+            && resource.data.status == 'awaiting_payment'
+            && request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['paymentCountryCode', 'paymentProviderCode', 'updatedAt'])
+          )
+        );
+
+      allow delete: if false;
+    }
+
+    match /safetyReports/{reportId} {
+      allow create: if signedIn()
+        && request.resource.data.reporterUserId == request.auth.uid;
+      allow read, update, delete: if false;
+    }
+
+    // Everything not matched above is denied by default. Do not add a
+    // catch-all allow here — that is how direct-access projects get breached.
+  }
+}

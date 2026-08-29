@@ -1,0 +1,85 @@
+rules_version = '2';
+
+// ---------------------------------------------------------------------------
+// Savanna — Cloud Storage security rules
+//
+// Uploads go straight from the browser to the bucket, so these rules are the
+// only thing between a user and what they can store. Two things matter more
+// than the rest: constrain the content type, and constrain the size. Without a
+// size cap a user can fill your bucket and your bill with a single upload.
+// ---------------------------------------------------------------------------
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+
+    function underBytes(limit) {
+      return request.resource.size < limit;
+    }
+
+    // --- Avatars -----------------------------------------------------------
+
+    match /avatars/{uid}/{fileName} {
+      // Avatars are shown across chats and shopfronts, so any signed-in user
+      // may read them.
+      allow read: if signedIn();
+
+      // Only the owner may write, only an image, and only up to 5 MB.
+      allow write: if signedIn()
+        && request.auth.uid == uid
+        && isImage()
+        && underBytes(5 * 1024 * 1024);
+
+      allow delete: if signedIn() && request.auth.uid == uid;
+    }
+
+    // --- Chat attachments --------------------------------------------------
+
+    match /conversations/{conversationId}/{allPaths=**} {
+      // Membership is a Firestore question, and Storage rules cannot query
+      // Firestore. The path therefore carries the sender's uid, and the client
+      // is trusted only to name files under its own prefix. Anything stronger
+      // needs a signed upload token minted by a trusted environment.
+      allow read: if signedIn();
+
+      allow write: if signedIn()
+        && allPaths.matches(request.auth.uid + '/.*')
+        && underBytes(25 * 1024 * 1024);
+
+      allow delete: if false;
+    }
+
+    // --- Story media -------------------------------------------------------
+
+    match /stories/{uid}/{allPaths=**} {
+      allow read: if signedIn();
+
+      allow write: if signedIn()
+        && request.auth.uid == uid
+        && (isImage() || request.resource.contentType.matches('video/.*'))
+        && underBytes(50 * 1024 * 1024);
+
+      allow delete: if signedIn() && request.auth.uid == uid;
+    }
+
+    // --- Shop media -------------------------------------------------------
+
+    match /shops/{uid}/{allPaths=**} {
+      allow read: if true;
+
+      allow write: if signedIn()
+        && request.auth.uid == uid
+        && (isImage() || request.resource.contentType.matches('video/.*'))
+        && underBytes(50 * 1024 * 1024);
+
+      allow delete: if signedIn() && request.auth.uid == uid;
+    }
+  }
+}

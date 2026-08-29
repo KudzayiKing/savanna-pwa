@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { SavannaShell } from "@/components/SavannaShell";
 import { AnimatedShoppingBagIcon } from "@/components/AnimatedNavIcons";
 import { startLogin } from "@/const";
-import { trpc } from "@/lib/trpc";
+import { useFirebaseBuyerOrders, useFirebaseMerchantOrders, useFirebaseShopMutations, useMyFirebaseStorefront, type FirebaseOrderStatus } from "@/lib/firebaseShops";
 import { ClipboardList, Loader2, PackageCheck, Store } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "wouter";
@@ -41,22 +41,11 @@ function StatusPill({ status }: { status: string }) {
 }
 
 export default function OrdersPage() {
-  const { isAuthenticated, loading } = useAuth();
-  const utils = trpc.useUtils();
-  const buyerOrders = trpc.commerce.orders.mine.useQuery(undefined, { enabled: isAuthenticated });
-  const storefront = trpc.commerce.storefronts.mine.useQuery(undefined, { enabled: isAuthenticated });
-  const merchantOrders = trpc.commerce.orders.merchantList.useQuery(
-    { storefrontId: storefront.data?.storefront?.id ?? 0 },
-    { enabled: Boolean(storefront.data?.storefront?.id) },
-  );
-  const updateStatus = trpc.commerce.orders.updateStatus.useMutation({
-    onSuccess: () => {
-      merchantOrders.refetch();
-      utils.commerce.orders.mine.invalidate();
-      toast.success("Order status updated");
-    },
-    onError: error => toast.error(error.message),
-  });
+  const { user, isAuthenticated, loading } = useAuth();
+  const buyerOrders = useFirebaseBuyerOrders(user);
+  const storefront = useMyFirebaseStorefront(user);
+  const merchantOrders = useFirebaseMerchantOrders(storefront.data?.storefront?.id);
+  const shopMutations = useFirebaseShopMutations();
 
   if (loading) {
     return (
@@ -82,7 +71,8 @@ export default function OrdersPage() {
             <p className="mt-4 text-sm leading-7 text-[#796b56]">
               Sign in to view purchases, payment status, receipts, and any updates from your sellers.
             </p>
-            <Button onClick={() => startLogin()} className="mt-6 rounded-xl bg-[#5d3a0c] text-white hover:bg-[#412607]">
+            <Button onClick={() => startLogin()} className="savanna-brand-token mt-6 rounded-xl px-5 shadow-none">
+              <ClipboardList className="mr-2 size-4" />
               Sign in to orders
             </Button>
           </div>
@@ -129,7 +119,7 @@ export default function OrdersPage() {
                     </div>
                     <p className="mt-1 text-xs text-[#8a765d]">Placed {new Date(order.createdAt).toLocaleString()}</p>
                     {order.status === "awaiting_payment" ? (
-                      <p className="mt-3 text-sm text-[#80572c]">Payment confirmation is required before the seller can prepare this order.</p>
+                      <p className="mt-3 text-sm text-[#80572c]">Confirm this order so the seller knows how you plan to pay and can start preparing it.</p>
                     ) : null}
                   </div>
                   <div className="text-right">
@@ -137,7 +127,7 @@ export default function OrdersPage() {
                     <p className="mt-1 text-xs text-[#8a765d]">Fees: {formatPrice(order.feeMinor, order.currencyCode)}</p>
                     {order.status === "awaiting_payment" ? (
                       <Link href={`/checkout/order/${order.id}`}>
-                        <Button className="mt-3 rounded-xl bg-[#5d3a0c] text-white hover:bg-[#412607]">Pay now</Button>
+                        <Button className="mt-3 rounded-xl bg-[#5d3a0c] text-white hover:bg-[#412607]">Confirm order</Button>
                       </Link>
                     ) : null}
                   </div>
@@ -190,16 +180,22 @@ export default function OrdersPage() {
                       ) : (
                         <div className="flex flex-wrap gap-2">
                           <Button
-                            disabled={updateStatus.isPending}
-                            onClick={() => updateStatus.mutate({ orderId: order.id, status: nextStatus })}
+                            disabled={shopMutations.updateOrderStatus.isPending}
+                            onClick={() => shopMutations.updateOrderStatus.mutate(
+                              { orderId: order.id, status: nextStatus as FirebaseOrderStatus },
+                              { onSuccess: () => toast.success("Order status updated"), onError: error => toast.error(error.message) },
+                            )}
                             variant="outline"
                             className="rounded-xl border-[#ead2a4] text-[#9a6410]"
                           >
                             {actionLabel}
                           </Button>
                           <Button
-                            disabled={updateStatus.isPending}
-                            onClick={() => updateStatus.mutate({ orderId: order.id, status: "ready" })}
+                            disabled={shopMutations.updateOrderStatus.isPending}
+                            onClick={() => shopMutations.updateOrderStatus.mutate(
+                              { orderId: order.id, status: "ready" },
+                              { onSuccess: () => toast.success("Order status updated"), onError: error => toast.error(error.message) },
+                            )}
                             className="rounded-xl bg-[#5d3a0c] text-white hover:bg-[#412607]"
                           >
                             Mark ready

@@ -4,8 +4,24 @@
 React 19 + TS + Vite 7 + Tailwind 4 + Wouter · Express 4 + tRPC 11 + Drizzle ORM
 (MySQL/TiDB) + superjson · esbuild bundles the server · pnpm.
 
-## Auth: Supabase (sole identity provider)
-Manus OAuth was **removed** on 2026-08-28. Do not reintroduce `OAUTH_SERVER_URL`,
+## Auth & backend: Firebase (Supabase was replaced)
+As of 2026-08-29 the app runs **direct-to-Firebase from the browser**: Firebase
+Auth (phone + Google), Firestore, and Firebase Storage. Supabase was evaluated
+and dropped — do not reintroduce it.
+
+- Firebase project **`savanna-2caf0`**, hosting **https://savanna-2caf0.web.app**
+  (also `savanna-2caf0.firebaseapp.com`).
+- Firebase CLI is logged in as **kibaliailabs@gmail.com**.
+- **Only MVP-reachable pages may use Firestore — never tRPC.** Firebase Hosting
+  serves static files only, so any tRPC call gets the SPA fallback HTML back and
+  dies with `Unexpected token '<' ... is not valid JSON`. `server/pwa.assets.test.ts`
+  enforces this by parsing routes out of `App.tsx`.
+- tRPC/Express/MySQL still exist but are only reachable from the deliberately
+  deferred surfaces: Learn (`CoursePage`, `LearnPage`, `CreatorStudioPage`) and
+  payments (`PaymentsPage`, `PaymentDetailPage`). They are not deployed.
+
+Superseded (kept for history — Manus OAuth was **removed** on 2026-08-28; do not
+reintroduce `OAUTH_SERVER_URL`,
 `VITE_APP_ID`, `VITE_OAUTH_PORTAL_URL`, `OWNER_OPEN_ID`, or `ENABLE_LOCAL_AUTH` —
 nothing reads them.
 
@@ -23,6 +39,17 @@ nothing reads them.
 ## Verification commands
 `npx tsc --noEmit` · `npx vitest run` · `npm run build` · `node scripts/check-prod-bundle.mjs`
 
+## Deploying
+```
+firebase deploy --only firestore:rules,firestore:indexes,hosting
+firebase deploy --only storage        # needs Storage enabled in console first
+```
+Build first (`npx vite build` writes `dist/public`, which hosting serves).
+Use the **global** `firebase` binary at `/usr/local/bin/firebase` — invoking
+`npx firebase-tools` wedges the shell (exit 127, empty output).
+Firebase Storage is **not yet initialised** on the project, so `storage` fails
+until someone clicks 'Get Started' in the console.
+
 ## Standing constraints
 - **Do not modify the nav or bottom nav.** The user redesigned them deliberately.
   `client/src/components/SavannaShell.tsx` and nav/bottom-nav CSS in
@@ -31,6 +58,24 @@ nothing reads them.
 - `server/pwa.assets.test.ts` uses ~200 brittle `toContain()` assertions against raw
   source text. They break on any refactor; converting them to render tests is
   plan item P2-13.
+
+## Styling: the `!important` trap (cost 4 wasted rounds once)
+`client/src/index.css` has a **mobile media-query block** that pins layout on
+semantic classes with `!important` — e.g. `.savanna-app .savanna-mobile-bottom-nav`
+sets `width`, `height`, `border-radius`, and `padding-left/right`.
+
+`!important` on a **longhand** beats a **non-important shorthand** regardless of
+specificity, so Tailwind's `px-*` (which emits `padding-inline`) loses silently.
+Symptom: the class is in the DOM, the build is clean, nothing moves.
+
+**Diagnostic order when a style tweak does nothing:**
+1. Check whether the built CSS hash changed. No delta = the edit changed nothing.
+2. Grep `client/src/index.css` for the element's *semantic* class + `!important`.
+3. Fix the value in that CSS rule, not in the JSX.
+
+The bottom-nav inset now lives in `index.css` as `0.5rem !important` (8px,
+matching `py-2`); the `px-2` on the element is decorative and the test comment
+says so. `server/pwa.assets.test.ts` guards the CSS rule directly.
 
 ## Environment quirks
 - No `timeout` binary (macOS) — use background tasks.
@@ -50,9 +95,13 @@ nothing reads them.
   extensions (Phantom wallet), not app bugs.
 
 ## Known unfinished work
-- Chat is structurally complete but **not operational**: no polling/realtime of any
-  kind, no pagination, no unread counts or previews, no typing/presence. Messages
-  are stored **plaintext** despite `IMPLEMENTATION_PLAN.md` claiming E2EE, and the
-  `messageKeyEnvelopes` / `conversationSearchTokens` tables do not exist.
+- Chat runs on Firestore via `client/src/lib/firebaseChat.ts` but is **not yet
+  realtime**: it uses `useQuery`, not `onSnapshot`, so there is no live push, no
+  pagination, no unread counts or previews, no typing/presence. Switching the
+  list/detail queries to `onSnapshot` is the fix and is the natural next P1 item.
+  Messages are stored **plaintext** despite `IMPLEMENTATION_PLAN.md` claiming E2EE.
+- Video/voice calling and voice-message recording are intentional toast
+  placeholders ("arrives with the next release") — the animated icons are real,
+  the features are not. Do not mistake them for working features.
 - P0-3: rotate remaining leaked credentials in `.project-config.json` (JWT_SECRET
   already rotated).

@@ -37,6 +37,7 @@ async function findAvailablePort(startPort: number): Promise<number> {
 
 export async function startListening(server: Server): Promise<void> {
   const preferredPort = parseInt(process.env.PORT || "3000");
+  const host = process.env.HOST?.trim() || undefined;
   const port = await findAvailablePort(preferredPort);
 
   if (port !== preferredPort) {
@@ -44,8 +45,8 @@ export async function startListening(server: Server): Promise<void> {
   }
 
   await new Promise<void>(resolve => {
-    server.listen(port, () => {
-      console.log(`Server running on http://localhost:${port}/`);
+    server.listen({ port, host }, () => {
+      console.log(`Server running on http://${host || "localhost"}:${port}/`);
       resolve();
     });
   });

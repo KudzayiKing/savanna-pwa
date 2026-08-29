@@ -67,6 +67,21 @@ describe("Savanna PWA assets", () => {
     expect(source).toContain("payments and live updates are paused");
   });
 
+  it("offers Google sign-in as a no-SMS Firebase Auth path", async () => {
+    const [login, googleAuth] = await Promise.all([
+      readFile(resolve(projectRoot, "client/src/pages/LoginPage.tsx"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/lib/googleAuth.ts"), "utf8"),
+    ]);
+
+    expect(googleAuth).toContain("GoogleAuthProvider");
+    expect(googleAuth).toContain("signInWithPopup");
+    expect(googleAuth).toContain("signInWithRedirect");
+    expect(login).toContain("Continue with Gmail");
+    expect(login).toContain("signInWithGoogle");
+    expect(login).toContain("Phone sign-in may require Firebase billing");
+    expect(login).toContain("bg-[#D9A441]/20 text-[#D9A441]");
+  });
+
   it("keeps the SAVANNA Ramabhadra wordmark in the supplied Gold color", async () => {
     const [shell, styles, html, db, orders, paymentCatalog, merchantStudio] = await Promise.all([
       readFile(resolve(projectRoot, "client/src/components/SavannaShell.tsx"), "utf8"),
@@ -98,8 +113,9 @@ describe("Savanna PWA assets", () => {
     expect(styles).toContain("--processing: #E5A72E;");
     expect(styles).toContain("--info: #3E7FA8;");
     expect(styles).toContain("--error: #D85C5C;");
-    expect(db).toContain("const avatarUrl = profile.userId === viewerUserId && profile.avatarKey ? await storageGetSignedUrl(profile.avatarKey) : null;");
-    expect(db).toContain("export async function listPublicProducts(query?: string)");
+    expect(db).toContain("const avatarUrl = await signedUrlOrNull(profile.avatarKey);");
+    expect(db).toContain("export async function listPublicProducts(query?: string, userId?: number | null)");
+    expect(db).toContain("export async function listPublicProductMemories(query?: string, userId?: number | null)");
     expect(db).toContain("eq(products.status, \"active\")");
     expect(db).toContain("export async function listPublicPreviewLessons(query?: string)");
     expect(db).toContain("eq(courseLessons.isPreview, true)");
@@ -125,7 +141,24 @@ describe("Savanna PWA assets", () => {
   });
 
   it("provides a mobile Stories header and a familiar mobile chat-list hierarchy", async () => {
-    const [shell, stories, messages, profile, styles, animatedIcons, shops, learn, orders, app] = await Promise.all([
+    const [
+      shell,
+      stories,
+      messages,
+      profile,
+      styles,
+      animatedIcons,
+      shops,
+      learn,
+      orders,
+      app,
+      firebaseStories,
+      firebaseShops,
+      firebaseChat,
+      firestoreRules,
+      storageRules,
+      firestoreIndexes,
+    ] = await Promise.all([
       readFile(resolve(projectRoot, "client/src/components/SavannaShell.tsx"), "utf8"),
       readFile(resolve(projectRoot, "client/src/components/StoriesPanel.tsx"), "utf8"),
       readFile(resolve(projectRoot, "client/src/pages/MessagesPage.tsx"), "utf8"),
@@ -136,6 +169,12 @@ describe("Savanna PWA assets", () => {
       readFile(resolve(projectRoot, "client/src/pages/LearnPage.tsx"), "utf8"),
       readFile(resolve(projectRoot, "client/src/pages/OrdersPage.tsx"), "utf8"),
       readFile(resolve(projectRoot, "client/src/App.tsx"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/lib/firebaseStories.ts"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/lib/firebaseShops.ts"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/lib/firebaseChat.ts"), "utf8"),
+      readFile(resolve(projectRoot, "firestore.rules"), "utf8"),
+      readFile(resolve(projectRoot, "storage.rules"), "utf8"),
+      readFile(resolve(projectRoot, "firestore.indexes.json"), "utf8"),
     ]);
 
     expect(shell).toContain("<MobileStoriesHeader />");
@@ -152,9 +191,15 @@ describe("Savanna PWA assets", () => {
     expect(stories).toContain("window.requestAnimationFrame");
     expect(stories).toContain("const collapsedStoriesCluster = compact ?");
     expect(stories).toContain("const ownStoryInitial =");
-    expect(stories).toContain("return storyColors[Math.abs(id) % storyColors.length];");
-    expect(stories).toContain("trpc.account.profile.useQuery");
-    expect(stories).toContain("const ownStoryAvatarUrl = ownProfile.data?.avatarUrl ?? null;");
+    expect(stories).toContain("return storyColors[Math.abs(value) % storyColors.length];");
+    expect(stories).toContain("useFirebaseStories(user, true)");
+    expect(stories).toContain("usePublishFirebaseStory");
+    expect(stories).toContain("useReactToFirebaseStory");
+    expect(stories).toContain("useReplyToFirebaseStory");
+    expect(stories).toContain("useViewFirebaseStory");
+    expect(stories).not.toContain("trpc.stories");
+    expect(stories).not.toContain("trpc.account.profile.useQuery");
+    expect(stories).toContain("const ownStoryAvatarUrl = user?.photoURL ?? null;");
     expect(stories).toContain('aria-label="Add to your Story"');
     expect(stories).toContain('<img src={ownStoryAvatarUrl} alt="" className="size-full rounded-full object-cover" />');
     expect(stories).toContain('absolute -bottom-0.5 -right-0.5 grid size-5');
@@ -185,21 +230,23 @@ describe("Savanna PWA assets", () => {
     expect(stories).toContain("flex shrink-0 flex-col items-center gap-1");
     expect(stories).toContain("const groupedStories = useMemo");
     expect(stories).toContain("Open ${group.authorName}'s Stories");
+    expect(stories).toContain("story.discovery?.label");
+    expect(stories).toContain("Around you Stories");
     expect(stories).toContain('aria-label="Collapsed Stories cluster"');
     expect(stories).toContain('className="savanna-collapsed-story-cluster flex shrink-0 items-center"');
     expect(stories).toContain('text-[#5f6861] dark:text-[#9AA1A6]">Your Story</span>');
-    expect(stories).toContain('text-[#5f6861] dark:text-[#9AA1A6]">{group.authorName.split(" ")[0]}</span>');
+    expect(stories).toContain('discoveryLabel && discoveryLabel !== "Yours" ? discoveryLabel : group.authorName.split(" ")[0]');
     expect(stories).toContain("groupedStories.slice(0, 3).map");
     expect(stories).toContain("grid size-8 shrink-0 place-items-center rounded-full");
-    expect(stories).toContain('groupIndex ? "-ml-2" : ""');
+    expect(stories).toContain('groupIndex ? "-ml-1.5" : ""');
     expect(stories).toContain("Previous Story");
     expect(stories).toContain("Next Story");
-    expect(stories).toContain("aria-label={`Story ${activeStoryIndex + 1} of ${activeGroup.items.length}`}");
+    expect(stories).toContain("aria-label={`Story ${(index ?? 0) + 1} of ${total}`}");
     expect(stories).toContain("Share a Story");
     expect(stories).not.toContain("from the desktop panel for now");
     expect(messages).toContain("Search chats or people");
     expect(messages).toContain("Create a chat tab");
-    expect(messages).toContain("const filterTabs = ([['all', 'All'], ['direct', 'Chats'], ['group', 'Groups'], ['merchant_support', 'Support']] as const);");
+    expect(messages).toContain('const filterTabs = ([["all", "All"], ["direct", "Chats"], ["group", "Groups"], ["merchant_support", "Support"]] as const);');
     expect(messages).toContain("savanna-message-tab-membership");
     expect(messages).toContain("setMobileDetail(true)");
     expect(messages).toContain("DrawerContent");
@@ -209,16 +256,20 @@ describe("Savanna PWA assets", () => {
     expect(messages).toContain('overflow-x-auto px-3 pb-1');
     expect(messages).toContain('savanna-mobile-messages-canvas -mx-4');
     expect(messages).not.toContain(">Chats</h1>");
-    expect(messages).toContain("const previewConversations = [");
+    expect(messages).toContain("const previewConversations: ConversationListItem[] = [");
     expect(messages).toContain('const chatPreviewMode = import.meta.env.DEV ? new URLSearchParams(window.location.search).get("chatPreview") : null;');
     expect(messages).toContain('useState(chatPreviewMode === "drawer")');
-    expect(messages).toContain('if (conversation.id < 0) { if (import.meta.env.DEV) { setSelectedConversationId(conversation.id); if (isMobile) setMobileDetail(true); return; } return toast.info("Development preview chat — no real conversation opened"); }');
+    expect(messages).toContain("useFirebaseConversations(user)");
+    expect(messages).toContain("useFirebaseMessages(selectedConversationId");
+    expect(messages).toContain("useFirebaseChatMutations(user)");
+    expect(messages).toContain('id.startsWith("preview-")');
+    expect(messages).toContain("if (isPreviewConversationId(conversation.id))");
     expect(styles).toContain(".savanna-app main [class*=\"rounded-[28px]\"][class*=\"border\"]");
     expect(styles).toContain("border: 0 !important;");
-    expect(messages).toContain("Development preview chat — no real conversation opened");
+    expect(messages).toContain("Development preview chat - no real conversation opened");
     expect(messages).toContain('if (status === "delivered" || status === "read") return <AnimatedCheckCheckIcon size={13} aria-label="Delivered" />;');
     expect(styles).toContain("--chat-read-blue: #53BDEB");
-    expect(messages).toContain('previewStatus: "failed" as const');
+    expect(messages).toContain('previewStatus: "failed"');
     expect(messages).toContain('aria-label="Sent"');
     expect(messages).toContain('aria-label="Failed"');
     expect(messages).toContain('AnimatedCheckCheckIcon size={13} aria-label="Delivered"');
@@ -250,7 +301,7 @@ describe("Savanna PWA assets", () => {
     expect(animatedIcons).toContain('initial="idle" animate={state}');
     expect(profile).toContain("Choose how Savanna looks on this device.");
     expect(profile).toContain("Use {theme === \"light\" ? \"dark\" : \"light\"} mode");
-    expect(profile).toContain('className="savanna-profile-page mx-auto max-w-[910px] space-y-6"');
+    expect(profile).toContain('className="savanna-profile-page mx-auto max-w-[960px] space-y-6"');
     expect(styles).toContain("#2A3942");
     expect(styles).toContain("--chat-bg: #0A1014");
     expect(styles).toContain("--chat-surface: #131A1E");
@@ -266,8 +317,32 @@ describe("Savanna PWA assets", () => {
     expect(styles).toContain("border: 0.5px solid color-mix(in srgb, var(--chat-gold) 50%, transparent) !important;");
     expect(styles).toContain("border: 0.5px solid var(--chat-border) !important;");
     expect(shell).toContain('active ? "bg-[#D9A441]/20 text-[#A87820] dark:text-[#D9A441]"');
-    expect(shell).toContain('active ? "inline-flex w-auto min-w-[92px] gap-2 rounded-[28px] bg-[#D9A441]/20 px-3 text-[#D9A441] dark:text-[#D9A441]"');
-    expect(shell).toContain('savanna-mobile-bottom-nav savanna-glass-bottom-nav fixed bottom-[max(0.75rem,calc(env(safe-area-inset-bottom)+0.5rem))] left-1/2 z-50 flex h-[60px] w-[min(calc(100vw-1.5rem),430px)] items-center rounded-[34px] px-4');
+    expect(shell).toContain('active ? "inline-flex w-max min-w-max items-center gap-2 rounded-[28px] bg-[#D9A441]/20 px-3 text-[#D9A441] dark:text-[#D9A441]"');
+    // `justify-between` anchors the end tabs, and every tab is `flex-none`: the
+    // active one grows to fit its label, and a `flex-1` slot would hoard the
+    // leftover space on one side.
+    expect(shell).toContain('className="flex h-full flex-none items-center justify-center rounded-[28px] text-xs font-semibold"');
+    expect(shell).toContain('className="whitespace-nowrap leading-none text-[#D9A441] dark:text-[#D9A441]"');
+    expect(shell).toContain('savanna-mobile-bottom-nav savanna-glass-bottom-nav fixed bottom-[max(0.75rem,calc(env(safe-area-inset-bottom)+0.5rem))] left-1/2 z-50 flex h-[60px] w-[min(calc(100vw-1.5rem),430px)] items-center justify-between rounded-[34px] px-2 py-2');
+
+    // The `px-2` above is a LIE unless you read this rule too. A mobile
+    // media-query block in index.css sets
+    // `padding-left/right: 0.5rem !important` on `.savanna-mobile-bottom-nav`,
+    // which beats the utility and is therefore the value that actually
+    // renders. It must stay 0.5rem (8px) so the active pill's gap to the
+    // rail's side edge equals the `py-2` gap to its top and bottom.
+    // An earlier version of this rule used 1rem (16px), which silently
+    // defeated every `px-*` utility tried on the element — the symptom was
+    // "the end tabs never move no matter what I change".
+    const bottomNavRule = styles.match(/\.savanna-app \.savanna-mobile-bottom-nav \{[^}]*\}/);
+    expect(bottomNavRule).not.toBeNull();
+    expect(bottomNavRule![0]).toContain('padding-right: 0.5rem !important');
+    expect(bottomNavRule![0]).toContain('padding-left: 0.5rem !important');
+    // Guard against reintroducing the 1rem inset that swallowed the utilities.
+    expect(bottomNavRule![0]).not.toContain('1rem !important');
+    expect(shell).toContain('"grid h-11 place-items-center transition-[width,background-color] duration-200"');
+    expect(styles).toContain(".savanna-app .savanna-mobile-header .savanna-wordmark");
+    expect(styles).toContain("font-size: 26px;");
     expect(shell).toContain(': "w-11 rounded-[28px] text-[#8a765d]"');
     expect(styles).toContain('.dark .savanna-app .savanna-mobile-messages-canvas');
     expect(styles).toContain('.dark .savanna-app .savanna-mobile-header,\n  .dark .savanna-app .savanna-mobile-header > section');
@@ -293,9 +368,41 @@ describe("Savanna PWA assets", () => {
     expect(shops).toContain("AnimatedSearchIcon size={17}");
     expect(shops).toContain('const SHOPPING_BANNER_URL = "/shops_banner.png"');
     expect(shops).toContain("Featured products");
+    expect(shops).toContain('["around", "Around you"]');
+    expect(shops).toContain('["memories", "Memories"]');
+    expect(shops).toContain("useFirebaseProductMemories");
+    expect(shops).toContain("Short stories from shops");
     expect(shops).toContain("Newest active listings");
     expect(shops).toContain('aria-label="Shop discovery filters"');
-    expect(shops).toContain("trpc.commerce.storefronts.products.useQuery");
+    expect(shops).toContain("useFirebaseProducts");
+    expect(shops).toContain("useFirebaseStorefronts");
+    expect(shops).toContain("hasAroundYou");
+    expect(firebaseStories).toContain('collection(db, "stories")');
+    expect(firebaseStories).toContain("uploadBytes(storageRef, input.file");
+    expect(firebaseStories).toContain("getDownloadURL(storageRef)");
+    expect(firebaseStories).toContain("replyToStoryInFirebase");
+    expect(firebaseShops).toContain('collection(getFirestoreDb(), "storefronts")');
+    expect(firebaseShops).toContain('collection(getFirestoreDb(), "products")');
+    expect(firebaseShops).toContain("useFirebaseStorefronts");
+    expect(firebaseShops).toContain("useFirebaseProducts");
+    expect(firebaseShops).toContain("useFirebaseProductMemories");
+    expect(firebaseShops).toContain("useFirebaseShopMutations");
+    expect(firebaseChat).toContain('collection(db, "conversations")');
+    expect(firebaseChat).toContain("useFirebaseConversations");
+    expect(firebaseChat).toContain("useFirebaseMessages");
+    expect(firebaseChat).toContain("sendFirebaseAttachment");
+    expect(firebaseChat).toContain("createSupportConversation");
+    expect(firestoreRules).toContain("match /stories/{storyId}");
+    expect(firestoreRules).toContain("match /storefronts/{storefrontId}");
+    expect(firestoreRules).toContain("match /products/{productId}");
+    expect(firestoreRules).toContain("match /orders/{orderId}");
+    expect(firestoreRules).toContain("match /safetyReports/{reportId}");
+    expect(firestoreRules).toContain("'storyId'");
+    expect(storageRules).toContain("match /stories/{uid}/{allPaths=**}");
+    expect(storageRules).toContain("match /shops/{uid}/{allPaths=**}");
+    expect(firestoreIndexes).toContain('"collectionGroup": "stories"');
+    expect(firestoreIndexes).toContain('"collectionGroup": "storefronts"');
+    expect(firestoreIndexes).toContain('"collectionGroup": "products"');
     expect(learn).toContain("savanna-route-learn");
     expect(learn).toContain("AnimatedBookOpenTextIcon");
     expect(learn).toContain("AnimatedSearchIcon size={17}");
@@ -317,7 +424,8 @@ describe("Savanna PWA assets", () => {
     expect(messages).toContain('className="savanna-new-chat-drawer rounded-t-[28px]');
     expect(messages).toContain("savanna-new-chat-tabs");
     expect(messages).toContain("savanna-desktop-messages grid min-h-screen lg:grid-cols-[470px_minmax(0,1fr)]");
-    expect(messages).toContain("data-active={selectedConversationId === conversation.id}");
+    expect(messages).toContain("const active = selectedConversationId === conversation.id;");
+    expect(messages).toContain("data-active={active}");
     expect(styles).toContain("border-right: 1px solid var(--chat-border) !important;");
     expect(styles).toContain(".savanna-desktop-chat-rows .savanna-chat-row[data-active=\"true\"]");
     expect(styles).toContain(".dark .savanna-app .savanna-chat-row {");
@@ -326,13 +434,20 @@ describe("Savanna PWA assets", () => {
     expect(messages).toContain("const filteredChatList = filteredConversations.filter");
     expect(messages).toContain('AnimatedPlusIcon size={16}');
     expect(messages).toContain('text-[#FF5B6B]');
-    expect(app).toContain('<Route path="/home" component={Home} />');
+    // `/home` used to render the Home page directly; it now redirects to
+    // /messages, which is the app's landing route. Assert the redirect rather
+    // than the old component form so this fails if the route is dropped.
+    expect(app).toContain('<Route path="/home"><Redirect to="/messages" /></Route>');
     expect(app).toContain('<Route path="/"><Redirect to="/messages" /></Route>');
     expect(messages).toContain("const desktopPreviewMessages = [");
-    expect(messages).toContain('const isPreviewConversation = import.meta.env.DEV && (selectedConversationId ?? 0) < 0;');
+    expect(messages).toContain('const isPreviewConversation = Boolean(selectedConversationId && isPreviewConversationId(selectedConversationId));');
     expect(messages).toContain('if (import.meta.env.DEV && isMobile && chatPreviewMode === "detail") setSelectedConversationId(previewConversations[0].id);');
-    expect(messages).toContain('if (import.meta.env.DEV) { setSelectedConversationId(conversation.id); if (isMobile) setMobileDetail(true); return; }');
-    expect(messages).toContain('Development preview — messages are not sent or saved.');
+    // The preview guard is now nested inside a string-id check rather than
+    // being a bare DEV branch, so assert the pieces that must survive: the
+    // guard itself, and the fallback a real visitor gets in production.
+    expect(messages).toContain('if (isPreviewConversationId(conversation.id)) {');
+    expect(messages).toContain('if (import.meta.env.DEV) {');
+    expect(messages).toContain('return toast.info("Development preview chat - no real conversation opened");');
     expect(messages).toContain('savanna-wordmark text-[28px]');
     expect(messages).toContain('AnimatedSendIcon size={18}');
     expect(styles).toContain('.savanna-app .savanna-desktop-chat-list .savanna-wordmark');
@@ -343,10 +458,17 @@ describe("Savanna PWA assets", () => {
     expect(styles).toContain('border-radius: 1rem !important;');
     expect(styles).toContain('.dark .savanna-app .savanna-incoming-message {\n    background: var(--chat-search) !important;');
     expect(styles).toContain('.dark .savanna-app .savanna-mobile-conversation .savanna-incoming-message {\n    background: var(--chat-search) !important;');
-    expect(styles).toContain('.dark .savanna-app .savanna-mobile-conversation-header');
+    expect(styles).toContain('.savanna-app .savanna-chat-glass-header');
+    expect(styles).toContain('.dark .savanna-app .savanna-chat-glass-header');
     expect(animatedIcons).toContain('export function AnimatedSendIcon');
     expect(animatedIcons).toContain('className={cn("inline-flex items-center justify-center", className)}');
-    expect(animatedIcons).toContain('style={{ color, transform: "rotate(-45deg)", ...style }}');
+    // The send glyph must be rotated a quarter turn anticlockwise so the plane
+    // points nose-up. That rotation is owned by a plain `.savanna-send-icon`
+    // wrapper (source + stylesheet), NOT by the motion element's inline style:
+    // framer-motion rewrites `transform` on elements it controls, so an inline
+    // transform there survives SSR but can be clobbered on the client.
+    expect(animatedIcons).toContain('<span className="savanna-send-icon">');
+    expect(styles).toMatch(/\.savanna-app \.savanna-send-icon \{[^}]*transform:\s*rotate\(-90deg\)/);
     expect(animatedIcons).toContain('onMouseEnter={handleEnter}');
     expect(animatedIcons).toContain('x: [0, 6, 20, -20, 0]');
   });
@@ -453,5 +575,189 @@ describe("Savanna PWA assets", () => {
     expect(styles).toMatch(
       /\.dark \.savanna-app nav\.savanna-mobile-bottom-nav\.savanna-glass-bottom-nav \{[\s\S]*?border:\s*1px solid/
     );
+  });
+
+  // Regression guard: the frontend ships to Firebase Hosting, which serves
+  // static files only. A page that still calls tRPC gets the SPA fallback HTML
+  // back and dies with `Unexpected token '<' ... is not valid JSON`, which is
+  // exactly the failure that broke sign-in on the static deploy. Every route
+  // reachable in the MVP must therefore read and write through Firestore.
+  it("keeps every MVP-reachable route free of tRPC calls", async () => {
+    const appSource = await readFile(resolve(projectRoot, "client/src/App.tsx"), "utf8");
+
+    const routes = [...appSource.matchAll(/<Route\s+path="([^"]+)"(?:\s+component=\{(\w+)\})?/g)]
+      .map(match => ({ path: match[1], component: match[2] }))
+      .filter((route): route is { path: string; component: string } => Boolean(route.component));
+
+    // Surfaces deliberately deferred past the MVP. Learn is hidden (its routes
+    // redirect to /shops) and payments are not processing yet, so these may
+    // still target the Express server. Everything else must not.
+    const deferred = new Set([
+      "CoursePage",
+      "LearnPage",
+      "CreatorStudioPage",
+      "PaymentsPage",
+      "PaymentDetailPage",
+    ]);
+
+    const live = routes.filter(route => !deferred.has(route.component));
+    expect(live.length).toBeGreaterThan(5);
+
+    for (const route of live) {
+      const file = resolve(projectRoot, "client/src/pages", `${route.component}.tsx`);
+      const source = await readFile(file, "utf8");
+      expect(
+        source.includes("trpc."),
+        `${route.component} (${route.path}) is reachable on the static deploy and must not call tRPC`
+      ).toBe(false);
+    }
+  });
+
+  // The buyer records how they intend to pay, but must never be able to move
+  // their own order forward or rewrite what they owe.
+  it("lets the buyer write only the payment-preference fields on an order", async () => {
+    const rules = await readFile(resolve(projectRoot, "firestore.rules"), "utf8");
+    const ordersBlock = rules.slice(rules.indexOf("match /orders/{orderId}"));
+    const updateRule = ordersBlock.slice(
+      ordersBlock.indexOf("allow update:"),
+      ordersBlock.indexOf("allow delete:")
+    );
+
+    expect(updateRule).toContain("resource.data.storefrontOwnerUserId == request.auth.uid");
+    expect(updateRule).toContain("resource.data.buyerUserId == request.auth.uid");
+    // Without the status check a buyer could confirm an already-paid order.
+    expect(updateRule).toContain("resource.data.status == 'awaiting_payment'");
+    // Without affectedKeys the buyer could set status to "paid" for free.
+    expect(updateRule).toContain("affectedKeys()");
+    expect(updateRule).toContain("hasOnly(['paymentCountryCode', 'paymentProviderCode', 'updatedAt'])");
+    expect(ordersBlock.slice(ordersBlock.indexOf("allow delete:"))).toContain("allow delete: if false;");
+  });
+
+  // Regression guard: the composer field is a glass pill shared by web and
+  // mobile in both themes. Opaque fills and per-breakpoint radius rules have
+  // silently defeated this surface more than once, so assert the properties
+  // that make it glass rather than just asserting the class is present.
+  it("makes the message composer a glass pill with circular actions in both themes", async () => {
+    const styles = await readFile(resolve(projectRoot, "client/src/index.css"), "utf8");
+    const messages = await readFile(resolve(projectRoot, "client/src/pages/MessagesPage.tsx"), "utf8");
+
+    // One shared class, so web and mobile cannot drift apart.
+    expect(messages).toContain("savanna-composer-field");
+
+    const ruleBody = (selector: string) => {
+      const start = styles.indexOf(selector);
+      expect(start, `missing rule: ${selector}`).toBeGreaterThan(-1);
+      return styles.slice(start, styles.indexOf("}", start));
+    };
+
+    const base = ruleBody(".savanna-app .savanna-composer-field {");
+    expect(base).toMatch(/border-radius:\s*9999px/);
+    expect(base).toMatch(/backdrop-filter:[^;]*blur\(/);
+    expect(base).toMatch(/box-shadow:\s*none/);
+
+    // The dark theme must restate the surface, not just rely on the base rule.
+    expect(ruleBody(".dark .savanna-app .savanna-composer-field {")).toMatch(/background:/);
+
+    // Any opaque fill on the field itself defeats the blur. Strip comments
+    // first: a selector match would otherwise swallow the comment block above
+    // it, and those comments legitimately mention this class by name.
+    const css = styles.replace(/\/\*[\s\S]*?\*\//g, "");
+    const fieldRules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .map(match => ({ selector: match[1].trim(), body: match[2] }))
+      .filter(rule => /savanna-composer-field/.test(rule.selector));
+
+    expect(fieldRules.length).toBeGreaterThan(0);
+    for (const rule of fieldRules) {
+      expect(
+        /background(-color)?:\s*#[0-9A-Fa-f]{3,8}\s*!important/.test(rule.body),
+        `opaque background defeats the composer glass: ${rule.selector}`
+      ).toBe(false);
+    }
+
+    // Mic and send are circles so they nest flush in the pill.
+    expect(messages).toContain("savanna-send-button savanna-composer-action savanna-brand-token shrink-0 rounded-full");
+    expect(messages).toContain("savanna-composer-action savanna-brand-token shrink-0 rounded-full");
+  });
+
+  // Regression guard: two product-wide a11y rules paint a gold outline on
+  // every focused control, and on a search pill or the composer that reads as
+  // a stray gold halo. Both are switched off for those fields at both
+  // breakpoints - the `!important` mobile rule included.
+  it("keeps the gold focus halo off the search and message fields", async () => {
+    const styles = await readFile(resolve(projectRoot, "client/src/index.css"), "utf8");
+    const css = styles.replace(/\/\*[\s\S]*?\*\//g, "");
+
+    // The two rules that paint the gold, so the guard fails loudly if either
+    // is rewritten and the override below stops targeting the right thing.
+    expect(css).toMatch(/:where\(a,\s*button,\s*input,\s*textarea,\s*select\):focus-visible\s*\{[^}]*outline:\s*3px solid[^;]*#F2C14E/);
+    expect(css).toMatch(/\.savanna-app input:focus-visible[\s\S]{0,120}?outline:\s*3px solid #F2C14E !important/);
+
+    const neutralised = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .map(match => ({ selector: match[1].trim(), body: match[2] }))
+      .filter(rule => /:focus-visible$/.test(rule.selector.trim()))
+      .filter(rule => /savanna-route-search|savanna-desktop-chat-search|savanna-mobile-chat-search|savanna-composer-field/.test(rule.selector));
+
+    expect(neutralised.length).toBeGreaterThan(0);
+    for (const rule of neutralised) {
+      expect(rule.body).toMatch(/outline:\s*0\s*!important/);
+      // shadcn's Input paints its focus via a ring box-shadow, not an outline.
+      expect(rule.body).toMatch(/box-shadow:\s*none\s*!important/);
+    }
+
+    // Every search and message field is covered by name.
+    for (const field of [
+      ".savanna-route-search",
+      ".savanna-desktop-chat-search",
+      ".savanna-mobile-chat-search",
+      ".savanna-composer-field",
+    ]) {
+      expect(
+        neutralised.some(rule => rule.selector.includes(field)),
+        `no neutralising rule covers ${field}`
+      ).toBe(true);
+    }
+  });
+
+  // Regression guard: tapping an avatar in the chat list or in a conversation
+  // header opens the other person's /people/:userId profile. The whole thing
+  // silently degrades to "nothing happens" if `memberIds` stops being read off
+  // the Firestore document, which is invisible to a typecheck — the field is
+  // optional at runtime and simply comes back undefined.
+  it("links chat avatars through to the counterparty's public profile", async () => {
+    const chat = await readFile(resolve(projectRoot, "client/src/lib/firebaseChat.ts"), "utf8");
+    const messages = await readFile(resolve(projectRoot, "client/src/pages/MessagesPage.tsx"), "utf8");
+    const header = await readFile(resolve(projectRoot, "client/src/components/ConversationHeader.tsx"), "utf8");
+
+    // The list item must carry the participants, and the mapper must read them
+    // off the document. Without this the peer can never be resolved.
+    expect(chat).toMatch(/export type FirebaseConversationListItem = \{[\s\S]*?memberIds:\s*string\[\][\s\S]*?\}/);
+    expect(chat).toMatch(/memberIds:\s*Array\.isArray\(data\.memberIds\)\s*\?\s*data\.memberIds\.map\(String\)\s*:\s*\[\]/);
+
+    // Peer resolution returns null for groups and while signed out, so the
+    // avatar never looks tappable when there is no single profile to open.
+    expect(chat).toMatch(/export function getConversationPeerId\(/);
+    expect(chat).toMatch(/if \(conversation\.kind === "group"\) return null;/);
+    expect(chat).toMatch(/if \(!viewerId\) return null;/);
+
+    // Both surfaces navigate to the public profile route.
+    expect(messages).toContain("const [, navigate] = useLocation();");
+    expect(messages).toMatch(/navigate\(`\/people\/\$\{peerId\}`\)/);
+    expect(messages).toContain("onAvatarClick={peerProfileOpener(selected)}");
+    // Header appears twice: the mobile detail view and the desktop panel.
+    expect(messages.match(/onAvatarClick=\{peerProfileOpener\(selected\)\}/g)?.length).toBe(2);
+
+    // The header only offers a button when it is given a handler; otherwise a
+    // group avatar would advertise a tap that does nothing.
+    expect(header).toMatch(/onAvatarClick\?:/);
+    expect(header).toMatch(/onAvatarClick \? \([\s\S]*?<button[\s\S]*?onClick=\{onAvatarClick\}/);
+    expect(header).toContain(`aria-label={\`Open \${title}'s profile\`}`);
+
+    // A chat row contains its own nested avatar button, so the row itself must
+    // not be a <button> — nesting interactive content is invalid HTML and the
+    // avatar click would be swallowed. The nested handler stops propagation so
+    // opening a profile does not also select the conversation.
+    expect(messages).toMatch(/role="button"\s*\n\s*tabIndex=\{0\}/);
+    expect(messages).toMatch(/onClick=\{event => \{\s*\n\s*event\.stopPropagation\(\);/);
+    expect(messages).not.toMatch(/<button[\s\S]{0,400}savanna-chat-row/);
   });
 });

@@ -21,7 +21,6 @@ import { Redirect, Route, Switch } from "wouter";
  *    round trip before first paint.
  *  - `NotFound`, because it is tiny and can be needed by any bad URL.
  */
-const Home = lazy(() => import("./pages/Home"));
 const CheckoutPage = lazy(() => import("./pages/CheckoutPage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const MerchantStudioPage = lazy(() => import("./pages/MerchantStudioPage"));
@@ -58,7 +57,7 @@ function Router() {
   return (
     <Suspense fallback={<RouteFallback />}>
       <Switch>
-        <Route path="/home" component={Home} />
+        <Route path="/home"><Redirect to="/messages" /></Route>
         <Route path="/login" component={LoginPage} />
         <Route path="/"><Redirect to="/messages" /></Route>
         <Route path="/messages" component={MessagesPage} />

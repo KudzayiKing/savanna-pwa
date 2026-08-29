@@ -31,6 +31,7 @@ import {
   products,
   storefronts,
   stories,
+  storyMedia,
   storyAudienceMembers,
   storyReactions,
   storyViews,
@@ -43,6 +44,7 @@ import { bytesMatchMimeType } from "./media";
 import { storageGetSignedUrl, storagePut } from "./storage";
 import { createCipheriv, createHash, randomBytes } from "node:crypto";
 import { canAccessLesson, canMerchantAdvanceOrder, canTransitionPaymentIntent, canViewStory, resolveReceiptStatus } from "../shared/domainRules";
+import { createDiscoveryBadge } from "../shared/discovery";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -427,37 +429,157 @@ export async function recordMessageDelivery(userId: number, messageId: number, s
   else await db.update(messages).set({ status: "delivered" }).where(eq(messages.id, messageId));
 }
 
-export async function listStoriesForUser(userId: number) {
+async function withStoryMedia<T extends { id: number }>(storyRows: T[]) {
+  if (!storyRows.length) {
+    return storyRows.map(row => ({
+      ...row,
+      media: [] as Array<{ id: number; url: string | null; mimeType: string; type: "image" | "video" }>,
+      primaryMediaUrl: null as string | null,
+      primaryMediaType: null as "image" | "video" | null,
+    }));
+  }
   const db = await getDb();
-  if (!db) throw new Error("Database is unavailable");
-  const now = new Date();
-  const candidates = await db.select({ story: stories, authorName: profiles.displayName }).from(stories).leftJoin(profiles, eq(profiles.userId, stories.authorUserId)).where(and(isNull(stories.deletedAt), gt(stories.expiresAt, now))).orderBy(desc(stories.publishedAt));
-  const memberships = await db.select().from(storyAudienceMembers).where(eq(storyAudienceMembers.userId, userId));
-  const allowedCustomStoryIds = new Set(memberships.map(membership => membership.storyId));
-  return candidates.filter(({ story }) => canViewStory({ isAuthor: story.authorUserId === userId, isAudienceMember: allowedCustomStoryIds.has(story.id), audience: story.audience })).map(({ story, authorName }) => ({ ...story, authorName: authorName?.trim() || "Savanna member" }));
+  const mediaRows = await db.select().from(storyMedia).where(inArray(storyMedia.storyId, storyRows.map(row => row.id)));
+  const grouped = new Map<number, typeof mediaRows>();
+  for (const media of mediaRows) {
+    const existing = grouped.get(media.storyId);
+    if (existing) existing.push(media);
+    else grouped.set(media.storyId, [media]);
+  }
+  return Promise.all(storyRows.map(async row => {
+    const media = await Promise.all((grouped.get(row.id) ?? []).map(async item => ({
+      id: item.id,
+      url: await signedUrlOrNull(item.storageKey),
+      mimeType: item.mimeType,
+      type: item.mimeType.startsWith("video/") ? "video" as const : "image" as const,
+    })));
+    return {
+      ...row,
+      media,
+      primaryMediaUrl: media[0]?.url ?? null,
+      primaryMediaType: media[0]?.type ?? null,
+    };
+  }));
 }
 
-export async function publishTextStory(input: { authorUserId: number; textBody: string; audience: "public" | "custom" | "private"; customAudienceUserIds?: number[] }) {
+type StoryPublishInput = {
+  authorUserId: number;
+  textBody?: string | null;
+  audience: "public" | "custom" | "private";
+  customAudienceUserIds?: number[];
+  saveToMemories?: boolean;
+  storefrontId?: number | null;
+  productName?: string | null;
+  productDescription?: string | null;
+  productPriceMinor?: number | null;
+  productCurrencyCode?: string | null;
+};
+
+async function createStoryRecord(input: StoryPublishInput) {
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable");
   const audienceUserIds = Array.from(new Set((input.customAudienceUserIds ?? []).filter(userId => userId !== input.authorUserId)));
   if (input.audience === "custom" && audienceUserIds.length === 0) throw new Error("Select at least one Savanna account for a custom Story");
+  if (input.storefrontId) {
+    await requireStorefrontOwner(input.authorUserId, input.storefrontId);
+    if (!input.saveToMemories) throw new Error("Business product stories must be saved as Memories");
+    if (input.audience !== "public") throw new Error("Business Memories must be public");
+    if (!input.productName?.trim()) throw new Error("Add a product name for this Memory");
+    if (!input.productDescription?.trim()) throw new Error("Add a short product description for this Memory");
+    if (!input.productPriceMinor || input.productPriceMinor <= 0) throw new Error("Add a valid product price for this Memory");
+  }
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
   const storyId = await db.transaction(async tx => {
-    const result = await tx.insert(stories).values({ authorUserId: input.authorUserId, textBody: input.textBody, audience: input.audience, expiresAt });
+    const result = await tx.insert(stories).values({
+      authorUserId: input.authorUserId,
+      textBody: input.textBody?.trim() || null,
+      audience: input.audience,
+      isMemory: Boolean(input.saveToMemories),
+      storefrontId: input.storefrontId ?? null,
+      productName: input.productName?.trim() || null,
+      productDescription: input.productDescription?.trim() || null,
+      productPriceMinor: input.productPriceMinor ?? null,
+      productCurrencyCode: input.productCurrencyCode?.trim().toUpperCase() || null,
+      expiresAt,
+    });
     const id = Number(result[0].insertId);
     if (input.audience === "custom") await tx.insert(storyAudienceMembers).values(audienceUserIds.map(userId => ({ storyId: id, userId })));
     return id;
   });
-  await logAuditEvent(input.authorUserId, "story.published", "story", String(storyId), { audience: input.audience, expiresAt: expiresAt.toISOString() });
+  return { storyId, expiresAt };
+}
+
+export async function listStoriesForUser(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  const now = new Date();
+  const [viewerProfile] = await db.select({ city: profiles.city, countryCode: profiles.countryCode }).from(profiles).where(eq(profiles.userId, userId)).limit(1);
+  const candidates = await db
+    .select({
+      story: stories,
+      authorName: profiles.displayName,
+      authorCity: profiles.city,
+      authorCountryCode: profiles.countryCode,
+    })
+    .from(stories)
+    .leftJoin(profiles, eq(profiles.userId, stories.authorUserId))
+    .where(and(isNull(stories.deletedAt), gt(stories.expiresAt, now)))
+    .orderBy(desc(stories.publishedAt));
+  const memberships = await db.select().from(storyAudienceMembers).where(eq(storyAudienceMembers.userId, userId));
+  const allowedCustomStoryIds = new Set(memberships.map(membership => membership.storyId));
+  const visibleStories = candidates
+    .filter(({ story }) => canViewStory({ isAuthor: story.authorUserId === userId, isAudienceMember: allowedCustomStoryIds.has(story.id), audience: story.audience }))
+    .map(({ story, authorName, authorCity, authorCountryCode }) => ({
+      ...story,
+      authorName: authorName?.trim() || "Savanna member",
+      discovery: createDiscoveryBadge({
+        surface: "stories",
+        viewerUserId: userId,
+        ownerUserId: story.authorUserId,
+        viewerCity: viewerProfile?.city,
+        viewerCountryCode: viewerProfile?.countryCode,
+        itemCity: authorCity,
+        itemCountryCode: authorCountryCode,
+        isProductMemory: Boolean(story.storefrontId && story.isMemory),
+        title: story.productName ?? story.textBody,
+        description: story.productDescription,
+      }),
+    }))
+    .sort((left, right) => right.discovery.score - left.discovery.score);
+  return withStoryMedia(visibleStories);
+}
+
+export async function publishTextStory(input: StoryPublishInput & { textBody: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  const { storyId, expiresAt } = await createStoryRecord(input);
+  await logAuditEvent(input.authorUserId, "story.published", "story", String(storyId), { audience: input.audience, isMemory: Boolean(input.saveToMemories), storefrontId: input.storefrontId ?? null, expiresAt: expiresAt.toISOString() });
   return { id: storyId, expiresAt };
+}
+
+export async function publishMediaStory(input: StoryPublishInput & { fileName: string; mimeType: "image/jpeg" | "image/png" | "image/webp" | "video/mp4"; base64Data: string; byteSize: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  const isImage = productImageTypes.has(input.mimeType);
+  const isVideo = productVideoTypes.has(input.mimeType);
+  if (!isImage && !isVideo) throw new Error("Stories support JPG, PNG, WebP, or MP4 media");
+  const bytes = Buffer.from(input.base64Data, "base64");
+  const maxSize = isVideo ? 20 * 1024 * 1024 : 6 * 1024 * 1024;
+  if (bytes.byteLength !== input.byteSize || bytes.byteLength > maxSize) throw new Error("Story media size could not be verified");
+  if (!bytesMatchMimeType(bytes, input.mimeType)) throw new Error("Story media contents do not match the selected file type");
+  const { storyId, expiresAt } = await createStoryRecord(input);
+  const safeFileName = safeStorageFileName(input.fileName, isVideo ? "story-video.mp4" : "story-image");
+  const upload = await storagePut(`private/stories/${storyId}/${input.authorUserId}/${safeFileName}`, bytes, input.mimeType);
+  await db.insert(storyMedia).values({ storyId, storageKey: upload.key, mimeType: input.mimeType });
+  await logAuditEvent(input.authorUserId, "story.media_published", "story", String(storyId), { audience: input.audience, isMemory: Boolean(input.saveToMemories), storefrontId: input.storefrontId ?? null, mimeType: input.mimeType, byteSize: bytes.byteLength, expiresAt: expiresAt.toISOString() });
+  return { id: storyId, expiresAt, url: upload.url };
 }
 
 export async function recordStoryView(userId: number, storyId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable");
   const [story] = await db.select().from(stories).where(eq(stories.id, storyId)).limit(1);
-  if (!story || story.deletedAt || story.expiresAt <= new Date()) throw new Error("Story is unavailable");
+  if (!story || story.deletedAt || (!story.isMemory && story.expiresAt <= new Date())) throw new Error("Story is unavailable");
   const [membership] = await db.select().from(storyAudienceMembers).where(and(eq(storyAudienceMembers.storyId, story.id), eq(storyAudienceMembers.userId, userId))).limit(1);
   if (!canViewStory({ isAuthor: story.authorUserId === userId, isAudienceMember: Boolean(membership), audience: story.audience })) throw new Error("You do not have access to this Story");
   await db.insert(storyViews).values({ storyId, viewerUserId: userId }).onDuplicateKeyUpdate({ set: { viewedAt: new Date() } });
@@ -468,6 +590,32 @@ export async function reactToStory(userId: number, storyId: number, emoji: strin
   if (!db) throw new Error("Database is unavailable");
   await recordStoryView(userId, storyId);
   await db.insert(storyReactions).values({ storyId, userId, emoji }).onDuplicateKeyUpdate({ set: { emoji } });
+}
+
+export async function replyToStory(userId: number, storyId: number, payload: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  await recordStoryView(userId, storyId);
+  const [story] = await db.select().from(stories).where(eq(stories.id, storyId)).limit(1);
+  if (!story) throw new Error("Story is unavailable");
+  if (story.authorUserId === userId) throw new Error("You cannot reply to your own Story");
+
+  const directConversations = await db
+    .select({ conversationId: conversationMembers.conversationId })
+    .from(conversationMembers)
+    .innerJoin(conversations, eq(conversations.id, conversationMembers.conversationId))
+    .where(and(eq(conversationMembers.userId, userId), eq(conversationMembers.status, "active"), eq(conversations.kind, "direct")));
+  const candidateIds = directConversations.map(item => item.conversationId);
+  const [existingDirect] = candidateIds.length
+    ? await db
+      .select({ conversationId: conversationMembers.conversationId })
+      .from(conversationMembers)
+      .where(and(inArray(conversationMembers.conversationId, candidateIds), eq(conversationMembers.userId, story.authorUserId), eq(conversationMembers.status, "active")))
+      .limit(1)
+    : [];
+  const conversationId = existingDirect?.conversationId ?? (await createConversation({ createdByUserId: userId, kind: "direct", memberIds: [story.authorUserId] })).id;
+  await sendConversationMessage({ userId, conversationId, clientMessageId: crypto.randomUUID(), payload: `Replied to your Story: ${payload}` });
+  return { conversationId };
 }
 
 type StorefrontInput = {
@@ -579,8 +727,91 @@ export async function getPublicProfile(viewerUserId: number | null, userId: numb
   const [profile] = await db.select().from(profiles).where(eq(profiles.userId, userId)).limit(1);
   if (!profile) throw new Error("Profile unavailable");
   if (profile.userId !== viewerUserId && profile.profileVisibility !== "public") throw new Error("This profile is not public");
-  const avatarUrl = profile.userId === viewerUserId && profile.avatarKey ? await storageGetSignedUrl(profile.avatarKey) : null;
-  return { id: profile.id, userId: profile.userId, displayName: profile.displayName, bio: profile.bio, countryCode: profile.countryCode, city: profile.city, profileVisibility: profile.profileVisibility, avatarUrl };
+  const avatarUrl = await signedUrlOrNull(profile.avatarKey);
+  const [storefront] = await db.select().from(storefronts).where(eq(storefronts.ownerUserId, userId)).limit(1);
+  const business = storefront && (storefront.visibility === "public" || storefront.ownerUserId === viewerUserId)
+    ? await withStorefrontCover(storefront)
+    : null;
+  const storyFilters = [
+    eq(stories.authorUserId, userId),
+    isNull(stories.storefrontId),
+    isNull(stories.deletedAt),
+    gt(stories.expiresAt, new Date()),
+  ];
+  if (profile.userId !== viewerUserId) storyFilters.push(eq(stories.audience, "public"));
+  const profileStoryRows = await db
+    .select({
+      id: stories.id,
+      authorUserId: stories.authorUserId,
+      textBody: stories.textBody,
+      audience: stories.audience,
+      isMemory: stories.isMemory,
+      storefrontId: stories.storefrontId,
+      productName: stories.productName,
+      productDescription: stories.productDescription,
+      productPriceMinor: stories.productPriceMinor,
+      productCurrencyCode: stories.productCurrencyCode,
+      publishedAt: stories.publishedAt,
+      expiresAt: stories.expiresAt,
+      createdAt: stories.createdAt,
+      deletedAt: stories.deletedAt,
+    })
+    .from(stories)
+    .where(and(...storyFilters))
+    .orderBy(desc(stories.publishedAt))
+    .limit(12);
+  const memoryFilters = [
+    eq(stories.authorUserId, userId),
+    eq(stories.isMemory, true),
+    isNull(stories.storefrontId),
+    isNull(stories.deletedAt),
+  ];
+  if (profile.userId !== viewerUserId) memoryFilters.push(eq(stories.audience, "public"));
+  const profileMemoryRows = await db
+    .select({
+      id: stories.id,
+      authorUserId: stories.authorUserId,
+      textBody: stories.textBody,
+      audience: stories.audience,
+      isMemory: stories.isMemory,
+      storefrontId: stories.storefrontId,
+      productName: stories.productName,
+      productDescription: stories.productDescription,
+      productPriceMinor: stories.productPriceMinor,
+      productCurrencyCode: stories.productCurrencyCode,
+      publishedAt: stories.publishedAt,
+      expiresAt: stories.expiresAt,
+      createdAt: stories.createdAt,
+      deletedAt: stories.deletedAt,
+    })
+    .from(stories)
+    .where(and(...memoryFilters))
+    .orderBy(desc(stories.publishedAt))
+    .limit(24);
+  const profileStories = await withStoryMedia(profileStoryRows);
+  const profileMemories = await withStoryMedia(profileMemoryRows);
+  return {
+    id: profile.id,
+    userId: profile.userId,
+    displayName: profile.displayName,
+    bio: profile.bio,
+    countryCode: profile.countryCode,
+    city: profile.city,
+    profileVisibility: profile.profileVisibility,
+    avatarUrl,
+    business: business
+      ? {
+        id: business.id,
+        slug: business.slug,
+        name: business.name,
+        category: business.category,
+        coverUrl: business.coverUrl,
+        visibility: business.visibility,
+      }
+      : null,
+    stories: profileStories,
+    memories: profileMemories,
+  };
 }
 
 /**
@@ -730,18 +961,45 @@ export async function uploadProductMedia(userId: number, input: CommerceUploadIn
   return { id: Number(result[0].insertId), url: upload.url };
 }
 
-export async function listPublicStorefronts(query?: string) {
+export async function listPublicStorefronts(query?: string, userId?: number | null) {
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable");
-  const all = await db.select().from(storefronts).where(eq(storefronts.visibility, "public")).orderBy(desc(storefronts.updatedAt));
+  const [viewerProfile] = userId ? await db.select({ city: profiles.city, countryCode: profiles.countryCode }).from(profiles).where(eq(profiles.userId, userId)).limit(1) : [];
+  const all = await db
+    .select({
+      storefront: storefronts,
+      ownerCity: profiles.city,
+      ownerCountryCode: profiles.countryCode,
+    })
+    .from(storefronts)
+    .leftJoin(profiles, eq(profiles.userId, storefronts.ownerUserId))
+    .where(eq(storefronts.visibility, "public"))
+    .orderBy(desc(storefronts.updatedAt));
   const needle = query?.trim().toLowerCase();
-  const filtered = needle ? all.filter(storefront => [storefront.name, storefront.category, storefront.bio].some(value => value?.toLowerCase().includes(needle))) : all;
-  return Promise.all(filtered.map(storefront => withStorefrontCover(storefront)));
+  const filtered = needle ? all.filter(({ storefront }) => [storefront.name, storefront.category, storefront.bio].some(value => value?.toLowerCase().includes(needle))) : all;
+  const ranked = await Promise.all(filtered.map(async ({ storefront, ownerCity, ownerCountryCode }) => ({
+    ...(await withStorefrontCover(storefront)),
+    discovery: createDiscoveryBadge({
+      surface: "shops",
+      viewerUserId: userId,
+      ownerUserId: storefront.ownerUserId,
+      viewerCity: viewerProfile?.city,
+      viewerCountryCode: viewerProfile?.countryCode,
+      itemCity: ownerCity,
+      itemCountryCode: ownerCountryCode,
+      title: storefront.name,
+      description: storefront.bio,
+      category: storefront.category,
+      query,
+    }),
+  })));
+  return ranked.sort((left, right) => right.discovery.score - left.discovery.score);
 }
 
-export async function listPublicProducts(query?: string) {
+export async function listPublicProducts(query?: string, userId?: number | null) {
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable");
+  const [viewerProfile] = userId ? await db.select({ city: profiles.city, countryCode: profiles.countryCode }).from(profiles).where(eq(profiles.userId, userId)).limit(1) : [];
   const all = await db
     .select({
       id: products.id,
@@ -754,14 +1012,91 @@ export async function listPublicProducts(query?: string) {
       createdAt: products.createdAt,
       storefrontName: storefronts.name,
       storefrontSlug: storefronts.slug,
+      storefrontOwnerUserId: storefronts.ownerUserId,
+      storefrontCategory: storefronts.category,
+      ownerCity: profiles.city,
+      ownerCountryCode: profiles.countryCode,
     })
     .from(products)
     .innerJoin(storefronts, eq(storefronts.id, products.storefrontId))
+    .leftJoin(profiles, eq(profiles.userId, storefronts.ownerUserId))
     .where(and(eq(products.status, "active"), eq(storefronts.visibility, "public")))
     .orderBy(desc(products.createdAt));
   const needle = query?.trim().toLowerCase();
   const filtered = needle ? all.filter(product => [product.title, product.description, product.category, product.storefrontName].some(value => value?.toLowerCase().includes(needle))) : all;
-  return withProductMedia(filtered);
+  const ranked = filtered.map(product => ({
+    ...product,
+    discovery: createDiscoveryBadge({
+      surface: "shops",
+      viewerUserId: userId,
+      ownerUserId: product.storefrontOwnerUserId,
+      viewerCity: viewerProfile?.city,
+      viewerCountryCode: viewerProfile?.countryCode,
+      itemCity: product.ownerCity,
+      itemCountryCode: product.ownerCountryCode,
+      title: product.title,
+      description: product.description,
+      category: product.category ?? product.storefrontCategory,
+      query,
+    }),
+  })).sort((left, right) => right.discovery.score - left.discovery.score);
+  return withProductMedia(ranked);
+}
+
+export async function listPublicProductMemories(query?: string, userId?: number | null) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  const [viewerProfile] = userId ? await db.select({ city: profiles.city, countryCode: profiles.countryCode }).from(profiles).where(eq(profiles.userId, userId)).limit(1) : [];
+  const all = await db
+    .select({
+      id: stories.id,
+      authorUserId: stories.authorUserId,
+      textBody: stories.textBody,
+      audience: stories.audience,
+      isMemory: stories.isMemory,
+      storefrontId: stories.storefrontId,
+      productName: stories.productName,
+      productDescription: stories.productDescription,
+      productPriceMinor: stories.productPriceMinor,
+      productCurrencyCode: stories.productCurrencyCode,
+      publishedAt: stories.publishedAt,
+      expiresAt: stories.expiresAt,
+      createdAt: stories.createdAt,
+      deletedAt: stories.deletedAt,
+      storefrontName: storefronts.name,
+      storefrontSlug: storefronts.slug,
+      storefrontOwnerUserId: storefronts.ownerUserId,
+      storefrontCategory: storefronts.category,
+      ownerCity: profiles.city,
+      ownerCountryCode: profiles.countryCode,
+    })
+    .from(stories)
+    .innerJoin(storefronts, eq(storefronts.id, stories.storefrontId))
+    .leftJoin(profiles, eq(profiles.userId, storefronts.ownerUserId))
+    .where(and(eq(stories.isMemory, true), eq(stories.audience, "public"), isNull(stories.deletedAt), eq(storefronts.visibility, "public")))
+    .orderBy(desc(stories.publishedAt))
+    .limit(30);
+  const needle = query?.trim().toLowerCase();
+  const filtered = needle ? all.filter(memory => [memory.productName, memory.productDescription, memory.textBody, memory.storefrontName, memory.storefrontCategory].some(value => value?.toLowerCase().includes(needle))) : all;
+  const ranked = filtered.map(memory => ({
+    ...memory,
+    authorName: memory.storefrontName,
+    discovery: createDiscoveryBadge({
+      surface: "shops",
+      viewerUserId: userId,
+      ownerUserId: memory.storefrontOwnerUserId,
+      viewerCity: viewerProfile?.city,
+      viewerCountryCode: viewerProfile?.countryCode,
+      itemCity: memory.ownerCity,
+      itemCountryCode: memory.ownerCountryCode,
+      isProductMemory: true,
+      title: memory.productName,
+      description: memory.productDescription ?? memory.textBody,
+      category: memory.storefrontCategory,
+      query,
+    }),
+  })).sort((left, right) => right.discovery.score - left.discovery.score);
+  return withStoryMedia(ranked);
 }
 
 export async function getStorefrontBySlug(userId: number | null, slug: string) {
@@ -770,7 +1105,33 @@ export async function getStorefrontBySlug(userId: number | null, slug: string) {
   const [storefront] = await db.select().from(storefronts).where(eq(storefronts.slug, slug)).limit(1);
   if (!storefront || (storefront.visibility !== "public" && storefront.ownerUserId !== userId)) throw new Error("Storefront unavailable");
   const catalog = await db.select().from(products).where(and(eq(products.storefrontId, storefront.id), userId === storefront.ownerUserId ? undefined : eq(products.status, "active"))).orderBy(desc(products.createdAt));
-  return { storefront: await withStorefrontCover(storefront), products: await withProductMedia(catalog) };
+  const memoryFilters = [
+    eq(stories.storefrontId, storefront.id),
+    eq(stories.isMemory, true),
+    isNull(stories.deletedAt),
+  ];
+  if (userId !== storefront.ownerUserId) memoryFilters.push(eq(stories.audience, "public"));
+  const memoryRows = await db
+    .select({
+      id: stories.id,
+      authorUserId: stories.authorUserId,
+      textBody: stories.textBody,
+      audience: stories.audience,
+      isMemory: stories.isMemory,
+      storefrontId: stories.storefrontId,
+      productName: stories.productName,
+      productDescription: stories.productDescription,
+      productPriceMinor: stories.productPriceMinor,
+      productCurrencyCode: stories.productCurrencyCode,
+      publishedAt: stories.publishedAt,
+      expiresAt: stories.expiresAt,
+      createdAt: stories.createdAt,
+      deletedAt: stories.deletedAt,
+    })
+    .from(stories)
+    .where(and(...memoryFilters))
+    .orderBy(desc(stories.publishedAt));
+  return { storefront: await withStorefrontCover(storefront), products: await withProductMedia(catalog), memories: await withStoryMedia(memoryRows) };
 }
 
 export async function createOrder(userId: number, items: Array<{ productId: number; quantity: number }>, buyerNote?: string) {

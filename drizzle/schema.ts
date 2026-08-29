@@ -245,6 +245,12 @@ export const stories = mysqlTable(
     authorUserId: int("authorUserId").notNull(),
     textBody: varchar("textBody", { length: 700 }),
     audience: mysqlEnum("audience", ["public", "connections", "custom", "private"]).default("connections").notNull(),
+    isMemory: boolean("isMemory").default(false).notNull(),
+    storefrontId: int("storefrontId"),
+    productName: varchar("productName", { length: 160 }),
+    productDescription: varchar("productDescription", { length: 280 }),
+    productPriceMinor: int("productPriceMinor"),
+    productCurrencyCode: varchar("productCurrencyCode", { length: 3 }),
     createdAt: utcCreatedAt,
     publishedAt: timestamp("publishedAt").defaultNow().notNull(),
     expiresAt: timestamp("expiresAt").notNull(),
@@ -253,6 +259,8 @@ export const stories = mysqlTable(
   table => [
     index("stories_author_created_at_idx").on(table.authorUserId, table.createdAt),
     index("stories_expiry_idx").on(table.expiresAt, table.deletedAt),
+    index("stories_memory_author_idx").on(table.authorUserId, table.isMemory, table.createdAt),
+    index("stories_storefront_memory_idx").on(table.storefrontId, table.isMemory, table.createdAt),
   ]
 );
 

@@ -8,6 +8,7 @@ import {
   getStorefrontBySlug,
   listOrdersForMerchant,
   listOrdersForUser,
+  listPublicProductMemories,
   listPublicProducts,
   listPublicStorefronts,
   reviewStorefrontVerification,
@@ -50,8 +51,9 @@ const uploadInput = z.object({
 
 export const commerceRouter = router({
   storefronts: router({
-    list: publicProcedure.input(z.object({ query: z.string().trim().max(120).optional() }).optional()).query(({ input }) => listPublicStorefronts(input?.query)),
-    products: publicProcedure.input(z.object({ query: z.string().trim().max(120).optional() }).optional()).query(({ input }) => listPublicProducts(input?.query)),
+    list: publicProcedure.input(z.object({ query: z.string().trim().max(120).optional() }).optional()).query(({ ctx, input }) => listPublicStorefronts(input?.query, ctx.user?.id ?? null)),
+    products: publicProcedure.input(z.object({ query: z.string().trim().max(120).optional() }).optional()).query(({ ctx, input }) => listPublicProducts(input?.query, ctx.user?.id ?? null)),
+    memories: publicProcedure.input(z.object({ query: z.string().trim().max(120).optional() }).optional()).query(({ ctx, input }) => listPublicProductMemories(input?.query, ctx.user?.id ?? null)),
     detail: publicProcedure.input(z.object({ slug: z.string().trim().min(1).max(80) })).query(({ ctx, input }) => getStorefrontBySlug(ctx.user?.id ?? null, input.slug)),
     mine: protectedProcedure.query(({ ctx }) => getMyStorefront(ctx.user.id)),
     create: protectedProcedure.input(storefrontInput).mutation(({ ctx, input }) => createStorefront(ctx.user.id, input)),

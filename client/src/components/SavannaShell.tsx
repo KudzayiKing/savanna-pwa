@@ -4,7 +4,6 @@ import { ConnectionPill, InstallSavannaButton, PwaStatusBanner } from "@/compone
 import { MobileStoriesHeader } from "@/components/StoriesPanel";
 import { AnimatedPlusIcon, MobileNavIcon, type MobileNavIconName } from "@/components/AnimatedNavIcons";
 import { cn } from "@/lib/utils";
-import { trpc } from "@/lib/trpc";
 import {
   ChevronDown,
   Command,
@@ -25,15 +24,20 @@ const mobileNavigation = navigation;
 type SavannaShellProps = {
   children: ReactNode;
   context?: ReactNode;
+  /**
+   * Skips the persistent chrome (mobile header with Stories and the bottom
+   * nav) for immersive full-screen routes such as an open conversation. The
+   * chrome itself is unchanged - it is simply not mounted.
+   */
+  hideChrome?: boolean;
 };
 
-export function SavannaShell({ children, context }: SavannaShellProps) {
+export function SavannaShell({ children, context, hideChrome = false }: SavannaShellProps) {
   const [location] = useLocation();
   const { isAuthenticated, user } = useAuth();
-  const ownProfile = trpc.account.profile.useQuery({ userId: user?.id ?? 0 }, { enabled: isAuthenticated && Boolean(user?.id), retry: false });
   const isMessagesWorkspace = location === "/messages";
   const usesIconRail = ["/messages", "/shops", "/orders", "/profile"].includes(location);
-  const profileAvatarUrl = ownProfile.data?.avatarUrl ?? null;
+  const profileAvatarUrl = user?.photoURL ?? null;
 
   return (
     <div className="savanna-app min-h-screen bg-[#fcfaf4] text-[#2c2114]">
@@ -43,7 +47,7 @@ export function SavannaShell({ children, context }: SavannaShellProps) {
 
       <PwaStatusBanner />
 
-      <MobileStoriesHeader />
+      {hideChrome ? null : <MobileStoriesHeader />}
 
       <div className={cn("mx-auto flex min-h-screen", usesIconRail ? "max-w-none" : "max-w-[1720px]")}>
         <aside className={cn("sticky top-0 hidden h-screen shrink-0 flex-col lg:flex", usesIconRail ? "savanna-message-rail w-[84px] items-center border-r px-3 py-5" : "w-[248px] border-r border-[#eadfca] bg-[#f6f0e2] px-4 py-7")}>
@@ -100,7 +104,7 @@ export function SavannaShell({ children, context }: SavannaShellProps) {
           </>}
         </aside>
 
-        <section className="min-w-0 flex-1 pb-10 lg:pb-0">
+        <section className={cn("min-w-0 flex-1", hideChrome ? "" : "pb-10 lg:pb-0")}>
           {!usesIconRail ? <div className="savanna-glass-header hidden h-[76px] items-center justify-between border-b border-[#eadfca]/70 bg-[#fcfaf4]/72 px-7 backdrop-blur-xl lg:flex xl:px-10">
             <button className="group flex h-10 w-[min(440px,42vw)] items-center gap-3 rounded-xl border border-[#d7ddd0] bg-white/65 px-3 text-left text-sm text-[#7a8276] shadow-[0_4px_12px_rgba(39,54,37,0.035)] transition-colors hover:border-[#b7c5b4]" aria-label="Open search and command menu">
               <Search className="size-4" />
@@ -126,19 +130,29 @@ export function SavannaShell({ children, context }: SavannaShellProps) {
         ) : null}
       </div>
 
-      <nav aria-label="Mobile navigation" className="savanna-mobile-bottom-nav savanna-glass-bottom-nav fixed bottom-[max(0.75rem,calc(env(safe-area-inset-bottom)+0.5rem))] left-1/2 z-50 flex h-[60px] w-[min(calc(100vw-1.5rem),430px)] items-center rounded-[34px] px-4 py-1.5 backdrop-blur-xl lg:hidden">
-        {mobileNavigation.map((item) => {
-          const active = location === item.href;
-          return (
-            <Link href={item.href} key={item.href} className="grid h-full min-w-0 flex-1 place-items-center rounded-[28px] px-1 text-xs font-semibold">
-              <span className={cn("grid h-12 place-items-center transition-[width,background-color] duration-200", active ? "inline-flex w-auto min-w-[92px] gap-2 rounded-[28px] bg-[#D9A441]/20 px-3 text-[#D9A441] dark:text-[#D9A441]" : "w-11 rounded-[28px] text-[#8a765d]")}>
-                {item.label === "Profile" && profileAvatarUrl ? <img src={profileAvatarUrl} alt="" className="size-7 rounded-full object-cover" /> : <MobileNavIcon name={item.label as MobileNavIconName} active={active} size={23} />}
-                {active ? <span className="truncate leading-none text-[#D9A441] dark:text-[#D9A441]">{item.label}</span> : null}
-              </span>
-            </Link>
-          );
-        })}
-      </nav>
+      {/* IMPORTANT: the horizontal inset on this rail is NOT controlled by
+          the `px-2` below. A mobile-media-query rule in index.css sets
+          `padding-left/right: 0.5rem !important` on `.savanna-mobile-bottom-nav`,
+          which beats any utility here. 0.5rem (8px) matches the `py-2`
+          vertical gap, so the active pill sits the same distance from the
+          rail's left/right edge as it does from its top and bottom.
+          If you need to change the end inset, edit that CSS rule — not this
+          className. `justify-between` is what anchors the end tabs. */}
+      {hideChrome ? null : (
+        <nav aria-label="Mobile navigation" className="savanna-mobile-bottom-nav savanna-glass-bottom-nav fixed bottom-[max(0.75rem,calc(env(safe-area-inset-bottom)+0.5rem))] left-1/2 z-50 flex h-[60px] w-[min(calc(100vw-1.5rem),430px)] items-center justify-between rounded-[34px] px-2 py-2 backdrop-blur-xl lg:hidden">
+          {mobileNavigation.map((item) => {
+            const active = location === item.href;
+            return (
+              <Link href={item.href} key={item.href} className="flex h-full flex-none items-center justify-center rounded-[28px] text-xs font-semibold">
+                <span className={cn("grid h-11 place-items-center transition-[width,background-color] duration-200", active ? "inline-flex w-max min-w-max items-center gap-2 rounded-[28px] bg-[#D9A441]/20 px-3 text-[#D9A441] dark:text-[#D9A441]" : "w-11 rounded-[28px] text-[#8a765d]")}>
+                  {item.label === "Profile" && profileAvatarUrl ? <img src={profileAvatarUrl} alt="" className="size-7 rounded-full object-cover" /> : <MobileNavIcon name={item.label as MobileNavIconName} active={active} size={23} />}
+                  {active ? <span className="whitespace-nowrap leading-none text-[#D9A441] dark:text-[#D9A441]">{item.label}</span> : null}
+                </span>
+              </Link>
+            );
+          })}
+        </nav>
+      )}
     </div>
   );
 }
