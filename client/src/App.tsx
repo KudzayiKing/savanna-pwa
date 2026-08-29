@@ -22,10 +22,7 @@ import { Redirect, Route, Switch } from "wouter";
  *  - `NotFound`, because it is tiny and can be needed by any bad URL.
  */
 const Home = lazy(() => import("./pages/Home"));
-const CoursePage = lazy(() => import("./pages/CoursePage"));
 const CheckoutPage = lazy(() => import("./pages/CheckoutPage"));
-const CreatorStudioPage = lazy(() => import("./pages/CreatorStudioPage"));
-const LearnPage = lazy(() => import("./pages/LearnPage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const MerchantStudioPage = lazy(() => import("./pages/MerchantStudioPage"));
 const OrdersPage = lazy(() => import("./pages/OrdersPage"));
@@ -69,9 +66,9 @@ function Router() {
         <Route path="/shops/:slug/products/:productId" component={ProductDetailPage} />
         <Route path="/shops/:slug" component={StorefrontPage} />
         <Route path="/shops" component={ShopsPage} />
-        <Route path="/learn/manage" component={CreatorStudioPage} />
-        <Route path="/learn/:slug" component={CoursePage} />
-        <Route path="/learn" component={LearnPage} />
+        <Route path="/learn/manage"><Redirect to="/shops/manage" /></Route>
+        <Route path="/learn/:slug"><Redirect to="/shops" /></Route>
+        <Route path="/learn"><Redirect to="/shops" /></Route>
         <Route path="/checkout/:subjectType/:subjectId" component={CheckoutPage} />
         <Route path="/orders" component={OrdersPage} />
         <Route path="/payments/:paymentIntentId" component={PaymentDetailPage} />

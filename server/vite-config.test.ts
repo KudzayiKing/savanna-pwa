@@ -54,4 +54,27 @@ describe("Vite dev-server integration", () => {
     // whole Vite toolchain in and the server dies under `--omit=dev`.
     expect(shared).not.toMatch(/from ["']vite["']/);
   });
+
+  it("routes Netlify API traffic to the serverless tRPC function before the SPA fallback", async () => {
+    const [netlify, pkg, adapter] = await Promise.all([
+      readFile(resolve(projectRoot, "netlify.toml"), "utf8"),
+      readFile(resolve(projectRoot, "package.json"), "utf8"),
+      readFile(resolve(projectRoot, "server/_core/netlify.ts"), "utf8"),
+    ]);
+
+    const apiRedirect = netlify.indexOf('from = "/api/*"');
+    const spaRedirect = netlify.indexOf('from = "/*"');
+
+    expect(apiRedirect).toBeGreaterThanOrEqual(0);
+    expect(spaRedirect).toBeGreaterThanOrEqual(0);
+    expect(apiRedirect).toBeLessThan(spaRedirect);
+    expect(netlify).toContain('to = "/.netlify/functions/api/:splat"');
+    expect(netlify).toContain('directory = "netlify/functions"');
+    expect(pkg).toContain("server/_core/netlify.ts");
+    expect(pkg).toContain("netlify/functions/api.mjs");
+    expect(pkg).toContain('"serverless-http"');
+    expect(adapter).toContain("serverless(app)");
+    expect(adapter).toContain('replace(/^\\/\\.netlify\\/functions\\/api/, "/api")');
+    expect(adapter).toContain('headers: { "content-type": "application/json" }');
+  });
 });

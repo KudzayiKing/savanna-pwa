@@ -1,8 +1,10 @@
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { ConnectionPill, InstallSavannaButton, PwaStatusBanner } from "@/components/PwaExperience";
 import { MobileStoriesHeader } from "@/components/StoriesPanel";
 import { AnimatedPlusIcon, MobileNavIcon, type MobileNavIconName } from "@/components/AnimatedNavIcons";
 import { cn } from "@/lib/utils";
+import { trpc } from "@/lib/trpc";
 import {
   ChevronDown,
   Command,
@@ -14,12 +16,11 @@ import { Link, useLocation } from "wouter";
 const navigation = [
   { href: "/messages", label: "Messages" },
   { href: "/shops", label: "Shops" },
-  { href: "/learn", label: "Learn" },
   { href: "/orders", label: "Orders" },
   { href: "/profile", label: "Profile" },
 ];
 
-const mobileNavigation = navigation.filter((item) => item.href !== "/profile");
+const mobileNavigation = navigation;
 
 type SavannaShellProps = {
   children: ReactNode;
@@ -28,8 +29,11 @@ type SavannaShellProps = {
 
 export function SavannaShell({ children, context }: SavannaShellProps) {
   const [location] = useLocation();
+  const { isAuthenticated, user } = useAuth();
+  const ownProfile = trpc.account.profile.useQuery({ userId: user?.id ?? 0 }, { enabled: isAuthenticated && Boolean(user?.id), retry: false });
   const isMessagesWorkspace = location === "/messages";
-  const usesIconRail = ["/messages", "/shops", "/learn", "/orders", "/profile"].includes(location);
+  const usesIconRail = ["/messages", "/shops", "/orders", "/profile"].includes(location);
+  const profileAvatarUrl = ownProfile.data?.avatarUrl ?? null;
 
   return (
     <div className="savanna-app min-h-screen bg-[#fcfaf4] text-[#2c2114]">
@@ -48,7 +52,7 @@ export function SavannaShell({ children, context }: SavannaShellProps) {
             <nav aria-label="Primary navigation" className="flex flex-1 flex-col items-center gap-3">
               {navigation.map((item) => {
                 const active = location === item.href;
-                return <Link href={item.href} key={item.href} title={item.label} aria-label={item.label} className={cn("grid size-11 place-items-center rounded-2xl transition-all duration-200", active ? "bg-[#D9A441]/20 text-[#A87820] dark:text-[#D9A441]" : "text-[#8a765d]")}><MobileNavIcon name={item.label as MobileNavIconName} active={active} size={22} /><span className="sr-only">{item.label}</span></Link>;
+                return <Link href={item.href} key={item.href} title={item.label} aria-label={item.label} className={cn("grid size-11 place-items-center rounded-2xl transition-all duration-200", active ? "bg-[#D9A441]/20 text-[#A87820] dark:text-[#D9A441]" : "text-[#8a765d]")}>{item.label === "Profile" && profileAvatarUrl ? <img src={profileAvatarUrl} alt="" className="size-7 rounded-full object-cover" /> : <MobileNavIcon name={item.label as MobileNavIconName} active={active} size={22} />}<span className="sr-only">{item.label}</span></Link>;
               })}
             </nav>
             <div className="mt-auto"><Button size="icon" className="savanna-brand-token size-11 rounded-2xl shadow-none" aria-label="Open creator menu"><AnimatedPlusIcon size={20} /></Button></div>
@@ -71,7 +75,7 @@ export function SavannaShell({ children, context }: SavannaShellProps) {
                       : "text-[#695c4a] hover:bg-[#f1dfbf] hover:text-[#5d3a0c]"
                   )}
                 >
-                  <MobileNavIcon name={item.label as MobileNavIconName} active={active} size={21} />
+                {item.label === "Profile" && profileAvatarUrl ? <img src={profileAvatarUrl} alt="" className="size-6 rounded-full object-cover" /> : <MobileNavIcon name={item.label as MobileNavIconName} active={active} size={21} />}
                   <span>{item.label}</span>
                 </Link>
               );
@@ -128,7 +132,7 @@ export function SavannaShell({ children, context }: SavannaShellProps) {
           return (
             <Link href={item.href} key={item.href} className="grid h-full min-w-0 flex-1 place-items-center rounded-[28px] px-1 text-xs font-semibold">
               <span className={cn("grid h-12 place-items-center transition-[width,background-color] duration-200", active ? "inline-flex w-auto min-w-[92px] gap-2 rounded-[28px] bg-[#D9A441]/20 px-3 text-[#D9A441] dark:text-[#D9A441]" : "w-11 rounded-[28px] text-[#8a765d]")}>
-                <MobileNavIcon name={item.label as MobileNavIconName} active={active} size={23} />
+                {item.label === "Profile" && profileAvatarUrl ? <img src={profileAvatarUrl} alt="" className="size-7 rounded-full object-cover" /> : <MobileNavIcon name={item.label as MobileNavIconName} active={active} size={23} />}
                 {active ? <span className="truncate leading-none text-[#D9A441] dark:text-[#D9A441]">{item.label}</span> : null}
               </span>
             </Link>

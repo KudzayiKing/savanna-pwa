@@ -15,6 +15,8 @@ import {
   submitStorefrontVerification,
   updateMerchantOrderStatus,
   updateStorefront,
+  uploadProductMedia,
+  uploadStorefrontCover,
 } from "../db";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getPaymentPartner } from "../payments/catalog";
@@ -39,6 +41,13 @@ const productInput = z.object({
   status: z.enum(["draft", "active", "archived", "sold_out"]),
 });
 
+const uploadInput = z.object({
+  fileName: z.string().trim().min(1).max(160),
+  mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "video/mp4"]),
+  base64Data: z.string().min(1),
+  byteSize: z.number().int().positive().max(20 * 1024 * 1024),
+});
+
 export const commerceRouter = router({
   storefronts: router({
     list: publicProcedure.input(z.object({ query: z.string().trim().max(120).optional() }).optional()).query(({ input }) => listPublicStorefronts(input?.query)),
@@ -54,6 +63,8 @@ export const commerceRouter = router({
       const { storefrontId, ...values } = input;
       return createProduct(ctx.user.id, storefrontId, values);
     }),
+    uploadCover: protectedProcedure.input(uploadInput.omit({ mimeType: true }).extend({ storefrontId: z.number().int().positive(), mimeType: z.enum(["image/jpeg", "image/png", "image/webp"]) })).mutation(({ ctx, input }) => uploadStorefrontCover(ctx.user.id, input)),
+    uploadProductMedia: protectedProcedure.input(uploadInput.extend({ productId: z.number().int().positive() })).mutation(({ ctx, input }) => uploadProductMedia(ctx.user.id, input)),
     saveSettlement: protectedProcedure.input(z.object({ storefrontId: z.number().int().positive(), countryCode: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/), providerCode: z.string().trim().min(2).max(64), recipientAlias: z.string().trim().min(2).max(180), recipientReference: z.string().trim().min(2).max(180) })).mutation(({ ctx, input }) => {
       if (!getPaymentPartner(input.countryCode, input.providerCode)) throw new Error("This settlement partner is not available for the selected country");
       return saveMerchantSettlementProfile(ctx.user.id, input);

@@ -27,6 +27,7 @@ import {
   paymentIntents,
   paymentProviderEvents,
   paymentReceipts,
+  productMedia,
   products,
   storefronts,
   stories,
@@ -488,6 +489,66 @@ type ProductInput = {
   status: "draft" | "active" | "archived" | "sold_out";
 };
 
+type CommerceUploadInput = {
+  fileName: string;
+  mimeType: string;
+  base64Data: string;
+  byteSize: number;
+};
+
+const productImageTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+const productVideoTypes = new Set(["video/mp4"]);
+
+function safeStorageFileName(fileName: string, fallback: string) {
+  return fileName.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120) || fallback;
+}
+
+async function signedUrlOrNull(storageKey: string | null | undefined) {
+  if (!storageKey) return null;
+  try {
+    return await storageGetSignedUrl(storageKey);
+  } catch (error) {
+    console.warn("[Storage] Could not sign media URL", error);
+    return null;
+  }
+}
+
+async function withStorefrontCover<T extends { coverKey?: string | null }>(storefront: T) {
+  return { ...storefront, coverUrl: await signedUrlOrNull(storefront.coverKey) };
+}
+
+async function withProductMedia<T extends { id: number }>(rows: T[]) {
+  if (!rows.length) return rows.map(row => ({ ...row, media: [] as Array<{ id: number; url: string | null; mimeType: string; sortOrder: number; type: "image" | "video" }>, primaryImageUrl: null as string | null, videoUrl: null as string | null }));
+  const db = await getDb();
+  const mediaRows = await db
+    .select()
+    .from(productMedia)
+    .where(inArray(productMedia.productId, rows.map(row => row.id)));
+  const grouped = new Map<number, typeof mediaRows>();
+  for (const media of mediaRows) {
+    const existing = grouped.get(media.productId);
+    if (existing) existing.push(media);
+    else grouped.set(media.productId, [media]);
+  }
+  return Promise.all(rows.map(async row => {
+    const media = await Promise.all((grouped.get(row.id) ?? [])
+      .sort((left, right) => left.sortOrder - right.sortOrder)
+      .map(async item => ({
+        id: item.id,
+        url: await signedUrlOrNull(item.storageKey),
+        mimeType: item.mimeType,
+        sortOrder: item.sortOrder,
+        type: item.mimeType.startsWith("video/") ? "video" as const : "image" as const,
+      })));
+    return {
+      ...row,
+      media,
+      primaryImageUrl: media.find(item => item.type === "image")?.url ?? null,
+      videoUrl: media.find(item => item.type === "video")?.url ?? null,
+    };
+  }));
+}
+
 function slugify(value: string) {
   const normalized = value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 62);
   return normalized || "savanna-shop";
@@ -509,7 +570,7 @@ export async function getMyStorefront(userId: number) {
   const catalog = storefront ? await db.select().from(products).where(eq(products.storefrontId, storefront.id)).orderBy(desc(products.createdAt)) : [];
   const [settlement] = storefront ? await db.select().from(merchantSettlementProfiles).where(eq(merchantSettlementProfiles.storefrontId, storefront.id)).limit(1) : [];
   const safeSettlement = settlement ? { countryCode: settlement.countryCode, providerCode: settlement.providerCode, recipientAlias: settlement.recipientAlias, status: settlement.status } : null;
-  return { storefront: storefront ?? null, onboarding: onboarding ?? null, settlement: safeSettlement, products: catalog };
+  return { storefront: storefront ? await withStorefrontCover(storefront) : null, onboarding: onboarding ?? null, settlement: safeSettlement, products: await withProductMedia(catalog) };
 }
 
 export async function getPublicProfile(viewerUserId: number | null, userId: number) {
@@ -594,6 +655,21 @@ export async function updateStorefront(userId: number, storefrontId: number, inp
   return { success: true } as const;
 }
 
+export async function uploadStorefrontCover(userId: number, input: CommerceUploadInput & { storefrontId: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  await requireStorefrontOwner(userId, input.storefrontId);
+  if (!productImageTypes.has(input.mimeType)) throw new Error("Shop banner must be a JPG, PNG, or WebP image");
+  const bytes = Buffer.from(input.base64Data, "base64");
+  if (bytes.byteLength !== input.byteSize || bytes.byteLength > 6 * 1024 * 1024) throw new Error("Shop banner size could not be verified");
+  if (!bytesMatchMimeType(bytes, input.mimeType)) throw new Error("Shop banner contents do not match the selected image type");
+  const safeFileName = safeStorageFileName(input.fileName, "shop-banner");
+  const upload = await storagePut(`public/storefronts/${input.storefrontId}/banner/${safeFileName}`, bytes, input.mimeType);
+  await db.update(storefronts).set({ coverKey: upload.key }).where(eq(storefronts.id, input.storefrontId));
+  await logAuditEvent(userId, "storefront.banner_uploaded", "storefront", String(input.storefrontId), { mimeType: input.mimeType, byteSize: bytes.byteLength });
+  return { url: upload.url };
+}
+
 export async function submitStorefrontVerification(userId: number, storefrontId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable");
@@ -625,12 +701,42 @@ export async function createProduct(userId: number, storefrontId: number, input:
   return { id: productId };
 }
 
+export async function uploadProductMedia(userId: number, input: CommerceUploadInput & { productId: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  const [product] = await db.select().from(products).where(eq(products.id, input.productId)).limit(1);
+  if (!product) throw new Error("Product unavailable");
+  await requireStorefrontOwner(userId, product.storefrontId);
+
+  const isImage = productImageTypes.has(input.mimeType);
+  const isVideo = productVideoTypes.has(input.mimeType);
+  if (!isImage && !isVideo) throw new Error("Product media must be a JPG, PNG, WebP, or MP4 file");
+
+  const existing = await db.select().from(productMedia).where(eq(productMedia.productId, input.productId));
+  const imageCount = existing.filter(item => item.mimeType.startsWith("image/")).length;
+  const videoCount = existing.filter(item => item.mimeType.startsWith("video/")).length;
+  if (isImage && imageCount >= 5) throw new Error("Each product can have up to 5 images");
+  if (isVideo && videoCount >= 1) throw new Error("Each product can have 1 product video");
+
+  const bytes = Buffer.from(input.base64Data, "base64");
+  const maxSize = isVideo ? 20 * 1024 * 1024 : 6 * 1024 * 1024;
+  if (bytes.byteLength !== input.byteSize || bytes.byteLength > maxSize) throw new Error("Product media size could not be verified");
+  if (!bytesMatchMimeType(bytes, input.mimeType)) throw new Error("Product media contents do not match the selected file type");
+
+  const safeFileName = safeStorageFileName(input.fileName, isVideo ? "product-video.mp4" : "product-image");
+  const upload = await storagePut(`public/storefronts/${product.storefrontId}/products/${input.productId}/${safeFileName}`, bytes, input.mimeType);
+  const result = await db.insert(productMedia).values({ productId: input.productId, storageKey: upload.key, mimeType: input.mimeType, sortOrder: existing.length });
+  await logAuditEvent(userId, "product.media_uploaded", "product", String(input.productId), { mimeType: input.mimeType, byteSize: bytes.byteLength });
+  return { id: Number(result[0].insertId), url: upload.url };
+}
+
 export async function listPublicStorefronts(query?: string) {
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable");
   const all = await db.select().from(storefronts).where(eq(storefronts.visibility, "public")).orderBy(desc(storefronts.updatedAt));
   const needle = query?.trim().toLowerCase();
-  return needle ? all.filter(storefront => [storefront.name, storefront.category, storefront.bio].some(value => value?.toLowerCase().includes(needle))) : all;
+  const filtered = needle ? all.filter(storefront => [storefront.name, storefront.category, storefront.bio].some(value => value?.toLowerCase().includes(needle))) : all;
+  return Promise.all(filtered.map(storefront => withStorefrontCover(storefront)));
 }
 
 export async function listPublicProducts(query?: string) {
@@ -654,7 +760,8 @@ export async function listPublicProducts(query?: string) {
     .where(and(eq(products.status, "active"), eq(storefronts.visibility, "public")))
     .orderBy(desc(products.createdAt));
   const needle = query?.trim().toLowerCase();
-  return needle ? all.filter(product => [product.title, product.description, product.category, product.storefrontName].some(value => value?.toLowerCase().includes(needle))) : all;
+  const filtered = needle ? all.filter(product => [product.title, product.description, product.category, product.storefrontName].some(value => value?.toLowerCase().includes(needle))) : all;
+  return withProductMedia(filtered);
 }
 
 export async function getStorefrontBySlug(userId: number | null, slug: string) {
@@ -663,7 +770,7 @@ export async function getStorefrontBySlug(userId: number | null, slug: string) {
   const [storefront] = await db.select().from(storefronts).where(eq(storefronts.slug, slug)).limit(1);
   if (!storefront || (storefront.visibility !== "public" && storefront.ownerUserId !== userId)) throw new Error("Storefront unavailable");
   const catalog = await db.select().from(products).where(and(eq(products.storefrontId, storefront.id), userId === storefront.ownerUserId ? undefined : eq(products.status, "active"))).orderBy(desc(products.createdAt));
-  return { storefront, products: catalog };
+  return { storefront: await withStorefrontCover(storefront), products: await withProductMedia(catalog) };
 }
 
 export async function createOrder(userId: number, items: Array<{ productId: number; quantity: number }>, buyerNote?: string) {

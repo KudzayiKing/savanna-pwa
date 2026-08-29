@@ -2,12 +2,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SavannaShell } from "@/components/SavannaShell";
 import { StoriesPanel } from "@/components/StoriesPanel";
-import { ArrowRight, CirclePlay, MessageCircle, Store, Verified } from "lucide-react";
+import { ArrowRight, MessageCircle, Store, Verified } from "lucide-react";
 import { Link } from "wouter";
 
 const discoveryCards = [
   { title: "Shop local, clearly", copy: "Discover storefronts with transparent prices and direct support.", action: "Explore shops", icon: Store, tint: "bg-[#e8dfc9]" },
-  { title: "Learn from people you trust", copy: "Find structured courses and keep your learning progress in one place.", action: "Discover learning", icon: CirclePlay, tint: "bg-[#f2e8cd]" },
 ];
 
 function HomeContent() {
@@ -15,7 +14,7 @@ function HomeContent() {
     <div className="space-y-9">
       <div className="hidden lg:block"><StoriesPanel /></div>
 
-      <section className="grid gap-4 md:grid-cols-2">
+      <section className="grid gap-4">
         {discoveryCards.map((card) => {
           const Icon = card.icon;
           return (
@@ -46,7 +45,7 @@ function HomeContent() {
           </Link>
         </div>
         <div className="mt-7 grid gap-3 sm:grid-cols-3">
-          {["Choose your privacy", "Start a conversation", "Open a shop or course"].map((item, index) => (
+          {["Choose your privacy", "Start a conversation", "Open a shop"].map((item, index) => (
             <div key={item} className="flex items-center gap-3 rounded-2xl bg-[#fff9ec] p-4">
               <span className="grid size-7 place-items-center rounded-lg bg-[#f8edcf] text-xs font-bold text-[#7b4a0d]">0{index + 1}</span>
               <span className="text-sm font-medium text-[#5b4934]">{item}</span>

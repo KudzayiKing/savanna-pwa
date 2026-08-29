@@ -44,7 +44,7 @@
   --soft-surface: #F6F5F5;
   --elevated-surface: #FAFBF8;
   --obsidian: #151A17;
-  --obsidian-surface: #22352B;
+  --obsidian-surface: #202C33;
   --gold: #D9A441;
   --bright-gold: #E8B64A;
   --deep-gold: #A87820;
@@ -53,7 +53,7 @@
   --muted-ivory: #F6F5F5;
   --muted-dark: #5F6861;
   --quiet-text: #8B948C;
-  --success: #2F6B4F;
+  --success: #D9A441;
   --processing: #E5A72E;
   --info: #3E7FA8;
   --read-blue: #53BDEB;
@@ -64,8 +64,8 @@
   --card-foreground: var(--ink);
   --popover: var(--ivory-surface);
   --popover-foreground: var(--ink);
-  --primary: #16231D;
-  --primary-foreground: #FFFFFF;
+  --primary: #D9A441;
+  --primary-foreground: #151A17;
   --secondary: var(--soft-surface);
   --secondary-foreground: var(--ink);
   --muted: var(--soft-surface);
@@ -133,9 +133,9 @@ button:not(:disabled), a {
   top: -4rem;
   z-index: 100;
   border-radius: 0.75rem;
-  background: #16231D;
+  background: #D9A441;
   padding: 0.75rem 1rem;
-  color: white;
+  color: #151A17;
   font-weight: 700;
   transition: top 160ms cubic-bezier(0.23, 1, 0.32, 1);
 }
@@ -259,11 +259,11 @@ button:not(:disabled), a {
 [class~="text-[#3d2d1a]"],
 [class~="text-[#4a3824]"] { color: #151A17 !important; }
 [class~="bg-[#24482f]"],
-[class~="bg-[#31583a]"] { background-color: #16231D !important; }
-[class~="hover:bg-[#1b3b25]"]:hover { background-color: #22352B !important; }
+[class~="bg-[#31583a]"] { background-color: #D9A441 !important; }
+[class~="hover:bg-[#1b3b25]"]:hover { background-color: #E8B64A !important; }
 [class~="text-[#24482f]"],
 [class~="text-[#31583a]"],
-[class~="text-[#4d8050]"] { color: #2F6B4F !important; }
+[class~="text-[#4d8050]"] { color: #D9A441 !important; }
 [class~="text-[#213822]"],
 [class~="text-[#263126]"],
 [class~="text-[#354135]"],
@@ -281,11 +281,11 @@ button:not(:disabled), a {
 [class~="bg-[#f3ddb2]"],
 [class~="bg-[#f7e5bd]"],
 [class~="bg-[#f5e4bf]"],
-[class~="bg-[#fff6e2]"] { background-color: #FFF4D8 !important; }
+[class~="bg-[#fff6e2]"] { background-color: rgba(217, 164, 65, 0.2) !important; }
 [class~="text-[#7b4a0d]"],
 [class~="text-[#9a6410]"] { color: #A87820 !important; }
 [class~="text-[#8a765d]"] { color: #5F6861 !important; }
-[class~="text-[#496348]"] { color: #2F6B4F !important; }
+[class~="text-[#496348]"] { color: #D9A441 !important; }
 [class~="text-[#775b31]"] { color: #A87820 !important; }
 [class~="text-[#5b4934]"] { color: #151A17 !important; }
 [class~="text-[#52704f]"] { color: #5F6861 !important; }
@@ -296,7 +296,7 @@ button:not(:disabled), a {
 [class~="text-[#536250]"],
 [class~="text-[#6c7869]"],
 [class~="text-[#9aac96]"] { color: #5F6861 !important; }
-[class*="bg-[radial-gradient"][class*="#31583a"] { background-color: #16231D !important; background-image: none !important; }
+[class*="bg-[radial-gradient"][class*="#31583a"] { background-color: #D9A441 !important; background-image: none !important; }
 [class~="bg-[#dfe8d9]"],
 [class~="bg-[#dce6d8]"],
 [class~="bg-[#eef0e8]"],
@@ -632,8 +632,8 @@ button:not(:disabled), a {
   }
 }
 
-/* Final direct-green compatibility mapping from the source inventory. */
-[class~="text-[#4d8050]"] { color: #2F6B4F !important; }
+/* Final legacy accent compatibility mapping from the source inventory. */
+[class~="text-[#4d8050]"] { color: #D9A441 !important; }
 .dark .savanna-app [class~="text-[#4d8050]"] { color: #F2C14E !important; }
 
 /* Product-wide card treatment: surfaces stay defined by tone and spacing, not decorative borders. */
@@ -651,7 +651,7 @@ button:not(:disabled), a {
 [class~="text-[#80522a]"],
 [class~="text-[#80572c]"],
 [class~="text-[#876044]"] {
-  color: #2F6B4F !important;
+  color: #D9A441 !important;
 }
 
 .dark [class~="text-[#4d8050]"],
@@ -709,7 +709,7 @@ button:not(:disabled), a {
   }
 }
 
-/* Supplied dark chat palette: Savanna retains Gold where the reference uses green. */
+/* Supplied dark chat palette: Savanna keeps Gold for brand actions. */
 .dark {
   --chat-bg: #0A1014;
   --chat-shadow: #050A0E;
@@ -1795,7 +1795,7 @@ button:not(:disabled), a {
   }
 
   .savanna-app .savanna-mobile-header .savanna-wordmark {
-    font-size: 0.9em;
+    font-size: 1em;
   }
 
   .savanna-app .savanna-collapsed-story-cluster button {
@@ -2114,12 +2114,12 @@ button:not(:disabled), a {
   color: #5F6861 !important;
 }
 
-/* Discovery card icon tile — keep the soft gold tile, even if a product card or
+/* Discovery card icon tile — keep the 20% gold tile, even if a product card or
    section forgets the utility. */
 :root:not(.dark) .savanna-app :is(.savanna-route-shops, .savanna-route-learn, .savanna-route-orders)
   [class~="bg-[#f7e5bd]"] {
-  background: #FFF4D8 !important;
-  background-color: #FFF4D8 !important;
+  background: rgba(217, 164, 65, 0.2) !important;
+  background-color: rgba(217, 164, 65, 0.2) !important;
 }
 
 /* Card icons and card text use the bright brand gold (#D9A441) so they match the
@@ -2138,8 +2138,8 @@ button:not(:disabled), a {
   color: #D9A441 !important;
 }
 
-/* /orders safety net: any legacy green tokens inside the orders route collapse
-   to the brand gold so the page can never render green logos again. */
+/* /orders safety net: any legacy accent tokens inside the orders route collapse
+   to the brand gold so the page stays on the current palette. */
 :root:not(.dark) .savanna-app .savanna-route-orders
   [class~="text-[#24482f]"],
 :root:not(.dark) .savanna-app .savanna-route-orders
@@ -2165,8 +2165,8 @@ button:not(:disabled), a {
 
 :root:not(.dark) .savanna-app .savanna-route-orders
   [class~="bg-[#f5f7f3]"] {
-  background: #FFFFFF !important;
-  background-color: #FFFFFF !important;
+  background: #F6F5F5 !important;
+  background-color: #F6F5F5 !important;
 }
 
 :root:not(.dark) .savanna-app .savanna-route-orders
@@ -2174,4 +2174,59 @@ button:not(:disabled), a {
 :root:not(.dark) .savanna-app .savanna-route-orders
   [class~="border-[#cbd6c6]"] {
   border-color: #DDE3DC !important;
+}
+
+:root:not(.dark) .savanna-app :is(.savanna-profile-page, .savanna-route-shops, .savanna-route-learn)
+  :is([class~="bg-[#dfe8d9]"], [class~="bg-[#e4ebdd]"], [class~="bg-[#e5edf0]"], [class~="bg-[#e8dfc9]"], [class~="bg-[#f1dfbf]"], [class~="bg-[#f3ddb2]"], [class~="bg-[#f5e4bf]"], [class~="bg-[#f7e5bd]"], [class~="bg-[#fff6e2]"]) {
+  background: rgba(217, 164, 65, 0.2) !important;
+  background-color: rgba(217, 164, 65, 0.2) !important;
+}
+
+:root:not(.dark) .savanna-app :is(.savanna-profile-page, .savanna-route-shops, .savanna-route-learn)
+  :is([class~="text-[#24482f]"], [class~="text-[#31583a]"], [class~="text-[#4d8050]"], [class~="text-[#496348]"], [class~="text-[#80522a]"], [class~="text-[#9a6410]"]) {
+  color: #D9A441 !important;
+}
+
+.dark .savanna-app :is(.savanna-profile-page, .savanna-route-shops, .savanna-route-learn)
+  :is([class~="bg-[#dfe8d9]"], [class~="bg-[#e4ebdd]"], [class~="bg-[#e5edf0]"], [class~="bg-[#e8dfc9]"], [class~="bg-[#f1dfbf]"], [class~="bg-[#f3ddb2]"], [class~="bg-[#f5e4bf]"], [class~="bg-[#f7e5bd]"], [class~="bg-[#fff6e2]"]) {
+  background: rgba(217, 164, 65, 0.2) !important;
+  background-color: rgba(217, 164, 65, 0.2) !important;
+}
+
+.dark .savanna-app :is(.savanna-profile-page, .savanna-route-shops, .savanna-route-learn)
+  :is([class~="text-[#24482f]"], [class~="text-[#31583a]"], [class~="text-[#4d8050]"], [class~="text-[#496348]"], [class~="text-[#80522a]"], [class~="text-[#9a6410]"]) {
+  color: #F2C14E !important;
+}
+
+.savanna-app :is([class~="bg-[#24482f]"], [class~="bg-[#31583a]"], [class~="bg-[#1b3b25]"])[class~="text-white"] {
+  color: #151A17 !important;
+}
+
+.savanna-app
+  :is([class~="text-[#4f8551]"], [class~="text-[#658463]"], [class~="text-[#80522a]"], [class~="text-[#80572c]"]) {
+  color: #D9A441 !important;
+}
+
+.savanna-app
+  :is([class~="text-[#6d7969]"], [class~="text-[#6b7968]"], [class~="text-[#72806e]"], [class~="text-[#354136]"], [class~="text-[#3b483b]"], [class~="text-[#d9e7ce]"], [class~="text-[#d9e7d4]"]) {
+  color: #5F6861 !important;
+}
+
+.savanna-app :is([class~="bg-[#f3f8ef]"], [class~="bg-[#f5f7f2]"]) {
+  background: #F6F5F5 !important;
+  background-color: #F6F5F5 !important;
+}
+
+.savanna-app :is([class~="border-[#c7dac3]"], [class~="border-[#d1d9cc]"]) {
+  border-color: #DDE3DC !important;
+}
+
+:root:not(.dark) .savanna-app :is(.savanna-route-shops, .savanna-route-learn)
+  :is(.savanna-discovery-card, .savanna-discovery-empty),
+:root:not(.dark) .savanna-app .savanna-route-orders
+  :is(article[class*="rounded"], div[class*="rounded-[24px]"], section[class*="rounded"]) {
+  background: #F6F5F5 !important;
+  background-color: #F6F5F5 !important;
+  border: 1px solid #DDE3DC !important;
+  box-shadow: 0 12px 30px rgba(21, 26, 23, 0.06) !important;
 }

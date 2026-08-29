@@ -94,7 +94,7 @@ describe("Savanna PWA assets", () => {
     expect(styles).toContain("--gold: #D9A441;");
     expect(styles).toContain("--bright-gold: #E8B64A;");
     expect(styles).toContain("--deep-gold: #A87820;");
-    expect(styles).toContain("--success: #2F6B4F;");
+    expect(styles).toContain("--success: #D9A441;");
     expect(styles).toContain("--processing: #E5A72E;");
     expect(styles).toContain("--info: #3E7FA8;");
     expect(styles).toContain("--error: #D85C5C;");
@@ -108,15 +108,15 @@ describe("Savanna PWA assets", () => {
     expect(orders).toContain('completed: "savanna-order-status bg-[#FFFDF7] text-[#D9A441]"');
     expect(orders).toContain('cancelled: "savanna-order-status bg-[#FFFDF7] text-[#FF5B6B]"');
     expect(styles).toContain('[class~="bg-[#24482f]"],');
-    expect(styles).toContain("background-color: #16231D !important;");
-    expect(styles).toContain('[class~="hover:bg-[#1b3b25]"]:hover { background-color: #22352B !important; }');
+    expect(styles).toContain("background-color: #D9A441 !important;");
+    expect(styles).toContain('[class~="hover:bg-[#1b3b25]"]:hover { background-color: #E8B64A !important; }');
     expect(styles).toContain('[class~="text-[#31583a]"],');
     expect(styles).toContain('[class~="text-[#213822]"]');
     expect(styles).toContain('[class~="text-[#263126]"]');
     expect(styles).toContain('[class~="text-[#354135]"]');
     expect(styles).toContain('[class~="text-[#313d31]"]');
     expect(styles).toContain('[class~="text-[#405340]"] { color: #5F6861 !important; }');
-    expect(styles).toContain('[class~="text-[#496348]"] { color: #2F6B4F !important; }');
+    expect(styles).toContain('[class~="text-[#496348]"] { color: #D9A441 !important; }');
     expect(styles).toContain('.dark .savanna-app [class~="text-[#496348]"]');
     expect(paymentCatalog).toContain("Savanna will");
     expect(paymentCatalog).not.toContain("Ember will");
@@ -139,7 +139,7 @@ describe("Savanna PWA assets", () => {
     ]);
 
     expect(shell).toContain("<MobileStoriesHeader />");
-    expect(shell).toContain('const mobileNavigation = navigation.filter((item) => item.href !== "/profile");');
+    expect(shell).toContain("const mobileNavigation = navigation;");
     expect(shell).toContain("navigation.map((item) =>");
     expect(shell).toContain("mobileNavigation.map((item) =>");
     expect(shell).toContain('{ href: "/profile", label: "Profile" }');
@@ -173,9 +173,9 @@ describe("Savanna PWA assets", () => {
     expect(styles).toContain("backdrop-filter: saturate(180%) blur(24px);");
     expect(styles).not.toContain("inset 0 1px 0 rgba(255, 255, 255, 0.66)");
     expect(stories).toContain("savanna-mobile-header-spacer lg:hidden");
-    expect(stories).toContain('href="/profile" aria-label="Open profile"');
+    expect(stories).not.toContain('href="/profile" aria-label="Open profile"');
     expect(stories).toContain("{ownStoryAvatarUrl ? <img src={ownStoryAvatarUrl}");
-    expect(stories).toContain("<UserIcon size={21} />");
+    expect(stories).not.toContain("<UserIcon size={21} />");
     expect(stories).not.toContain('const [menuPulse, setMenuPulse] = useState(0);');
     expect(stories).toContain('const [searchPulse, setSearchPulse] = useState(0);');
     expect(stories).not.toContain('onPointerDown={() => setMenuPulse(current => current + 1)}');
@@ -308,6 +308,8 @@ describe("Savanna PWA assets", () => {
     expect(learn).toContain("trpc.learning.courses.previewLessons.useQuery");
     expect(styles).toContain(".savanna-discovery-banner");
     expect(styles).toContain(".savanna-discovery-tabs button[data-active=\"true\"]");
+    expect(styles).toContain(":is(.savanna-discovery-card, .savanna-discovery-empty)");
+    expect(styles).toContain("background: #F6F5F5 !important;");
     expect(orders).toContain("savanna-route-orders");
     expect(orders).toContain("AnimatedShoppingBagIcon size={18}");
     expect(orders).toContain('ready: "savanna-order-status bg-[#FFFDF7] text-[#53BDEB]"');
