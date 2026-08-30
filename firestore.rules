@@ -250,7 +250,7 @@ service cloud.firestore {
                [
                  'senderId', 'memberIds', 'body', 'createdAt', 'status', 'attachmentPath',
                  'attachmentUrl', 'attachmentName', 'attachmentMimeType',
-                 'attachmentSize', 'storyId'
+                 'attachmentSize', 'storyId', 'deliveredTo', 'readBy', 'receiptUpdatedAt'
                ]);
 
         // Allowed so a recipient can mark a message delivered/read. Tighten
@@ -260,6 +260,20 @@ service cloud.firestore {
         // No delete: "unsend" is a product decision, and implementing it as a
         // real delete would silently rewrite shared history.
         allow delete: if false;
+
+        match /receipts/{uid} {
+          allow read: if isMember(conversationRef(conversationId));
+
+          allow create, update: if isSelf(uid)
+            && isMember(conversationRef(conversationId))
+            && request.resource.data.userId == uid
+            && request.resource.data.status in ['delivered', 'read']
+            && request.resource.data.keys().hasOnly([
+              'userId', 'status', 'deliveredAt', 'readAt', 'updatedAt'
+            ]);
+
+          allow delete: if false;
+        }
       }
     }
 

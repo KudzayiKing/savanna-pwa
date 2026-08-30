@@ -60,14 +60,76 @@ function iconAccessibilityProps(props: AnimatedIconProps) {
   return props["aria-label"] ? { role: "img" as const } : { "aria-hidden": true as const };
 }
 
-export function AnimatedCheckCheckIcon({ size = 14, ...props }: AnimatedIconProps) {
+export function AnimatedCheckIcon({ size = 14, pulse = 1, ...props }: AnimatedIconProps) {
   const reducedMotion = useReducedMotion();
-  const state = reducedMotion ? "idle" : "complete";
+  const controls = useAnimationControls();
+
+  useEffect(() => {
+    if (reducedMotion) return;
+    controls.start("animate").then(() => controls.start("normal"));
+  }, [controls, pulse, reducedMotion]);
 
   return (
     <motion.svg {...iconAccessibilityProps(props)} {...props} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <motion.path d="M18 6 7 17l-5-5" strokeDasharray="20" initial="idle" animate={state} variants={{ idle: { strokeDashoffset: 0, scale: 1, opacity: 1 }, complete: { strokeDashoffset: [20, 0], scale: [0.96, 1.16, 1], opacity: [0.5, 1] } }} transition={{ duration: 0.36, ease: [0.23, 1, 0.32, 1] }} style={{ transformBox: "view-box", transformOrigin: "10px 12px" }} />
-      <motion.path d="m22 10-7.5 7.5L13 16" strokeDasharray="20" initial="idle" animate={state} variants={{ idle: { opacity: 1, x: 0 }, complete: { opacity: [0, 1], x: [-4, 0] } }} transition={{ duration: 0.28, delay: 0.16, ease: [0.23, 1, 0.32, 1] }} />
+      <motion.path
+        d="M5 14.5C5 14.5 6.5 14.5 8.5 18C8.5 18 14.0588 8.83333 19 7"
+        strokeDasharray="24"
+        strokeDashoffset="0"
+        initial="normal"
+        animate={controls}
+        variants={{
+          normal: { strokeDashoffset: 0, scale: 1, opacity: 1 },
+          animate: {
+            strokeDashoffset: [24, 0],
+            scale: [1, 1.15, 1],
+            opacity: [0.5, 1],
+          },
+        }}
+        transition={{ duration: 0.6, ease: "easeInOut" }}
+        style={{ transformBox: "view-box", transformOrigin: "12px 12px" }}
+      />
+    </motion.svg>
+  );
+}
+
+export function AnimatedCheckCheckIcon({ size = 14, pulse = 1, ...props }: AnimatedIconProps) {
+  const reducedMotion = useReducedMotion();
+  const controls = useAnimationControls();
+
+  useEffect(() => {
+    if (reducedMotion) return;
+    controls.start("animate").then(() => controls.start("normal"));
+  }, [controls, pulse, reducedMotion]);
+
+  return (
+    <motion.svg {...iconAccessibilityProps(props)} {...props} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <motion.path
+        d="M3 13.3333C3 13.3333 4.5 14 6.5 17C6.5 17 6.78485 16.5192 7.32133 15.7526M17 6C14.7085 7.14577 12.3119 9.55181 10.3879 11.8223"
+        strokeDasharray="26"
+        strokeDashoffset="0"
+        initial="normal"
+        animate={controls}
+        variants={{
+          normal: { strokeDashoffset: 0, scale: 1, opacity: 1 },
+          animate: {
+            strokeDashoffset: [26, 0],
+            scale: [1, 1.15, 1],
+            opacity: [0.5, 1],
+          },
+        }}
+        transition={{ duration: 0.7, ease: "easeInOut" }}
+        style={{ transformBox: "view-box", transformOrigin: "10px 12px" }}
+      />
+      <motion.path
+        d="M8 13.3333C8 13.3333 9.5 14 11.5 17C11.5 17 17 8.5 22 6"
+        initial="normal"
+        animate={controls}
+        variants={{
+          normal: { opacity: 1, x: 0 },
+          animate: { opacity: [0, 1], x: [-6, 0] },
+        }}
+        transition={{ duration: 0.5, ease: "easeOut", delay: 0.35 }}
+      />
     </motion.svg>
   );
 }

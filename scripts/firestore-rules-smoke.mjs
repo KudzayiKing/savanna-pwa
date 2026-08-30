@@ -145,6 +145,8 @@ await step("send message batch (message + conversation update + 2 inbox rows)", 
     attachmentPath: null,
     storyId: null,
     status: "sent",
+    deliveredTo: [userA],
+    readBy: [userA],
     createdAt: timestamp,
   });
   batch.update(conversationRef(conversationId), {
@@ -188,6 +190,25 @@ await signInWithEmailAndPassword(auth, "b@savanna.test", PASSWORD);
 await step("READ messages (array-contains query) as recipient", async () => {
   const snap = await getDocs(messagesQuery(conversationId, userB));
   if (snap.size !== 1) throw new Error(`expected 1 message, got ${snap.size}`);
+});
+
+await step("recipient marks incoming message read", async () => {
+  const timestamp = serverTimestamp();
+  const batch = writeBatch(db);
+  batch.update(doc(db, "conversations", conversationId, "messages", firstMessageId), {
+    deliveredTo: [userA, userB],
+    readBy: [userA, userB],
+    status: "read",
+    receiptUpdatedAt: timestamp,
+  });
+  batch.set(doc(db, "conversations", conversationId, "messages", firstMessageId, "receipts", userB), {
+    userId: userB,
+    status: "read",
+    deliveredAt: timestamp,
+    readAt: timestamp,
+    updatedAt: timestamp,
+  }, { merge: true });
+  await batch.commit();
 });
 
 await step("READ conversation doc as recipient", () => getDoc(conversationRef(conversationId)));

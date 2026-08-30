@@ -1,5 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
-import { AnimatedCheckCheckIcon, AnimatedPlusIcon, AnimatedSearchIcon, AnimatedSendIcon, MobileNavIcon } from "@/components/AnimatedNavIcons";
+import { AnimatedCheckCheckIcon, AnimatedCheckIcon, AnimatedPlusIcon, AnimatedSearchIcon, AnimatedSendIcon, MobileNavIcon } from "@/components/AnimatedNavIcons";
 import { MicIcon, type ChatIconHandle } from "@/components/AnimatedChatIcons";
 import { CommunityVisibilitySelect } from "@/components/CommunityVisibilitySelect";
 import { ConversationHeader } from "@/components/ConversationHeader";
@@ -23,10 +23,11 @@ import {
 } from "@/lib/firebaseChat";
 import { useFirebaseCommunityMutations, type FirebaseCommunityVisibility } from "@/lib/firebaseCommunities";
 import { useFirebaseStories } from "@/lib/firebaseStories";
+import { answerConversationRecall, parseSavannaInvocation, type SavannaRecallAnswer } from "@/lib/savannaRecall";
 import { isSameUser, normalizeUsername, searchUserProfilesByUsername, type AppUser } from "@/lib/userProfile";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
-import { Check, FileText, Loader2, MessageCircle, Paperclip, Users, X } from "lucide-react";
+import { FileText, Loader2, MessageCircle, Paperclip, Users, X } from "lucide-react";
 import { type ChangeEvent, type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
@@ -103,9 +104,10 @@ function PrivateAttachment({ url, fileName, mimeType }: { url: string | null; fi
 }
 
 function DeliveryIcon({ status }: { status: FirebaseMessageStatus }) {
-  if (status === "delivered" || status === "read") return <AnimatedCheckCheckIcon size={13} aria-label="Delivered" />;
+  if (status === "read") return <AnimatedCheckCheckIcon className="text-[#22C55E]" size={13} aria-label="Read" />;
+  if (status === "delivered") return <AnimatedCheckCheckIcon size={13} aria-label="Delivered" />;
   if (status === "failed") return <X className="size-3 text-[#FF5B6B]" aria-label="Failed" />;
-  return <Check className="size-3 text-[#AEBAC1]" aria-label="Sent" />;
+  return <AnimatedCheckIcon className="text-[#AEBAC1]" size={13} aria-label="Sent" />;
 }
 
 function DesktopStoryRail({ items, onCreateStory }: { items: Array<{ id: string | number; label: string }>; onCreateStory: () => void }) {
@@ -157,6 +159,7 @@ export default function MessagesPage() {
   const [newChatOpen, setNewChatOpen] = useState(chatPreviewMode === "drawer");
   const [creationMode, setCreationMode] = useState<CreationMode>("direct");
   const [communityForm, setCommunityForm] = useState(initialCommunityForm);
+  const [savannaAnswers, setSavannaAnswers] = useState<Record<string, SavannaRecallAnswer[]>>({});
   const [customTabs, setCustomTabs] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem("savanna-message-tabs") ?? "[]"); } catch { return []; }
   });
@@ -165,6 +168,7 @@ export default function MessagesPage() {
   });
   const attachmentInput = useRef<HTMLInputElement>(null);
   const micIcon = useRef<ChatIconHandle>(null);
+  const messageRefs = useRef<Record<string, HTMLElement | null>>({});
   const normalizedUsernameSearch = normalizeUsername(conversationSearch);
   const isUsernameSearch = conversationSearch.trim().startsWith("@") && normalizedUsernameSearch.length >= 2;
   const usernameResults = useQuery({
@@ -256,6 +260,7 @@ export default function MessagesPage() {
   const desktopStoryItems = desktopStories.data?.length ? desktopStories.data.slice(0, 8).map(story => ({ id: story.id, label: story.authorName })) : import.meta.env.DEV ? previewConversations.map(conversation => ({ id: conversation.id, label: conversationTitle(conversation) })) : [];
   const selected = conversationSource.find(conversation => conversation.id === selectedConversationId) ?? (isPreviewConversation ? previewConversations.find(conversation => conversation.id === selectedConversationId) : undefined);
   const selectedPresence = selected ? getConversationPresence(selected, filteredChatList.findIndex(conversation => conversation.id === selected.id)) : null;
+  const selectedSavannaAnswers = selectedConversationId ? savannaAnswers[selectedConversationId] ?? [] : [];
 
   const startChatWithProfile = (profile: AppUser) => {
     if (!user) return;
@@ -374,6 +379,23 @@ export default function MessagesPage() {
     if (!selectedConversationId) return;
     setSendPulse(current => current + 1);
     if (isPreviewConversation) return toast.info("Development preview - messages are not sent or saved.");
+    const savannaQuery = parseSavannaInvocation(draft);
+    if (savannaQuery !== null) {
+      if (attachment) return toast.error("@Savanna recall works with text questions for now.");
+      if (!savannaQuery) return toast.info("Ask Savanna what to find in this conversation.");
+      const answer = answerConversationRecall({
+        conversationId: selectedConversationId,
+        conversationTitle: selected ? conversationTitle(selected) : "this chat",
+        query: savannaQuery,
+        messages: messages.data ?? [],
+      });
+      setSavannaAnswers(current => ({
+        ...current,
+        [selectedConversationId]: [...(current[selectedConversationId] ?? []), answer].slice(-8),
+      }));
+      setDraft("");
+      return;
+    }
     if (attachment) {
       chatMutations.sendAttachment.mutate(
         { conversationId: selectedConversationId, memberIds: selected?.memberIds ?? [], file: attachment },
@@ -487,6 +509,27 @@ export default function MessagesPage() {
 
   const startVoiceRecording = () => toast.info("Voice messages arrive with the next release.");
 
+  const scrollToMessage = (messageId: string) => {
+    messageRefs.current[messageId]?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
+
+  const renderSavannaAnswer = (answer: SavannaRecallAnswer) => (
+    <div key={answer.id} className="flex justify-center">
+      <article className="savanna-recall-card w-full max-w-[88%] rounded-2xl border border-[#D9A441]/20 bg-[#D9A441]/10 px-4 py-3 text-sm text-[#3d2d1a] dark:border-[#D9A441]/25 dark:bg-[#D9A441]/15 dark:text-[#F0F2F5]">
+        <div className="flex items-center gap-2 text-xs font-semibold text-[#D9A441]">
+          <span className="grid size-7 place-items-center rounded-full bg-[#D9A441]/20">@</span>
+          Savanna
+        </div>
+        <p className="mt-2 whitespace-pre-wrap leading-6">{answer.answer}</p>
+        {answer.source ? (
+          <button type="button" onClick={() => scrollToMessage(answer.source!.messageId)} className="mt-3 text-xs font-semibold text-[#A87820] underline-offset-4 hover:underline dark:text-[#D9A441]">
+            View source message
+          </button>
+        ) : null}
+      </article>
+    </div>
+  );
+
   /**
    * One composer for every thread - mobile and desktop, direct, group and
    * merchant support. It shows the mic until there is something to send,
@@ -520,7 +563,7 @@ export default function MessagesPage() {
           <Button type="button" variant="ghost" size="icon" onClick={() => attachmentInput.current?.click()} className={cn("shrink-0 rounded-xl", actionSize)} aria-label="Attach private media">
             <Paperclip className="size-4" />
           </Button>
-          <Input value={draft} onChange={event => setDraft(event.target.value)} disabled={Boolean(attachment)} placeholder={attachment ? attachment.name : "Write a message"} aria-label="Message draft" className="min-w-0 flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0" />
+          <Input value={draft} onChange={event => setDraft(event.target.value)} disabled={Boolean(attachment)} placeholder={attachment ? attachment.name : "Message or @Savanna"} aria-label="Message draft" className="min-w-0 flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0" />
           {attachment ? <Button type="button" variant="ghost" onClick={() => setAttachment(null)} size="icon" className="size-8 shrink-0 rounded-lg" aria-label="Remove attachment"><X className="size-4" /></Button> : null}
           {showSend ? (
             <Button type="submit" disabled={sending} size="icon" className={cn("savanna-send-button savanna-composer-action savanna-brand-token shrink-0 rounded-full", actionSize)} aria-label="Send message">
@@ -650,7 +693,7 @@ export default function MessagesPage() {
           <span className="mt-1 flex items-center gap-1 truncate text-xs text-[#5f6861] dark:text-[#9AA1A6]">
             {conversation.previewMessage ? (
               <>
-                {previewStatus === "delivered" || previewStatus === "read" ? <AnimatedCheckCheckIcon size={13} aria-label="Delivered" /> : previewStatus === "failed" ? <X className="size-3 shrink-0 text-[#FF5B6B]" aria-label="Failed" /> : <Check className="size-3 shrink-0 text-[#AEBAC1]" aria-label="Sent" />}
+                {previewStatus === "failed" ? <X className="size-3 shrink-0 text-[#FF5B6B]" aria-label="Failed" /> : <DeliveryIcon status={previewStatus ?? "sent"} />}
                 {conversation.previewMessage}
               </>
             ) : conversation.kind === "merchant_support" ? "Merchant support" : "Tap to open your conversation"}
@@ -696,14 +739,19 @@ export default function MessagesPage() {
             menuItems={conversationMenu}
           />
           <div className="savanna-mobile-message-thread flex-1 space-y-3 overflow-y-auto p-4">
-            {messages.isLoading ? <Loader2 className="mx-auto mt-10 size-5 animate-spin text-[#9a6410]" /> : messages.data?.length ? messages.data.map(message => (
-              <div key={message.id} className={`flex ${isSameUser(message.senderUserId, user?.id) ? "justify-end" : "justify-start"}`}>
-                <article className={`max-w-[82%] rounded-2xl px-3 py-2.5 text-sm shadow-sm ${isSameUser(message.senderUserId, user?.id) ? "bg-[#5d3a0c] text-white" : "savanna-incoming-message bg-white text-[#3d2d1a] dark:text-[#fff8ed]"}`}>
-                  <p className="whitespace-pre-wrap">{message.contentType === "attachment" ? "Private attachment" : message.payload}</p>
-                  <p className={`mt-1 flex items-center justify-end gap-1 text-[10px] ${isSameUser(message.senderUserId, user?.id) ? "text-[#f8edcf]" : "text-[#5f6861]"}`}>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}{isSameUser(message.senderUserId, user?.id) ? <DeliveryIcon status={message.status} /> : null}</p>
-                </article>
-              </div>
-            )) : <div className="grid h-full place-items-center text-center"><div><MessageCircle className="mx-auto size-8 text-[#d2a34f]" /><p className="mt-3 text-sm font-semibold text-[#5b4934] dark:text-[#f2e7d5]">No messages yet</p></div></div>}
+            {messages.isLoading ? <Loader2 className="mx-auto mt-10 size-5 animate-spin text-[#9a6410]" /> : (messages.data?.length || selectedSavannaAnswers.length) ? (
+              <>
+                {messages.data?.map(message => (
+                  <div key={message.id} ref={element => { messageRefs.current[message.id] = element; }} className={`flex ${isSameUser(message.senderUserId, user?.id) ? "justify-end" : "justify-start"}`}>
+                    <article className={`max-w-[82%] rounded-2xl px-3 py-2.5 text-sm shadow-sm ${isSameUser(message.senderUserId, user?.id) ? "rounded-tr-none bg-[#D9A441]/20 text-[#3d2d1a] dark:text-[#F0F2F5]" : "savanna-incoming-message rounded-tl-none bg-white text-[#3d2d1a] dark:text-[#fff8ed]"}`}>
+                      <p className="whitespace-pre-wrap">{message.contentType === "attachment" ? "Private attachment" : message.payload}</p>
+                      <p className={`mt-1 flex items-center justify-end gap-1 text-[10px] ${isSameUser(message.senderUserId, user?.id) ? "text-[#8a765d] dark:text-[#f8edcf]" : "text-[#5f6861]"}`}>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}{isSameUser(message.senderUserId, user?.id) ? <DeliveryIcon status={message.status} /> : null}</p>
+                    </article>
+                  </div>
+                ))}
+                {selectedSavannaAnswers.map(renderSavannaAnswer)}
+              </>
+            ) : <div className="grid h-full place-items-center text-center"><div><MessageCircle className="mx-auto size-8 text-[#d2a34f]" /><p className="mt-3 text-sm font-semibold text-[#5b4934] dark:text-[#f2e7d5]">No messages yet</p></div></div>}
           </div>
           {renderComposer("mobile")}
         </div>
@@ -773,16 +821,21 @@ export default function MessagesPage() {
                 trailing={<SafetyActions targetDomain="message" targetId={`conversation-${selected.id}`} targetLabel="this conversation" />}
               />
               <div className="savanna-desktop-message-thread flex-1 space-y-3 overflow-y-auto p-6">
-                {messages.isLoading ? <Loader2 className="size-5 animate-spin text-[#A87820]" /> : messages.data?.length ? messages.data.map(message => (
-                  <article key={message.id} className={`group flex ${isSameUser(message.senderUserId, user?.id) ? "justify-end" : "justify-start"}`}>
-                    <div className={`max-w-[78%] rounded-2xl px-4 py-3 shadow-sm ${isSameUser(message.senderUserId, user?.id) ? "bg-[#A87820] text-[#111111]" : "savanna-incoming-message"}`}>
-                      <p className="whitespace-pre-wrap text-sm leading-6">{message.contentType === "attachment" ? "Private attachment" : message.payload}</p>
-                      {message.attachments.map(item => <PrivateAttachment key={item.id} url={item.url} fileName={item.fileName} mimeType={item.mimeType} />)}
-                      <div className="mt-1.5 flex items-center justify-end gap-1 text-[10px] opacity-80"><span>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>{isSameUser(message.senderUserId, user?.id) ? <DeliveryIcon status={message.status} /> : null}</div>
-                      <div className="mt-1 opacity-0 transition-opacity group-hover:opacity-100"><SafetyActions targetDomain="message" targetId={String(message.id)} targetLabel="this message" blockUserId={message.senderUserId} /></div>
-                    </div>
-                  </article>
-                )) : <div className="grid h-full min-h-72 place-items-center text-center"><div><MessageCircle className="mx-auto size-8 text-[#9AA1A6]" /><p className="mt-4 font-display text-2xl font-semibold">No messages yet</p><p className="mt-2 text-sm">Start the conversation when you are ready.</p></div></div>}
+                {messages.isLoading ? <Loader2 className="size-5 animate-spin text-[#A87820]" /> : (messages.data?.length || selectedSavannaAnswers.length) ? (
+                  <>
+                    {messages.data?.map(message => (
+                      <article key={message.id} ref={element => { messageRefs.current[message.id] = element; }} className={`group flex ${isSameUser(message.senderUserId, user?.id) ? "justify-end" : "justify-start"}`}>
+                        <div className={`max-w-[78%] rounded-2xl px-4 py-3 shadow-sm ${isSameUser(message.senderUserId, user?.id) ? "rounded-tr-none bg-[#D9A441]/20 text-[#3d2d1a] dark:text-[#F0F2F5]" : "savanna-incoming-message rounded-tl-none"}`}>
+                          <p className="whitespace-pre-wrap text-sm leading-6">{message.contentType === "attachment" ? "Private attachment" : message.payload}</p>
+                          {message.attachments.map(item => <PrivateAttachment key={item.id} url={item.url} fileName={item.fileName} mimeType={item.mimeType} />)}
+                          <div className="mt-1.5 flex items-center justify-end gap-1 text-[10px] opacity-80"><span>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>{isSameUser(message.senderUserId, user?.id) ? <DeliveryIcon status={message.status} /> : null}</div>
+                          <div className="mt-1 opacity-0 transition-opacity group-hover:opacity-100"><SafetyActions targetDomain="message" targetId={String(message.id)} targetLabel="this message" blockUserId={message.senderUserId} /></div>
+                        </div>
+                      </article>
+                    ))}
+                    {selectedSavannaAnswers.map(renderSavannaAnswer)}
+                  </>
+                ) : <div className="grid h-full min-h-72 place-items-center text-center"><div><MessageCircle className="mx-auto size-8 text-[#9AA1A6]" /><p className="mt-4 font-display text-2xl font-semibold">No messages yet</p><p className="mt-2 text-sm">Start the conversation when you are ready.</p></div></div>}
               </div>
               {renderComposer("desktop")}
             </>

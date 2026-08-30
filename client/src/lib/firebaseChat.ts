@@ -1,6 +1,7 @@
 import type { AppUser } from "@/lib/userProfile";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  arrayUnion,
   collection,
   doc,
   getDoc,
@@ -54,6 +55,8 @@ export type FirebaseMessage = {
   attachments: FirebaseMessageAttachment[];
   createdAt: Date | string;
   status: FirebaseMessageStatus;
+  deliveredTo: string[];
+  readBy: string[];
 };
 
 type CreateConversationInput = {
@@ -167,7 +170,22 @@ export function getConversationPeerId(
   return peer ?? null;
 }
 
-function mapMessage(id: string, data: DocumentData): FirebaseMessage {
+function messageReceiptStatus(data: DocumentData, viewerId?: string | null): FirebaseMessageStatus {
+  const fallback = (data.status as FirebaseMessageStatus | undefined) ?? "sent";
+  if (fallback === "failed" || fallback === "deleted") return fallback;
+  const senderId = String(data.senderId ?? "");
+  if (!viewerId || senderId !== viewerId) return fallback;
+  const memberIds = Array.isArray(data.memberIds) ? data.memberIds.map(String) : [];
+  const recipients = memberIds.filter(memberId => memberId && memberId !== viewerId);
+  if (!recipients.length) return fallback;
+  const deliveredTo = Array.isArray(data.deliveredTo) ? data.deliveredTo.map(String) : [];
+  const readBy = Array.isArray(data.readBy) ? data.readBy.map(String) : [];
+  if (recipients.every(memberId => readBy.includes(memberId))) return "read";
+  if (recipients.every(memberId => deliveredTo.includes(memberId))) return "delivered";
+  return fallback;
+}
+
+function mapMessage(id: string, data: DocumentData, viewerId?: string | null): FirebaseMessage {
   const hasAttachment = Boolean(data.attachmentPath || data.attachmentUrl);
   const attachment: FirebaseMessageAttachment | null = hasAttachment
     ? {
@@ -186,8 +204,42 @@ function mapMessage(id: string, data: DocumentData): FirebaseMessage {
     payload: typeof data.body === "string" ? data.body : "",
     attachments: attachment ? [attachment] : [],
     createdAt: toDate(data.createdAt),
-    status: (data.status as FirebaseMessageStatus | undefined) ?? "sent",
+    status: messageReceiptStatus(data, viewerId),
+    deliveredTo: Array.isArray(data.deliveredTo) ? data.deliveredTo.map(String) : [],
+    readBy: Array.isArray(data.readBy) ? data.readBy.map(String) : [],
   };
+}
+
+async function markVisibleMessagesRead(conversationId: string, uid: string, docs: Array<{ id: string; data: () => DocumentData }>) {
+  const unreadIncoming = docs.filter(item => {
+    const data = item.data();
+    const senderId = String(data.senderId ?? "");
+    const memberIds = Array.isArray(data.memberIds) ? data.memberIds.map(String) : [];
+    const readBy = Array.isArray(data.readBy) ? data.readBy.map(String) : [];
+    return senderId && senderId !== uid && memberIds.includes(uid) && !readBy.includes(uid);
+  });
+  if (!unreadIncoming.length) return;
+
+  const db = getFirestoreDb();
+  const timestamp = serverTimestamp();
+  const batch = writeBatch(db);
+  for (const item of unreadIncoming) {
+    const messageRef = doc(db, "conversations", conversationId, "messages", item.id);
+    batch.update(messageRef, {
+      deliveredTo: arrayUnion(uid),
+      readBy: arrayUnion(uid),
+      status: "read",
+      receiptUpdatedAt: timestamp,
+    });
+    batch.set(doc(messageRef, "receipts", uid), {
+      userId: uid,
+      status: "read",
+      deliveredAt: timestamp,
+      readAt: timestamp,
+      updatedAt: timestamp,
+    }, { merge: true });
+  }
+  await batch.commit();
 }
 
 export async function createFirebaseConversation(input: CreateConversationInput) {
@@ -264,6 +316,8 @@ export async function sendFirebaseMessage(input: {
     attachmentPath: input.attachmentPath ?? null,
     storyId: input.storyId ?? null,
     status: input.status ?? "sent",
+    deliveredTo: [input.senderId],
+    readBy: [input.senderId],
     createdAt: timestamp,
   });
 
@@ -301,7 +355,7 @@ export async function listFirebaseMessages(conversationId?: string | null, user?
   if (!conversationId || !user) return [];
   const snapshot = await getDocs(messagesQuery(conversationId, user.id));
   return snapshot.docs
-    .map(item => mapMessage(item.id, item.data()))
+    .map(item => mapMessage(item.id, item.data(), user.id))
     .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime());
 }
 
@@ -335,6 +389,8 @@ export async function sendFirebaseAttachment(input: {
     attachmentMimeType: input.file.type,
     attachmentSize: input.file.size,
     status: "sent",
+    deliveredTo: [input.sender.id],
+    readBy: [input.sender.id],
     createdAt: timestamp,
   });
 
@@ -424,9 +480,12 @@ export function useFirebaseMessages(conversationId?: string | null, user?: AppUs
       messagesQuery(conversationId, uid),
       snapshot => {
         const nextMessages = snapshot.docs
-          .map(item => mapMessage(item.id, item.data()))
+          .map(item => mapMessage(item.id, item.data(), uid))
           .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime());
         queryClient.setQueryData(chatKeys.messages(conversationId), nextMessages);
+        void markVisibleMessagesRead(conversationId, uid, snapshot.docs).catch(error => {
+          console.error("[Firestore] Failed to mark messages read", error);
+        });
       },
       error => {
         console.error("[Firestore] Message listener failed", error);
