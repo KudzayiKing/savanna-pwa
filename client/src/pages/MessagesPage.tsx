@@ -7,6 +7,7 @@ import { SafetyActions } from "@/components/SafetyActions";
 import { SavannaShell } from "@/components/SavannaShell";
 import { StoryComposer } from "@/components/StoriesPanel";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -767,7 +768,46 @@ export default function MessagesPage() {
     );
   };
 
-  const newChatDrawer = (
+  // Shared body of the create-chat form so the mobile Drawer and the centered
+  // desktop Dialog render identical fields.
+  const newChatFields = (
+    <>
+      <div className="savanna-new-chat-tabs flex rounded-xl bg-[#f5e4bf] p-1">
+        <button type="button" data-active={creationMode === "direct"} onClick={() => setCreationMode("direct")} className={`flex-1 rounded-lg py-2 text-xs font-semibold ${creationMode === "direct" ? "bg-white text-[#7b4a0d] shadow-sm" : "text-[#7b4a0d]"}`}>Chat</button>
+        <button type="button" data-active={creationMode === "group"} onClick={() => setCreationMode("group")} className={`flex-1 rounded-lg py-2 text-xs font-semibold ${creationMode === "group" ? "bg-white text-[#7b4a0d] shadow-sm" : "text-[#7b4a0d]"}`}>Group</button>
+        <button type="button" data-active={creationMode === "community"} onClick={() => setCreationMode("community")} className={`flex-1 rounded-lg py-2 text-xs font-semibold ${creationMode === "community" ? "bg-white text-[#7b4a0d] shadow-sm" : "text-[#7b4a0d]"}`}>Community</button>
+      </div>
+      {creationMode === "community" ? (
+        <>
+          <Input value={communityForm.name} onChange={event => setCommunityForm(current => ({ ...current, name: event.target.value }))} placeholder="Community name" className="savanna-new-chat-input bg-white dark:bg-[#2a2119]" />
+          <Input value={communityForm.city} onChange={event => setCommunityForm(current => ({ ...current, city: event.target.value }))} placeholder="City or area" className="savanna-new-chat-input bg-white dark:bg-[#2a2119]" />
+          <textarea
+            value={communityForm.description}
+            onChange={event => setCommunityForm(current => ({ ...current, description: event.target.value }))}
+            placeholder="What is this community for?"
+            className="savanna-new-chat-input min-h-20 w-full resize-none rounded-xl border border-[#ead2a4] bg-white px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[#D9A441]/35 dark:bg-[#2a2119]"
+          />
+          <CommunityVisibilitySelect value={communityForm.visibility} onChange={visibility => setCommunityForm(current => ({ ...current, visibility }))} />
+        </>
+      ) : (
+        <>
+          {creationMode === "group" ? <Input value={groupTitle} onChange={event => setGroupTitle(event.target.value)} placeholder="Group name" className="savanna-new-chat-input bg-white dark:bg-[#2a2119]" /> : null}
+          <Input value={memberIds} onChange={event => setMemberIds(event.target.value)} placeholder={creationMode === "group" ? "User IDs, comma-separated" : "Savanna user ID"} aria-label="Savanna user ID" className="savanna-new-chat-input bg-white dark:bg-[#2a2119]" />
+        </>
+      )}
+    </>
+  );
+
+  const createButton = (isPending: boolean) => (
+    <Button type="submit" disabled={chatMutations.create.isPending || communityMutations.create.isPending} className="savanna-brand-token rounded-xl">
+      {isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <AnimatedPlusIcon className="mr-2 size-4" />}
+      {creationMode === "community" ? "Create community" : "Create chat"}
+    </Button>
+  );
+
+  // On web the create modal floats centered as a dialog; on mobile it stays a
+  // bottom drawer within thumb reach.
+  const newChatDrawer = isMobile ? (
     <Drawer open={newChatOpen} onOpenChange={setNewChatOpen}>
       <DrawerContent className="savanna-new-chat-drawer rounded-t-[28px] border-[#ead2a4] bg-[#fffaf0] dark:border-[#5b4833] dark:bg-[#21180f]">
         <DrawerHeader className="text-left">
@@ -775,38 +815,24 @@ export default function MessagesPage() {
           <DrawerDescription>Start a private chat, group conversation, or community.</DrawerDescription>
         </DrawerHeader>
         <form className="space-y-3 px-4" onSubmit={handleCreate}>
-          <div className="savanna-new-chat-tabs flex rounded-xl bg-[#f5e4bf] p-1">
-            <button type="button" data-active={creationMode === "direct"} onClick={() => setCreationMode("direct")} className={`flex-1 rounded-lg py-2 text-xs font-semibold ${creationMode === "direct" ? "bg-white text-[#7b4a0d] shadow-sm" : "text-[#7b4a0d]"}`}>Chat</button>
-            <button type="button" data-active={creationMode === "group"} onClick={() => setCreationMode("group")} className={`flex-1 rounded-lg py-2 text-xs font-semibold ${creationMode === "group" ? "bg-white text-[#7b4a0d] shadow-sm" : "text-[#7b4a0d]"}`}>Group</button>
-            <button type="button" data-active={creationMode === "community"} onClick={() => setCreationMode("community")} className={`flex-1 rounded-lg py-2 text-xs font-semibold ${creationMode === "community" ? "bg-white text-[#7b4a0d] shadow-sm" : "text-[#7b4a0d]"}`}>Community</button>
-          </div>
-          {creationMode === "community" ? (
-            <>
-              <Input value={communityForm.name} onChange={event => setCommunityForm(current => ({ ...current, name: event.target.value }))} placeholder="Community name" className="savanna-new-chat-input bg-white dark:bg-[#2a2119]" />
-              <Input value={communityForm.city} onChange={event => setCommunityForm(current => ({ ...current, city: event.target.value }))} placeholder="City or area" className="savanna-new-chat-input bg-white dark:bg-[#2a2119]" />
-              <textarea
-                value={communityForm.description}
-                onChange={event => setCommunityForm(current => ({ ...current, description: event.target.value }))}
-                placeholder="What is this community for?"
-                className="savanna-new-chat-input min-h-20 w-full resize-none rounded-xl border border-[#ead2a4] bg-white px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[#D9A441]/35 dark:bg-[#2a2119]"
-              />
-              <CommunityVisibilitySelect value={communityForm.visibility} onChange={visibility => setCommunityForm(current => ({ ...current, visibility }))} />
-            </>
-          ) : (
-            <>
-              {creationMode === "group" ? <Input value={groupTitle} onChange={event => setGroupTitle(event.target.value)} placeholder="Group name" className="savanna-new-chat-input bg-white dark:bg-[#2a2119]" /> : null}
-              <Input value={memberIds} onChange={event => setMemberIds(event.target.value)} placeholder={creationMode === "group" ? "User IDs, comma-separated" : "Savanna user ID"} aria-label="Savanna user ID" className="savanna-new-chat-input bg-white dark:bg-[#2a2119]" />
-            </>
-          )}
-          <DrawerFooter className="px-0">
-            <Button type="submit" disabled={chatMutations.create.isPending || communityMutations.create.isPending} className="savanna-brand-token rounded-xl">
-              {chatMutations.create.isPending || communityMutations.create.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <AnimatedPlusIcon className="mr-2 size-4" />}
-              {creationMode === "community" ? "Create community" : "Create chat"}
-            </Button>
-          </DrawerFooter>
+          {newChatFields}
+          <DrawerFooter className="px-0">{createButton(chatMutations.create.isPending || communityMutations.create.isPending)}</DrawerFooter>
         </form>
       </DrawerContent>
     </Drawer>
+  ) : (
+    <Dialog open={newChatOpen} onOpenChange={setNewChatOpen}>
+      <DialogContent className="savanna-new-chat-dialog max-w-md gap-0 rounded-[28px] border-[#ead2a4] bg-[#fffaf0] p-6 dark:border-[#5b4833] dark:bg-[#21180f]">
+        <DialogHeader className="text-left">
+          <DialogTitle className="font-display text-2xl text-[#3d2d1a] dark:text-[#fff8ed]">Create</DialogTitle>
+          <DialogDescription>Start a private chat, group conversation, or community.</DialogDescription>
+        </DialogHeader>
+        <form className="mt-4 space-y-3" onSubmit={handleCreate}>
+          {newChatFields}
+          <DialogFooter className="mt-4">{createButton(chatMutations.create.isPending || communityMutations.create.isPending)}</DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 
   const storyComposerDrawer = (

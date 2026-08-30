@@ -1434,6 +1434,50 @@ button:not(:disabled), a {
   }
 }
 
+/* The create-chat modal renders as a centered Dialog on web. It lives in a
+   Radix portal outside .savanna-app, so the global utility-bridge rules
+   (bg-white -> white etc.) would otherwise repaint it light. These rules sit
+   outside any media query and mirror the mobile drawer's chat tokens. */
+.dark .savanna-new-chat-dialog {
+  border-color: var(--chat-border) !important;
+  background-color: var(--chat-surface) !important;
+  color: var(--chat-text-primary) !important;
+}
+
+.dark .savanna-new-chat-dialog [data-slot="dialog-close"] {
+  color: var(--chat-text-secondary) !important;
+}
+
+.dark .savanna-new-chat-dialog .savanna-new-chat-tabs {
+  background-color: var(--chat-bg) !important;
+}
+
+.dark .savanna-new-chat-dialog .savanna-new-chat-tabs button {
+  color: var(--chat-text-secondary) !important;
+}
+
+.dark .savanna-new-chat-dialog .savanna-new-chat-tabs button[data-active="true"] {
+  background-color: color-mix(in srgb, var(--chat-gold) 20%, transparent) !important;
+  color: var(--chat-gold) !important;
+  box-shadow: none !important;
+}
+
+.dark .savanna-new-chat-dialog .savanna-new-chat-input {
+  border-color: var(--chat-border) !important;
+  background-color: var(--chat-search) !important;
+  color: var(--chat-text-primary) !important;
+}
+
+.dark .savanna-new-chat-dialog .savanna-new-chat-input::placeholder {
+  color: var(--chat-text-secondary) !important;
+  opacity: 1;
+}
+
+.dark .savanna-new-chat-dialog textarea.savanna-new-chat-input {
+  background-color: var(--chat-search) !important;
+  color: var(--chat-text-primary) !important;
+}
+
 @media (min-width: 1024px) {
   .dark .savanna-app .savanna-profile-page {
     color: var(--chat-text-primary);
