@@ -11,6 +11,7 @@
     "check:bundle": "node scripts/check-prod-bundle.mjs",
     "format": "prettier --write .",
     "test": "vitest run",
+    "test:rules": "firebase emulators:exec --only firestore,auth --project demo-savanna \"node scripts/firestore-rules-smoke.mjs\"",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"
   },

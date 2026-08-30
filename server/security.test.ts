@@ -8,7 +8,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { bytesMatchMimeType } from "./media";
-import { verifyOrigin } from "./_core/security";
+import { securityHeaders, verifyOrigin } from "./_core/security";
 
 /** Minimal PNG: 8-byte signature then an IHDR chunk header. */
 const pngBytes = Buffer.from(
@@ -176,6 +176,31 @@ describe("verifyOrigin CSRF guard", () => {
       path: "/api/trpc/auth.logout",
       headers: { origin: "https://APP.example", host: "app.example" },
     });
+    expect(next).toHaveBeenCalled();
+  });
+});
+
+describe("securityHeaders", () => {
+  it("allows Firebase Auth popup frames in report-only CSP during local development", () => {
+    const headers = new Map<string, string>();
+    const res = {
+      setHeader(name: string, value: string) {
+        headers.set(name, value);
+      },
+    };
+    const next = vi.fn();
+
+    securityHeaders(
+      { secure: false, headers: {} } as never,
+      res as never,
+      next,
+    );
+
+    const csp = headers.get("Content-Security-Policy-Report-Only") ?? "";
+    expect(csp).toContain("frame-src 'self'");
+    expect(csp).toContain("https://*.firebaseapp.com");
+    expect(csp).toContain("https://accounts.google.com");
+    expect(headers.get("Cross-Origin-Opener-Policy")).toBe("same-origin-allow-popups");
     expect(next).toHaveBeenCalled();
   });
 });

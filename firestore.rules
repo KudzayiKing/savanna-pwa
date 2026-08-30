@@ -25,6 +25,10 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == uid;
     }
 
+    function validUsername(value) {
+      return value == null || (value is string && value.matches('^[a-z0-9_]{3,24}$'));
+    }
+
     // `resource` is null on create, so this helper is only valid for
     // read/update/delete. Create rules check `request.resource` instead.
     function isMember(conversation) {
@@ -38,15 +42,31 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/conversations/$(conversationId));
     }
 
+    function validConversationCreate() {
+      return request.resource.data.keys().hasOnly([
+          'kind', 'title', 'memberIds', 'directKey', 'storefrontId',
+          'storefrontSlug', 'createdAt', 'updatedAt', 'lastMessageAt',
+          'lastMessagePreview', 'lastMessageStatus', 'mutedUntil'
+        ])
+        && request.resource.data.kind in ['direct', 'group', 'merchant_support']
+        && request.resource.data.memberIds is list
+        && request.resource.data.memberIds.size() >= 2
+        && request.auth.uid in request.resource.data.memberIds
+        && (
+          request.resource.data.kind != 'direct'
+          || (
+            request.resource.data.memberIds.size() == 2
+            && request.resource.data.directKey is string
+          )
+        );
+    }
+
     // --- Profiles ----------------------------------------------------------
 
     match /users/{uid} {
-      // Any signed-in user can read a profile: chats, stories and shopfronts
-      // all need to show who someone is. The trade-off is that a signed-in
-      // user can enumerate profiles — normal for a social app, but if that
-      // ever matters, publish a separate public directory collection holding
-      // only the fields worth exposing and lock this one down.
-      allow read: if signedIn();
+      // Private account profile. This may contain auth-derived contact details,
+      // so only the owner can read it. Public lookup lives in publicProfiles.
+      allow read: if isSelf(uid);
 
       // The field whitelist matters. Without it a user could write any
       // attribute onto their own profile — including anything the app later
@@ -54,23 +74,27 @@ service cloud.firestore {
       // to the app means adding it here.
       allow create: if isSelf(uid)
         && request.resource.data.keys().hasOnly(
-             [
-               'name', 'email', 'phoneNumber', 'photoURL', 'bio', 'city',
-               'countryCode', 'profileVisibility', 'phoneVisibility',
+               [
+               'name', 'username', 'usernameLower', 'email', 'phoneNumber',
+               'photoURL', 'bio', 'city', 'countryCode', 'profileVisibility',
+               'phoneVisibility',
                'handleDiscoverability', 'storyAudienceDefault',
                'readReceiptsEnabled', 'lastSeenVisibility',
                'courseProgressOptIn', 'createdAt', 'updatedAt'
-             ]);
+             ])
+        && validUsername(request.resource.data.get('usernameLower', null));
 
       allow update: if isSelf(uid)
         && request.resource.data.keys().hasOnly(
              [
-               'name', 'email', 'phoneNumber', 'photoURL', 'bio', 'city',
-               'countryCode', 'profileVisibility', 'phoneVisibility',
+               'name', 'username', 'usernameLower', 'email', 'phoneNumber',
+               'photoURL', 'bio', 'city', 'countryCode', 'profileVisibility',
+               'phoneVisibility',
                'handleDiscoverability', 'storyAudienceDefault',
                'readReceiptsEnabled', 'lastSeenVisibility',
                'courseProgressOptIn', 'createdAt', 'updatedAt'
-             ]);
+             ])
+        && validUsername(request.resource.data.get('usernameLower', null));
 
       // Deleting an account has to fan out to Firebase Auth, the user's
       // messages and their storage objects. That needs a trusted environment,
@@ -83,6 +107,78 @@ service cloud.firestore {
           && request.resource.data.blockedUserId == blockedUid
           && request.resource.data.keys().hasOnly(['blockedUserId', 'createdAt']);
       }
+
+      match /conversationRefs/{conversationId} {
+        allow read: if isSelf(uid);
+
+        allow create, update: if signedIn()
+          && request.resource.data.conversationId == conversationId
+          && request.resource.data.memberIds is list
+          && uid in request.resource.data.memberIds
+          && request.auth.uid in request.resource.data.memberIds
+          && request.resource.data.keys().hasOnly([
+            'conversationId', 'kind', 'title', 'memberIds', 'mutedUntil',
+            'storefrontId', 'storefrontSlug', 'updatedAt', 'lastMessageAt',
+            'lastMessagePreview', 'lastMessageStatus'
+          ]);
+
+        allow delete: if false;
+      }
+    }
+
+    match /publicProfiles/{uid} {
+      allow read: if resource.data.profileVisibility == 'public' || signedIn();
+
+      allow create, update: if isSelf(uid)
+        && request.resource.data.userId == uid
+        && request.resource.data.keys().hasOnly([
+          'userId', 'name', 'username', 'usernameLower', 'photoURL', 'bio',
+          'city', 'countryCode', 'profileVisibility', 'handleDiscoverability',
+          'updatedAt'
+        ])
+        && validUsername(request.resource.data.get('usernameLower', null));
+
+      allow delete: if false;
+    }
+
+    match /usernames/{usernameLower} {
+      allow read: if signedIn();
+
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.usernameLower == usernameLower
+        && validUsername(request.resource.data.usernameLower)
+        && request.resource.data.keys().hasOnly([
+          'uid', 'username', 'usernameLower', 'updatedAt'
+        ]);
+
+      allow update: if signedIn()
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.usernameLower == usernameLower
+        && validUsername(request.resource.data.usernameLower)
+        && request.resource.data.keys().hasOnly([
+          'uid', 'username', 'usernameLower', 'updatedAt'
+        ]);
+
+      allow delete: if signedIn()
+        && resource.data.uid == request.auth.uid;
+    }
+
+    match /follows/{followId} {
+      allow get: if signedIn();
+      allow list: if false;
+
+      allow create, update: if signedIn()
+        && request.resource.data.followerUserId == request.auth.uid
+        && request.resource.data.followingUserId is string
+        && request.resource.data.followingUserId != request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'followerUserId', 'followingUserId', 'createdAt'
+        ]);
+
+      allow delete: if signedIn()
+        && resource.data.followerUserId == request.auth.uid;
     }
 
     // --- Conversations -----------------------------------------------------
@@ -93,27 +189,41 @@ service cloud.firestore {
       // You may create a conversation only if you put yourself in it —
       // otherwise a user could add two other people to a chat and read the
       // transcript they generate.
-      allow create: if signedIn()
-        && request.resource.data.memberIds is list
-        && request.auth.uid in request.resource.data.memberIds;
+      allow create: if signedIn() && validConversationCreate();
 
       allow update: if isMember(resource);
 
       allow delete: if false;
 
       match /messages/{messageId} {
-        // Reads the parent conversation to check membership, which costs one
-        // extra document read per operation. Cheaper alternatives (denormalising
-        // memberIds onto every message) go stale the moment someone leaves.
-        allow read: if isMember(conversationRef(conversationId));
+        // DO NOT add a `resource.data.memberIds is list` guard back here.
+        //
+        // Security rules are not filters: for a `list` query Firestore checks
+        // the rule against the query's constraints, not against the documents.
+        // It can prove `uid in memberIds` from
+        // `where("memberIds", "array-contains", uid)`, but it cannot prove the
+        // standalone type test from that same constraint — so the extra clause
+        // evaluates to false and denies the thread to its own members. That is
+        // exactly the bug this rule used to ship: chat sent fine (writes are
+        // single-document, so they were unaffected) but no message ever loaded.
+        //
+        // Dropping the guard opens nothing: `in` against a non-list field is a
+        // type error, which denies just as the guard would have.
+        // Covered by scripts/firestore-rules-smoke.mjs.
+        allow read: if signedIn()
+          && request.auth.uid in resource.data.memberIds;
 
         // `senderId == request.auth.uid` is what stops a member of the
         // conversation posting as somebody else in it.
-        allow create: if isMember(conversationRef(conversationId))
+        allow create: if signedIn()
           && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.memberIds is list
+          && request.auth.uid in request.resource.data.memberIds
+          && isMember(conversationRef(conversationId))
+          && request.resource.data.memberIds == conversationRef(conversationId).data.memberIds
           && request.resource.data.keys().hasOnly(
                [
-                 'senderId', 'body', 'createdAt', 'status', 'attachmentPath',
+                 'senderId', 'memberIds', 'body', 'createdAt', 'status', 'attachmentPath',
                  'attachmentUrl', 'attachmentName', 'attachmentMimeType',
                  'attachmentSize', 'storyId'
                ]);

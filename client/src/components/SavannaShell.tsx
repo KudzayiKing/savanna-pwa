@@ -30,9 +30,11 @@ type SavannaShellProps = {
    * chrome itself is unchanged - it is simply not mounted.
    */
   hideChrome?: boolean;
+  hideMobileHeader?: boolean;
+  hideDesktopHeader?: boolean;
 };
 
-export function SavannaShell({ children, context, hideChrome = false }: SavannaShellProps) {
+export function SavannaShell({ children, context, hideChrome = false, hideMobileHeader = false, hideDesktopHeader = false }: SavannaShellProps) {
   const [location] = useLocation();
   const { isAuthenticated, user } = useAuth();
   const isMessagesWorkspace = location === "/messages";
@@ -47,7 +49,7 @@ export function SavannaShell({ children, context, hideChrome = false }: SavannaS
 
       <PwaStatusBanner />
 
-      {hideChrome ? null : <MobileStoriesHeader />}
+      {hideChrome || hideMobileHeader ? null : <MobileStoriesHeader />}
 
       <div className={cn("mx-auto flex min-h-screen", usesIconRail ? "max-w-none" : "max-w-[1720px]")}>
         <aside className={cn("sticky top-0 hidden h-screen shrink-0 flex-col lg:flex", usesIconRail ? "savanna-message-rail w-[84px] items-center border-r px-3 py-5" : "w-[248px] border-r border-[#eadfca] bg-[#f6f0e2] px-4 py-7")}>
@@ -105,7 +107,7 @@ export function SavannaShell({ children, context, hideChrome = false }: SavannaS
         </aside>
 
         <section className={cn("min-w-0 flex-1", hideChrome ? "" : "pb-10 lg:pb-0")}>
-          {!usesIconRail ? <div className="savanna-glass-header hidden h-[76px] items-center justify-between border-b border-[#eadfca]/70 bg-[#fcfaf4]/72 px-7 backdrop-blur-xl lg:flex xl:px-10">
+          {!hideDesktopHeader && !usesIconRail ? <div className="savanna-glass-header hidden h-[76px] items-center justify-between border-b border-[#eadfca]/70 bg-[#fcfaf4]/72 px-7 backdrop-blur-xl lg:flex xl:px-10">
             <button className="group flex h-10 w-[min(440px,42vw)] items-center gap-3 rounded-xl border border-[#d7ddd0] bg-white/65 px-3 text-left text-sm text-[#7a8276] shadow-[0_4px_12px_rgba(39,54,37,0.035)] transition-colors hover:border-[#b7c5b4]" aria-label="Open search and command menu">
               <Search className="size-4" />
               <span className="flex-1">Search Savanna</span>

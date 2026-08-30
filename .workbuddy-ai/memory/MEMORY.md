@@ -94,11 +94,41 @@ says so. `server/pwa.assets.test.ts` guards the CSS rule directly.
   `evmAsk.js` warnings and `Unchecked runtime.lastError` spam — those are browser
   extensions (Phantom wallet), not app bugs.
 
+## Firestore rules: never put a bare type test in a rule that a query must satisfy
+Security rules are **not filters**: for a `list` query Firestore validates the
+rule against the *query's constraints*, not the documents. It can prove
+`uid in memberIds` from `where("memberIds", "array-contains", uid)` — but it
+**cannot prove a standalone `memberIds is list` type test** from that same
+constraint. The unprovable clause is false, so the query is denied.
+
+This shipped as a real bug on 2026-08-30: chat messages sent fine (writes are
+single-document, where rules *do* see the real payload) but never rendered.
+Fixed by dropping `is list` from the messages **read** rule only — safe, because
+`in` against a non-list field is a type error and denies anyway. `is list` stays
+on the **create** rule, where it is provable and useful.
+
+**When you get `Missing or insufficient permissions` on a query:** suspect a
+clause the analyser cannot prove from the filters, not the membership logic.
+Bisect in the emulator — strip clauses one at a time; if the bare
+`signedIn()` variant passes, the query shape is fine and a specific clause is
+the culprit.
+
+Verify before theorising: `GET https://firebaserules.googleapis.com/v1/projects/
+{project}/releases/cloud.firestore` then fetch the named ruleset, and diff
+against the local file. gcloud has no account on this machine; the Firebase
+CLI's token is in `~/.config/configstore/firebase-tools.json`.
+
+**Regression guards:** `npm run test:rules` runs `scripts/firestore-rules-smoke.mjs`
+against the real rules in the Firestore + Auth emulators (needs Java; jar is
+now cached). `server/pwa.assets.test.ts` pins the read rule to contain
+`request.auth.uid in resource.data.memberIds` and **not** `is list`.
+
 ## Known unfinished work
-- Chat runs on Firestore via `client/src/lib/firebaseChat.ts` but is **not yet
-  realtime**: it uses `useQuery`, not `onSnapshot`, so there is no live push, no
-  pagination, no unread counts or previews, no typing/presence. Switching the
-  list/detail queries to `onSnapshot` is the fix and is the natural next P1 item.
+- Chat runs on Firestore via `client/src/lib/firebaseChat.ts` and **is** realtime
+  for the conversation list and the open thread (`useFirebaseConversations` and
+  `useFirebaseMessages` both drive `onSnapshot` alongside `useQuery`). Still
+  missing: pagination beyond the `limit(80)`/`limit(120)` caps, unread counts,
+  and typing/presence.
   Messages are stored **plaintext** despite `IMPLEMENTATION_PLAN.md` claiming E2EE.
 - Video/voice calling and voice-message recording are intentional toast
   placeholders ("arrives with the next release") — the animated icons are real,

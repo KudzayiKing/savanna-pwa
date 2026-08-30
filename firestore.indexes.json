@@ -29,6 +29,7 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "authorUserId", "order": "ASCENDING" },
+        { "fieldPath": "audience", "order": "ASCENDING" },
         { "fieldPath": "publishedAt", "order": "DESCENDING" }
       ]
     },
@@ -36,6 +37,23 @@
       "collectionGroup": "stories",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "authorUserId", "order": "ASCENDING" },
+        { "fieldPath": "publishedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "stories",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "customAudienceUserIds", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "publishedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "stories",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "audience", "order": "ASCENDING" },
         { "fieldPath": "customAudienceUserIds", "arrayConfig": "CONTAINS" },
         { "fieldPath": "publishedAt", "order": "DESCENDING" }
       ]

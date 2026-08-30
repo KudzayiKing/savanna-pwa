@@ -1,6 +1,6 @@
 import { startLogin } from "@/const";
 import { getFirebaseAuth, isFirebaseConfigured } from "@/lib/firebase";
-import { ensureUserProfile, getUserProfile, type AppUser } from "@/lib/userProfile";
+import { ensureUserProfile, type AppUser } from "@/lib/userProfile";
 import { onAuthStateChanged, signOut, type User as FirebaseUser } from "firebase/auth";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -86,7 +86,7 @@ export function useAuth(options?: UseAuthOptions) {
   const refresh = useCallback(async () => {
     if (!firebaseUser) return;
     try {
-      const loaded = await getUserProfile(firebaseUser.uid);
+      const loaded = await ensureUserProfile(firebaseUser);
       setProfile(loaded);
       setError(null);
     } catch (cause) {

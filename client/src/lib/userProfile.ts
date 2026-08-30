@@ -1,9 +1,18 @@
 import {
+  collection,
+  deleteDoc,
   doc,
   getDoc,
+  getDocs,
+  limit,
+  orderBy,
+  query,
+  runTransaction,
   serverTimestamp,
   setDoc,
+  startAt,
   Timestamp,
+  endAt,
   type FieldValue,
 } from "firebase/firestore";
 import type { User } from "firebase/auth";
@@ -24,6 +33,7 @@ import { getFirestoreDb } from "./firebase";
 export type AppUser = {
   id: string;
   name: string | null;
+  username: string | null;
   email: string | null;
   phoneNumber: string | null;
   photoURL: string | null;
@@ -84,6 +94,8 @@ export function legacyNumericUserId(uid: string | number | null | undefined): nu
 /** Fields as stored in Firestore, where timestamps may still be unresolved. */
 type UserDoc = {
   name?: string | null;
+  username?: string | null;
+  usernameLower?: string | null;
   email?: string | null;
   phoneNumber?: string | null;
   photoURL?: string | null;
@@ -101,6 +113,35 @@ type UserDoc = {
   updatedAt?: Timestamp | Date | FieldValue | null;
 };
 
+type PublicProfileDoc = {
+  userId?: string | null;
+  name?: string | null;
+  username?: string | null;
+  usernameLower?: string | null;
+  photoURL?: string | null;
+  bio?: string | null;
+  city?: string | null;
+  countryCode?: string | null;
+  profileVisibility?: AppUser["profileVisibility"];
+  handleDiscoverability?: AppUser["handleDiscoverability"];
+  updatedAt?: Timestamp | Date | FieldValue | null;
+};
+
+const USERNAME_PATTERN = /^[a-z0-9_]{3,24}$/;
+
+export function normalizeUsername(value: string | null | undefined): string {
+  return (value ?? "").trim().replace(/^@+/, "").toLowerCase();
+}
+
+function usernameOrNull(value: string | null | undefined): string | null {
+  const normalized = normalizeUsername(value);
+  if (!normalized) return null;
+  if (!USERNAME_PATTERN.test(normalized)) {
+    throw new Error("Username must be 3-24 characters using letters, numbers, or underscores.");
+  }
+  return normalized;
+}
+
 function toDate(value: unknown): Date | null {
   if (value instanceof Timestamp) return value.toDate();
   if (value instanceof Date) return value;
@@ -109,6 +150,57 @@ function toDate(value: unknown): Date | null {
 
 function usersCollection(uid: string) {
   return doc(getFirestoreDb(), "users", uid);
+}
+
+function publicProfilesCollection(uid: string) {
+  return doc(getFirestoreDb(), "publicProfiles", uid);
+}
+
+function usernamesCollection(usernameLower: string) {
+  return doc(getFirestoreDb(), "usernames", usernameLower);
+}
+
+function followsCollection(followerUid: string, followingUid: string) {
+  return doc(getFirestoreDb(), "follows", `${followerUid}__${followingUid}`);
+}
+
+function publicProfileWrite(uid: string, data: UserDoc) {
+  return {
+    userId: uid,
+    name: data.name ?? null,
+    username: data.username ?? null,
+    usernameLower: data.usernameLower ?? null,
+    photoURL: data.photoURL ?? null,
+    bio: data.bio ?? null,
+    city: data.city ?? null,
+    countryCode: data.countryCode ?? null,
+    profileVisibility: data.profileVisibility ?? "connections",
+    handleDiscoverability: data.handleDiscoverability ?? "exact_match",
+    updatedAt: serverTimestamp(),
+  } satisfies PublicProfileDoc;
+}
+
+function mapPublicProfile(uid: string, data: PublicProfileDoc): AppUser {
+  return {
+    id: data.userId ?? uid,
+    name: data.name ?? null,
+    username: data.username ?? null,
+    email: null,
+    phoneNumber: null,
+    photoURL: data.photoURL ?? null,
+    bio: data.bio ?? null,
+    city: data.city ?? null,
+    countryCode: data.countryCode ?? null,
+    profileVisibility: data.profileVisibility ?? "connections",
+    phoneVisibility: "nobody",
+    handleDiscoverability: data.handleDiscoverability ?? "exact_match",
+    storyAudienceDefault: "connections",
+    readReceiptsEnabled: true,
+    lastSeenVisibility: "connections",
+    courseProgressOptIn: false,
+    createdAt: null,
+    updatedAt: toDate(data.updatedAt),
+  };
 }
 
 /**
@@ -128,8 +220,9 @@ export async function ensureUserProfile(firebaseUser: User): Promise<AppUser> {
   if (!snapshot.exists()) {
     const created: UserDoc = {
       name: firebaseUser.displayName ?? null,
+      username: null,
+      usernameLower: null,
       email: firebaseUser.email ?? null,
-      phoneNumber: firebaseUser.phoneNumber ?? null,
       photoURL: firebaseUser.photoURL ?? null,
       bio: null,
       city: null,
@@ -153,12 +246,14 @@ export async function ensureUserProfile(firebaseUser: User): Promise<AppUser> {
       console.error("[Firestore] Failed to create user profile", error);
       throw error;
     });
+    await setDoc(publicProfilesCollection(firebaseUser.uid), publicProfileWrite(firebaseUser.uid, created), { merge: true });
 
     return {
       id: firebaseUser.uid,
       name: created.name ?? null,
+      username: created.username ?? null,
       email: created.email ?? null,
-      phoneNumber: created.phoneNumber ?? null,
+      phoneNumber: firebaseUser.phoneNumber ?? null,
       photoURL: created.photoURL ?? null,
       bio: created.bio ?? null,
       city: created.city ?? null,
@@ -183,10 +278,22 @@ export async function ensureUserProfile(firebaseUser: User): Promise<AppUser> {
   void setDoc(ref, { updatedAt: serverTimestamp() }, { merge: true }).catch(error => {
     console.warn("[Firestore] Failed to touch user profile", error);
   });
+  void setDoc(
+    publicProfilesCollection(firebaseUser.uid),
+    publicProfileWrite(firebaseUser.uid, {
+      ...data,
+      name: data.name ?? firebaseUser.displayName ?? null,
+      photoURL: data.photoURL ?? firebaseUser.photoURL ?? null,
+    }),
+    { merge: true },
+  ).catch(error => {
+    console.warn("[Firestore] Failed to sync public profile", error);
+  });
 
   return {
     id: firebaseUser.uid,
     name: data.name ?? firebaseUser.displayName ?? null,
+    username: data.username ?? null,
     email: data.email ?? firebaseUser.email ?? null,
     phoneNumber: data.phoneNumber ?? firebaseUser.phoneNumber ?? null,
     photoURL: data.photoURL ?? firebaseUser.photoURL ?? null,
@@ -206,38 +313,106 @@ export async function ensureUserProfile(firebaseUser: User): Promise<AppUser> {
 }
 
 export async function getUserProfile(uid: string): Promise<AppUser | null> {
-  const snapshot = await getDoc(usersCollection(uid));
+  const snapshot = await getDoc(publicProfilesCollection(uid));
   if (!snapshot.exists()) return null;
 
-  const data = snapshot.data() as UserDoc;
-  return {
-    id: uid,
-    name: data.name ?? null,
-    email: data.email ?? null,
-    phoneNumber: data.phoneNumber ?? null,
-    photoURL: data.photoURL ?? null,
-    bio: data.bio ?? null,
-    city: data.city ?? null,
-    countryCode: data.countryCode ?? null,
-    profileVisibility: data.profileVisibility ?? "connections",
-    phoneVisibility: data.phoneVisibility ?? "nobody",
-    handleDiscoverability: data.handleDiscoverability ?? "exact_match",
-    storyAudienceDefault: data.storyAudienceDefault ?? "connections",
-    readReceiptsEnabled: data.readReceiptsEnabled ?? true,
-    lastSeenVisibility: data.lastSeenVisibility ?? "connections",
-    courseProgressOptIn: data.courseProgressOptIn ?? false,
-    createdAt: toDate(data.createdAt),
-    updatedAt: toDate(data.updatedAt),
-  };
+  return mapPublicProfile(uid, snapshot.data() as PublicProfileDoc);
+}
+
+export async function searchUserProfilesByUsername(queryValue: string, viewer?: AppUser | null): Promise<AppUser[]> {
+  if (!viewer) return [];
+  const normalized = normalizeUsername(queryValue);
+  if (normalized.length < 2) return [];
+
+  const snapshot = await getDocs(
+    query(
+      collection(getFirestoreDb(), "publicProfiles"),
+      orderBy("usernameLower"),
+      startAt(normalized),
+      endAt(`${normalized}\uf8ff`),
+      limit(8),
+    ),
+  );
+
+  return snapshot.docs
+    .map(item => mapPublicProfile(item.id, item.data() as PublicProfileDoc))
+    .filter(profile =>
+      profile.id !== viewer.id
+      && Boolean(profile.username)
+      && profile.handleDiscoverability === "exact_match"
+      && profile.profileVisibility !== "private"
+    );
 }
 
 export async function updateUserProfile(
   uid: string,
-  patch: Partial<Pick<AppUser, "name" | "email" | "photoURL" | "bio" | "city" | "countryCode" | "profileVisibility" | "phoneVisibility" | "handleDiscoverability" | "storyAudienceDefault" | "readReceiptsEnabled" | "lastSeenVisibility" | "courseProgressOptIn">>
+  patch: Partial<Pick<AppUser, "name" | "username" | "email" | "photoURL" | "bio" | "city" | "countryCode" | "profileVisibility" | "phoneVisibility" | "handleDiscoverability" | "storyAudienceDefault" | "readReceiptsEnabled" | "lastSeenVisibility" | "courseProgressOptIn">>
 ): Promise<void> {
-  await setDoc(
-    usersCollection(uid),
-    { ...patch, updatedAt: serverTimestamp() },
-    { merge: true }
-  );
+  const nextUsername = Object.prototype.hasOwnProperty.call(patch, "username")
+    ? usernameOrNull(patch.username)
+    : undefined;
+
+  await runTransaction(getFirestoreDb(), async transaction => {
+    const userRef = usersCollection(uid);
+    const publicRef = publicProfilesCollection(uid);
+    const currentSnapshot = await transaction.get(userRef);
+    const current = currentSnapshot.exists() ? currentSnapshot.data() as UserDoc : {};
+    const oldUsernameLower = current.usernameLower ?? null;
+    const nextPatch: UserDoc = { ...patch };
+
+    if (nextUsername !== undefined) {
+      nextPatch.username = nextUsername;
+      nextPatch.usernameLower = nextUsername;
+
+      if (nextUsername) {
+        const usernameRef = usernamesCollection(nextUsername);
+        const usernameSnapshot = await transaction.get(usernameRef);
+        const claimedBy = usernameSnapshot.exists() ? usernameSnapshot.data().uid : null;
+        if (claimedBy && claimedBy !== uid) {
+          throw new Error(`@${nextUsername} is already taken.`);
+        }
+      }
+    }
+
+    const merged: UserDoc = { ...current, ...nextPatch };
+    transaction.set(userRef, { ...nextPatch, updatedAt: serverTimestamp() }, { merge: true });
+    transaction.set(publicRef, publicProfileWrite(uid, merged), { merge: true });
+
+    if (nextUsername !== undefined && oldUsernameLower && oldUsernameLower !== nextUsername) {
+      transaction.delete(usernamesCollection(oldUsernameLower));
+    }
+
+    if (nextUsername) {
+      transaction.set(usernamesCollection(nextUsername), {
+        uid,
+        username: nextUsername,
+        usernameLower: nextUsername,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+    }
+
+    if (nextUsername === null && oldUsernameLower) {
+      transaction.delete(usernamesCollection(oldUsernameLower));
+    }
+  });
+}
+
+export async function isFollowingUser(followerUid: string | null | undefined, followingUid: string | null | undefined): Promise<boolean> {
+  if (!followerUid || !followingUid || followerUid === followingUid) return false;
+  const snapshot = await getDoc(followsCollection(followerUid, followingUid));
+  return snapshot.exists();
+}
+
+export async function followUser(follower: AppUser, followingUid: string): Promise<void> {
+  if (follower.id === followingUid) throw new Error("You cannot follow yourself.");
+  await setDoc(followsCollection(follower.id, followingUid), {
+    followerUserId: follower.id,
+    followingUserId: followingUid,
+    createdAt: serverTimestamp(),
+  });
+}
+
+export async function unfollowUser(follower: AppUser, followingUid: string): Promise<void> {
+  if (follower.id === followingUid) return;
+  await deleteDoc(followsCollection(follower.id, followingUid));
 }

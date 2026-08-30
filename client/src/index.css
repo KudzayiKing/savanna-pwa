@@ -2287,6 +2287,178 @@ button:not(:disabled), a {
   color: #F2C14E !important;
 }
 
+/* Profile settings final layer: this route intentionally hides the mobile
+   Stories header, keeps enough scroll room above the fixed bottom nav, and
+   restores card definition after the broad app-wide border cleanup. */
+.savanna-app .savanna-profile-page {
+  min-height: 100dvh;
+}
+
+.savanna-app .savanna-profile-page .savanna-profile-switch {
+  background: #FFFFFF !important;
+  border: 1px solid #DDE3DC !important;
+  box-shadow: 0 10px 28px rgba(21, 26, 23, 0.045) !important;
+}
+
+.savanna-app .savanna-profile-page .savanna-profile-topbar {
+  top: max(0.75rem, calc(env(safe-area-inset-top) + 0.75rem)) !important;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.68), rgba(255, 255, 255, 0.34)),
+    linear-gradient(180deg, rgba(217, 164, 65, 0.08), rgba(255, 255, 255, 0.12)) !important;
+  background-color: rgba(255, 255, 255, 0.48) !important;
+  border: 1px solid rgba(221, 227, 220, 0.82) !important;
+  -webkit-backdrop-filter: saturate(180%) blur(24px);
+  backdrop-filter: saturate(180%) blur(24px);
+  box-shadow: 0 12px 28px rgba(21, 26, 23, 0.055) !important;
+  background-clip: padding-box;
+}
+
+.savanna-app .savanna-profile-page .savanna-profile-header {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.76), rgba(255, 255, 255, 0.42)),
+    linear-gradient(180deg, rgba(217, 164, 65, 0.08), transparent) !important;
+  background-color: rgba(255, 255, 255, 0.58) !important;
+  border: 1px solid rgba(221, 227, 220, 0.74) !important;
+  -webkit-backdrop-filter: saturate(180%) blur(24px);
+  backdrop-filter: saturate(180%) blur(24px);
+  box-shadow: 0 14px 34px rgba(21, 26, 23, 0.055) !important;
+  background-clip: padding-box;
+}
+
+@media (max-width: 1023px) {
+  .savanna-app .savanna-profile-page .savanna-profile-header {
+    top: max(0.75rem, calc(env(safe-area-inset-top) + 0.75rem)) !important;
+    background:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.34)),
+      linear-gradient(180deg, rgba(217, 164, 65, 0.1), rgba(255, 255, 255, 0.18)) !important;
+    background-color: rgba(255, 255, 255, 0.48) !important;
+    border-color: rgba(221, 227, 220, 0.82) !important;
+    box-shadow: 0 16px 34px rgba(21, 26, 23, 0.06) !important;
+  }
+}
+
+.savanna-app .savanna-profile-page .savanna-profile-switch a {
+  background: color-mix(in srgb, #D9A441 20%, transparent) !important;
+  color: #D9A441 !important;
+  box-shadow: none !important;
+}
+
+.savanna-app .savanna-profile-page .savanna-profile-card {
+  background: #FFFFFF !important;
+  border: 1px solid #DDE3DC !important;
+  box-shadow: 0 12px 30px rgba(21, 26, 23, 0.055) !important;
+}
+
+.savanna-app .savanna-profile-page .savanna-profile-card-muted {
+  background: color-mix(in srgb, #D9A441 12%, #FFFFFF) !important;
+  border: 1px solid color-mix(in srgb, #D9A441 18%, #DDE3DC) !important;
+}
+
+.savanna-app .savanna-profile-page .savanna-username-field {
+  border-color: #DDE3DC !important;
+  background: #FFFFFF !important;
+  box-shadow: none !important;
+}
+
+.savanna-app .savanna-profile-page .savanna-username-field:focus-within {
+  border-color: #DDE3DC !important;
+  box-shadow: none !important;
+}
+
+.savanna-app .savanna-profile-page .savanna-username-field input:focus-visible {
+  outline: 0 !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+.dark .savanna-app .savanna-profile-page .savanna-profile-switch,
+.dark .savanna-app .savanna-profile-page .savanna-profile-card {
+  background: var(--chat-surface) !important;
+  border: 1px solid var(--chat-border) !important;
+  box-shadow: none !important;
+}
+
+.dark .savanna-app .savanna-profile-page .savanna-profile-topbar {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--chat-surface) 62%, transparent), color-mix(in srgb, var(--chat-bg) 44%, transparent)),
+    linear-gradient(180deg, color-mix(in srgb, var(--chat-gold) 10%, transparent), transparent) !important;
+  background-color: color-mix(in srgb, var(--chat-surface) 52%, transparent) !important;
+  border-color: color-mix(in srgb, var(--chat-border) 72%, rgba(255, 255, 255, 0.18)) !important;
+  box-shadow: none !important;
+}
+
+.dark .savanna-app .savanna-profile-page .savanna-profile-header {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--chat-surface) 70%, transparent), color-mix(in srgb, var(--chat-bg) 38%, transparent)),
+    linear-gradient(180deg, color-mix(in srgb, var(--chat-gold) 9%, transparent), transparent) !important;
+  background-color: color-mix(in srgb, var(--chat-surface) 58%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--chat-border) 76%, rgba(255, 255, 255, 0.16)) !important;
+  box-shadow: none !important;
+}
+
+@media (max-width: 1023px) {
+  .dark .savanna-app .savanna-profile-page .savanna-profile-header {
+    background:
+      linear-gradient(135deg, color-mix(in srgb, var(--chat-surface) 64%, transparent), color-mix(in srgb, var(--chat-bg) 42%, transparent)),
+      linear-gradient(180deg, color-mix(in srgb, var(--chat-gold) 10%, transparent), transparent) !important;
+    background-color: color-mix(in srgb, var(--chat-surface) 52%, transparent) !important;
+    border-color: color-mix(in srgb, var(--chat-border) 72%, rgba(255, 255, 255, 0.18)) !important;
+  }
+}
+
+.dark .savanna-app .savanna-profile-page .savanna-profile-switch a {
+  background: color-mix(in srgb, var(--chat-gold) 20%, transparent) !important;
+  color: var(--chat-gold) !important;
+}
+
+.dark .savanna-app .savanna-profile-page .savanna-profile-card-muted {
+  background: color-mix(in srgb, var(--chat-gold) 12%, var(--chat-surface)) !important;
+  border: 1px solid var(--chat-border) !important;
+}
+
+.dark .savanna-app .savanna-profile-page .savanna-username-field {
+  border-color: var(--chat-border) !important;
+  background: var(--chat-search) !important;
+}
+
+.savanna-app .savanna-public-profile-page {
+  min-height: 100dvh;
+}
+
+.savanna-app .savanna-public-profile-page .savanna-public-profile-topbar {
+  top: max(0.75rem, calc(env(safe-area-inset-top) + 0.75rem)) !important;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.36)),
+    linear-gradient(180deg, rgba(217, 164, 65, 0.08), rgba(255, 255, 255, 0.12)) !important;
+  background-color: rgba(255, 255, 255, 0.5) !important;
+  border: 1px solid rgba(221, 227, 220, 0.82) !important;
+  -webkit-backdrop-filter: saturate(180%) blur(24px);
+  backdrop-filter: saturate(180%) blur(24px);
+  box-shadow: 0 12px 28px rgba(21, 26, 23, 0.055) !important;
+  background-clip: padding-box;
+}
+
+.savanna-app .savanna-public-profile-page .savanna-public-profile-card {
+  background: #FFFFFF !important;
+  border-color: #DDE3DC !important;
+  box-shadow: 0 12px 28px rgba(21, 26, 23, 0.045) !important;
+}
+
+.dark .savanna-app .savanna-public-profile-page .savanna-public-profile-topbar {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--chat-surface) 62%, transparent), color-mix(in srgb, var(--chat-bg) 44%, transparent)),
+    linear-gradient(180deg, color-mix(in srgb, var(--chat-gold) 10%, transparent), transparent) !important;
+  background-color: color-mix(in srgb, var(--chat-surface) 52%, transparent) !important;
+  border-color: color-mix(in srgb, var(--chat-border) 72%, rgba(255, 255, 255, 0.18)) !important;
+  box-shadow: none !important;
+}
+
+.dark .savanna-app .savanna-public-profile-page .savanna-public-profile-card {
+  background: var(--chat-surface) !important;
+  border-color: var(--chat-border) !important;
+  box-shadow: none !important;
+}
+
 .savanna-app :is([class~="bg-[#24482f]"], [class~="bg-[#31583a]"], [class~="bg-[#1b3b25]"])[class~="text-white"] {
   color: #151A17 !important;
 }

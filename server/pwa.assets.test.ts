@@ -82,6 +82,118 @@ describe("Savanna PWA assets", () => {
     expect(login).toContain("bg-[#D9A441]/20 text-[#D9A441]");
   });
 
+  it("keeps phone numbers out of public username lookup while starting chats by @username", async () => {
+    const [userProfile, firebaseChat, messages, profile, publicProfile, firestoreRules] = await Promise.all([
+      readFile(resolve(projectRoot, "client/src/lib/userProfile.ts"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/lib/firebaseChat.ts"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/pages/MessagesPage.tsx"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/pages/ProfilePage.tsx"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/pages/PublicProfilePage.tsx"), "utf8"),
+      readFile(resolve(projectRoot, "firestore.rules"), "utf8"),
+    ]);
+
+    expect(userProfile).toContain("publicProfiles");
+    expect(userProfile).toContain("usernames");
+    expect(userProfile).toContain("follows");
+    expect(userProfile).toContain("isFollowingUser");
+    expect(userProfile).toContain("followUser");
+    expect(userProfile).toContain("unfollowUser");
+    expect(userProfile).toContain("searchUserProfilesByUsername");
+    expect(userProfile).toContain("runTransaction");
+    expect(userProfile).toContain("phoneNumber: null");
+    expect(firebaseChat).toContain('doc(db, "conversations", `direct_${memberIds.join("__")}`)');
+    expect(firebaseChat).toContain('directKey: kind === "direct" ? memberIds.join("__") : null');
+    expect(firebaseChat).toContain('throw new Error("Choose another user to start a chat.")');
+    expect(firebaseChat).toContain('"users", memberId, "conversationRefs"');
+    expect(firebaseChat).toContain("conversationInboxQuery(user.id)");
+    expect(firebaseChat).toContain('where("memberIds", "array-contains", uid)');
+    expect(firebaseChat).toContain("onSnapshot(");
+    expect(firebaseChat).toContain("writeBatch(db)");
+    expect(firebaseChat).toContain(".sort((left, right) => new Date(right.lastMessageAt ?? 0).getTime()");
+    expect(messages).toContain("username-search");
+    expect(messages).toContain("searchUserProfilesByUsername");
+    expect(messages).toContain("startChatWithProfile");
+    expect(messages).toContain("locallyCreatedConversations");
+    expect(messages).toContain("savanna-open-conversation");
+    expect(messages).toContain("savanna-open-conversation-meta");
+    expect(messages).toContain("memberIds: selected?.memberIds ?? []");
+    expect(messages).toContain("@{profile.username}");
+    expect(messages).toContain('<MobileNavIcon name="Messages" active size={18} />');
+    expect(messages).toContain("That is your profile.");
+    expect(messages).toContain('toast.success("Chat started")');
+    expect(profile).toContain('id="profile-username"');
+    expect(profile).toContain("Your phone number stays private.");
+    expect(publicProfile).toContain("@{item.username}");
+    expect(publicProfile).toContain("<SavannaShell hideMobileHeader hideDesktopHeader>");
+    expect(publicProfile).toContain("savanna-public-profile-page");
+    expect(publicProfile).toContain("followMutation");
+    expect(publicProfile).toContain("startMessage");
+    expect(publicProfile).toContain("{!isOwnProfile ? (");
+    expect(publicProfile).toContain('sessionStorage.setItem("savanna-open-conversation"');
+    expect(publicProfile).toContain("Following");
+    expect(publicProfile).not.toContain("Follower");
+    expect(publicProfile).not.toContain("followers");
+    expect(publicProfile).not.toContain('href="/messages" aria-label={`Message ${displayName}`}');
+    expect(firestoreRules).toContain("match /publicProfiles/{uid}");
+    expect(firestoreRules).toContain("match /usernames/{usernameLower}");
+    expect(firestoreRules).toContain("match /follows/{followId}");
+    expect(firestoreRules).toContain("request.resource.data.followerUserId == request.auth.uid");
+    expect(firestoreRules).toContain("match /conversationRefs/{conversationId}");
+    expect(firestoreRules).toContain("request.resource.data.conversationId == conversationId");
+    expect(firestoreRules).toContain("'senderId', 'memberIds', 'body'");
+    expect(firestoreRules).toContain("request.resource.data.memberIds == conversationRef(conversationId).data.memberIds");
+    expect(firestoreRules).toContain("function validConversationCreate()");
+    expect(firestoreRules).toContain("'directKey'");
+    expect(firestoreRules).toContain("request.resource.data.memberIds.size() == 2");
+    expect(firestoreRules).toContain("allow read: if isSelf(uid);");
+
+    const publicProfileRuleBlock = firestoreRules.slice(
+      firestoreRules.indexOf("match /publicProfiles/{uid}"),
+      firestoreRules.indexOf("match /usernames/{usernameLower}"),
+    );
+    expect(publicProfileRuleBlock).not.toContain("phoneNumber");
+    expect(publicProfileRuleBlock).not.toContain("email");
+  });
+
+  // Security rules are not filters: a `list` query is checked against the
+  // query's constraints, not against the documents. Firestore can prove
+  // `uid in memberIds` from messagesQuery()'s array-contains filter, but it
+  // cannot prove a standalone `memberIds is list` type test from it — so that
+  // extra clause evaluates to false and denies the thread to its own members.
+  // Symptom in the browser: sends succeed, nothing ever renders.
+  it("never guards the message read rule with a type test the query cannot satisfy", async () => {
+    const firestoreRules = await readFile(resolve(projectRoot, "firestore.rules"), "utf8");
+
+    const messagesBlock = firestoreRules.slice(firestoreRules.indexOf("match /messages/{messageId}"));
+    const readRule = messagesBlock.slice(
+      messagesBlock.indexOf("allow read:"),
+      messagesBlock.indexOf("allow create:"),
+    );
+
+    expect(messagesBlock).not.toBe("");
+    expect(readRule).not.toBe("");
+    // Membership must still be enforced — just not via a clause that breaks it.
+    expect(readRule).toContain("request.auth.uid in resource.data.memberIds");
+    expect(readRule).not.toContain("is list");
+
+    // Writes are single-document, where rules do see the real payload, so the
+    // type guard on create is both provable and worth keeping.
+    const createRule = messagesBlock.slice(
+      messagesBlock.indexOf("allow create:"),
+      messagesBlock.indexOf("allow update:"),
+    );
+    expect(createRule).toContain("request.resource.data.memberIds is list");
+  });
+
+  it("syncs the browser status bar color with the active theme", async () => {
+    const themeContext = await readFile(resolve(projectRoot, "client/src/contexts/ThemeContext.tsx"), "utf8");
+
+    expect(themeContext).toContain('const themeColor = theme === "dark" ? "#111B21" : "#FFFFFF";');
+    expect(themeContext).toContain('document.querySelector<HTMLMetaElement>(\'meta[name="theme-color"]\')');
+    expect(themeContext).toContain("themeMeta.content = themeColor");
+    expect(themeContext).toContain("document.body.style.backgroundColor = themeColor");
+  });
+
   it("keeps the SAVANNA Ramabhadra wordmark in the supplied Gold color", async () => {
     const [shell, styles, html, db, orders, paymentCatalog, merchantStudio] = await Promise.all([
       readFile(resolve(projectRoot, "client/src/components/SavannaShell.tsx"), "utf8"),
@@ -256,7 +368,8 @@ describe("Savanna PWA assets", () => {
     expect(messages).toContain('overflow-x-auto px-3 pb-1');
     expect(messages).toContain('savanna-mobile-messages-canvas -mx-4');
     expect(messages).not.toContain(">Chats</h1>");
-    expect(messages).toContain("const previewConversations: ConversationListItem[] = [");
+    expect(messages).toContain("const previewConversations: ConversationListItem[] = [];");
+    expect(messages).toContain("const desktopPreviewMessages: never[] = [];");
     expect(messages).toContain('const chatPreviewMode = import.meta.env.DEV ? new URLSearchParams(window.location.search).get("chatPreview") : null;');
     expect(messages).toContain('useState(chatPreviewMode === "drawer")');
     expect(messages).toContain("useFirebaseConversations(user)");
@@ -269,7 +382,7 @@ describe("Savanna PWA assets", () => {
     expect(messages).toContain("Development preview chat - no real conversation opened");
     expect(messages).toContain('if (status === "delivered" || status === "read") return <AnimatedCheckCheckIcon size={13} aria-label="Delivered" />;');
     expect(styles).toContain("--chat-read-blue: #53BDEB");
-    expect(messages).toContain('previewStatus: "failed"');
+    expect(messages).not.toContain('previewStatus: "failed"');
     expect(messages).toContain('aria-label="Sent"');
     expect(messages).toContain('aria-label="Failed"');
     expect(messages).toContain('AnimatedCheckCheckIcon size={13} aria-label="Delivered"');
@@ -301,7 +414,28 @@ describe("Savanna PWA assets", () => {
     expect(animatedIcons).toContain('initial="idle" animate={state}');
     expect(profile).toContain("Choose how Savanna looks on this device.");
     expect(profile).toContain("Use {theme === \"light\" ? \"dark\" : \"light\"} mode");
-    expect(profile).toContain('className="savanna-profile-page mx-auto max-w-[960px] space-y-6"');
+    expect(profile).toContain("<SavannaShell hideMobileHeader>");
+    expect(profile).toContain("savanna-profile-topbar savanna-glass-header");
+    expect(profile).toContain("savanna-profile-header savanna-profile-hero");
+    expect(profile).not.toContain(">View</Link>");
+    expect(profile).toContain('className="savanna-profile-page mx-auto max-w-[960px] space-y-6 pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-8"');
+    expect(profile).toContain("savanna-profile-switch");
+    expect(profile).not.toContain('label: "Groups", icon: MessageCircle');
+    expect(profile).not.toContain('label: "Stories", icon: KeyRound');
+    expect(profile).toContain("savanna-username-field");
+    expect(shell).toContain("hideMobileHeader?: boolean");
+    expect(shell).toContain("hideDesktopHeader?: boolean");
+    expect(shell).toContain("hideChrome || hideMobileHeader ? null : <MobileStoriesHeader />");
+    expect(shell).toContain("!hideDesktopHeader && !usesIconRail");
+    expect(styles).toContain(".savanna-app .savanna-profile-page .savanna-profile-card");
+    expect(styles).toContain(".savanna-app .savanna-profile-page .savanna-profile-topbar");
+    expect(styles).toContain(".savanna-app .savanna-profile-page .savanna-profile-header");
+    expect(styles).toContain(".savanna-app .savanna-public-profile-page .savanna-public-profile-topbar");
+    expect(styles).toContain(".savanna-app .savanna-public-profile-page .savanna-public-profile-card");
+    expect(styles).toContain("@media (max-width: 1023px)");
+    expect(styles).toContain("env(safe-area-inset-top)");
+    expect(styles).toContain(".savanna-app .savanna-profile-page .savanna-username-field input:focus-visible");
+    expect(styles).toContain("outline: 0 !important;");
     expect(styles).toContain("#2A3942");
     expect(styles).toContain("--chat-bg: #0A1014");
     expect(styles).toContain("--chat-surface: #131A1E");
@@ -378,6 +512,8 @@ describe("Savanna PWA assets", () => {
     expect(shops).toContain("useFirebaseStorefronts");
     expect(shops).toContain("hasAroundYou");
     expect(firebaseStories).toContain('collection(db, "stories")');
+    expect(firebaseStories).toContain('where("audience", "==", "custom"), where("customAudienceUserIds", "array-contains", user.id)');
+    expect(firebaseStories).toContain('where("authorUserId", "==", authorUserId), where("audience", "==", "public")');
     expect(firebaseStories).toContain("uploadBytes(storageRef, input.file");
     expect(firebaseStories).toContain("getDownloadURL(storageRef)");
     expect(firebaseStories).toContain("replyToStoryInFirebase");
@@ -401,6 +537,8 @@ describe("Savanna PWA assets", () => {
     expect(storageRules).toContain("match /stories/{uid}/{allPaths=**}");
     expect(storageRules).toContain("match /shops/{uid}/{allPaths=**}");
     expect(firestoreIndexes).toContain('"collectionGroup": "stories"');
+    expect(firestoreIndexes).toContain('"fieldPath": "customAudienceUserIds"');
+    expect(firestoreIndexes).toContain('"fieldPath": "authorUserId"');
     expect(firestoreIndexes).toContain('"collectionGroup": "storefronts"');
     expect(firestoreIndexes).toContain('"collectionGroup": "products"');
     expect(learn).toContain("savanna-route-learn");
@@ -439,9 +577,9 @@ describe("Savanna PWA assets", () => {
     // than the old component form so this fails if the route is dropped.
     expect(app).toContain('<Route path="/home"><Redirect to="/messages" /></Route>');
     expect(app).toContain('<Route path="/"><Redirect to="/messages" /></Route>');
-    expect(messages).toContain("const desktopPreviewMessages = [");
+    expect(messages).toContain("const desktopPreviewMessages: never[] = [];");
     expect(messages).toContain('const isPreviewConversation = Boolean(selectedConversationId && isPreviewConversationId(selectedConversationId));');
-    expect(messages).toContain('if (import.meta.env.DEV && isMobile && chatPreviewMode === "detail") setSelectedConversationId(previewConversations[0].id);');
+    expect(messages).toContain('chatPreviewMode === "detail" && previewConversations[0]');
     // The preview guard is now nested inside a string-id check rather than
     // being a bare DEV branch, so assert the pieces that must survive: the
     // guard itself, and the fallback a real visitor gets in production.

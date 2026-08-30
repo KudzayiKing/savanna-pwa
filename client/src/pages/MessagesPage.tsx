@@ -1,5 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
-import { AnimatedCheckCheckIcon, AnimatedPlusIcon, AnimatedSearchIcon, AnimatedSendIcon } from "@/components/AnimatedNavIcons";
+import { AnimatedCheckCheckIcon, AnimatedPlusIcon, AnimatedSearchIcon, AnimatedSendIcon, MobileNavIcon } from "@/components/AnimatedNavIcons";
 import { MicIcon, type ChatIconHandle } from "@/components/AnimatedChatIcons";
 import { ConversationHeader } from "@/components/ConversationHeader";
 import { SafetyActions } from "@/components/SafetyActions";
@@ -21,8 +21,9 @@ import {
   type FirebaseMessageStatus,
 } from "@/lib/firebaseChat";
 import { useFirebaseStories } from "@/lib/firebaseStories";
-import { isSameUser } from "@/lib/userProfile";
+import { isSameUser, normalizeUsername, searchUserProfilesByUsername, type AppUser } from "@/lib/userProfile";
 import { cn } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
 import { Check, FileText, Loader2, MessageCircle, Paperclip, Users, X } from "lucide-react";
 import { type ChangeEvent, type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -32,18 +33,8 @@ const allowedMimeTypes = ["image/jpeg", "image/png", "image/webp", "application/
 
 type ConversationListItem = FirebaseConversationListItem;
 
-/** Development-only rows. `memberIds` is empty, so no avatar here links out. */
-const previewConversations: ConversationListItem[] = [
-  { id: "preview-201", kind: "direct", title: "Ayo Mensah", mutedUntil: null, previewMessage: "Fresh produce is in today.", previewStatus: "delivered", memberIds: [] },
-  { id: "preview-202", kind: "direct", title: "Esi Adom", mutedUntil: null, previewMessage: "A small thought for the day.", previewStatus: "read", memberIds: [] },
-  { id: "preview-203", kind: "group", title: "Zawadi Study Circle", mutedUntil: null, previewMessage: "New lesson is now available.", previewStatus: "sent", memberIds: [] },
-  { id: "preview-204", kind: "merchant_support", title: "Amina's Kitchen", mutedUntil: null, previewMessage: "Weekend plans, simply shared.", previewStatus: "failed", memberIds: [] },
-];
-
-const desktopPreviewMessages = [
-  { id: "preview-message-1201", senderUserId: "preview-801", contentType: "text", payload: "Fresh produce is in today. I can set aside a basket for you.", attachments: [], createdAt: new Date("2026-08-27T09:25:00.000Z"), status: "delivered" as const },
-  { id: "preview-message-1202", senderUserId: "preview-801", contentType: "text", payload: "This conversation is a development preview. Nothing here is saved or sent.", attachments: [], createdAt: new Date("2026-08-27T09:27:00.000Z"), status: "read" as const },
-];
+const previewConversations: ConversationListItem[] = [];
+const desktopPreviewMessages: never[] = [];
 
 type PresenceSnapshot = {
   headline: string;
@@ -132,10 +123,11 @@ export default function MessagesPage() {
   const { user, isAuthenticated, loading } = useAuth();
   const [, navigate] = useLocation();
   const conversations = useFirebaseConversations(user);
-  const desktopStories = useFirebaseStories(user, true);
+  const isMobile = useIsMobile();
+  const desktopStories = useFirebaseStories(user, !isMobile);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const isPreviewConversation = Boolean(selectedConversationId && isPreviewConversationId(selectedConversationId));
-  const messageQuery = useFirebaseMessages(selectedConversationId, isAuthenticated && selectedConversationId !== null && !isPreviewConversation);
+  const messageQuery = useFirebaseMessages(selectedConversationId, user, isAuthenticated && selectedConversationId !== null && !isPreviewConversation);
   const chatMutations = useFirebaseChatMutations(user);
   const [draft, setDraft] = useState("");
   const [attachment, setAttachment] = useState<File | null>(null);
@@ -143,9 +135,9 @@ export default function MessagesPage() {
   const [memberIds, setMemberIds] = useState("");
   const [groupTitle, setGroupTitle] = useState("");
   const [conversationSearch, setConversationSearch] = useState("");
+  const [locallyCreatedConversations, setLocallyCreatedConversations] = useState<ConversationListItem[]>([]);
   const [storyComposerOpen, setStoryComposerOpen] = useState(false);
   const [sendPulse, setSendPulse] = useState(0);
-  const isMobile = useIsMobile();
   const chatPreviewMode = import.meta.env.DEV ? new URLSearchParams(window.location.search).get("chatPreview") : null;
   const messages = isPreviewConversation ? { ...messageQuery, data: desktopPreviewMessages, isLoading: false } : messageQuery;
   const [chatFilter, setChatFilter] = useState<string>("all");
@@ -160,16 +152,56 @@ export default function MessagesPage() {
   });
   const attachmentInput = useRef<HTMLInputElement>(null);
   const micIcon = useRef<ChatIconHandle>(null);
+  const normalizedUsernameSearch = normalizeUsername(conversationSearch);
+  const isUsernameSearch = conversationSearch.trim().startsWith("@") && normalizedUsernameSearch.length >= 2;
+  const usernameResults = useQuery({
+    queryKey: ["firebase", "username-search", normalizedUsernameSearch, user?.id ?? "guest"],
+    queryFn: () => searchUserProfilesByUsername(conversationSearch, user),
+    enabled: Boolean(user && isUsernameSearch),
+  });
 
   useEffect(() => {
     if (!selectedConversationId && conversations.data?.[0]) setSelectedConversationId(conversations.data[0].id);
   }, [conversations.data, selectedConversationId]);
   useEffect(() => {
-    if (import.meta.env.DEV && !isMobile && chatPreviewMode === "desktop") setSelectedConversationId(previewConversations[0].id);
+    if (import.meta.env.DEV && !isMobile && chatPreviewMode === "desktop" && previewConversations[0]) setSelectedConversationId(previewConversations[0].id);
   }, [chatPreviewMode, isMobile]);
   useEffect(() => {
-    if (import.meta.env.DEV && isMobile && chatPreviewMode === "detail") setSelectedConversationId(previewConversations[0].id);
+    if (import.meta.env.DEV && isMobile && chatPreviewMode === "detail" && previewConversations[0]) setSelectedConversationId(previewConversations[0].id);
   }, [chatPreviewMode, isMobile]);
+  useEffect(() => {
+    const pendingConversationId = sessionStorage.getItem("savanna-open-conversation");
+    if (!pendingConversationId) return;
+    const pendingMeta = sessionStorage.getItem("savanna-open-conversation-meta");
+    if (pendingMeta && !user) return;
+    sessionStorage.removeItem("savanna-open-conversation");
+    sessionStorage.removeItem("savanna-open-conversation-meta");
+    if (pendingMeta && user) {
+      try {
+        const parsed = JSON.parse(pendingMeta) as { id?: string; title?: string; peerUserId?: string; kind?: FirebaseConversationKind };
+        const peerUserId = parsed.peerUserId;
+        if (parsed.id === pendingConversationId && peerUserId) {
+          setLocallyCreatedConversations(current => [
+            {
+              id: pendingConversationId,
+              kind: parsed.kind ?? "direct",
+              title: parsed.title ?? "Private chat",
+              mutedUntil: null,
+              lastMessageAt: new Date(),
+              previewMessage: "",
+              previewStatus: "sent",
+              memberIds: [user.id, peerUserId].sort(),
+            },
+            ...current.filter(item => item.id !== pendingConversationId),
+          ]);
+        }
+      } catch {
+        // Ignore stale handoff metadata; the conversation query will still load.
+      }
+    }
+    setSelectedConversationId(pendingConversationId);
+    if (isMobile) setMobileDetail(true);
+  }, [isMobile, user]);
   useEffect(() => { localStorage.setItem("savanna-message-tabs", JSON.stringify(customTabs)); }, [customTabs]);
   useEffect(() => { localStorage.setItem("savanna-message-tab-membership", JSON.stringify(tabMembership)); }, [tabMembership]);
 
@@ -200,17 +232,70 @@ export default function MessagesPage() {
   }, []);
 
   const conversationSource: ConversationListItem[] = useMemo(() => {
-    if (conversations.data?.length) return conversations.data;
-    return import.meta.env.DEV ? previewConversations : [];
-  }, [conversations.data]);
+    const real = conversations.data ?? [];
+    const localOnly = locallyCreatedConversations.filter(local => !real.some(item => item.id === local.id));
+    if (real.length || localOnly.length) return [...localOnly, ...real];
+    return chatPreviewMode ? previewConversations : [];
+  }, [chatPreviewMode, conversations.data, locallyCreatedConversations]);
   const filteredConversations = conversationSource.filter(conversation => conversationTitle(conversation).toLowerCase().includes(conversationSearch.toLowerCase()));
   const filteredChatList = filteredConversations.filter(conversation => chatFilter === "all" || conversation.kind === chatFilter || tabMembership[chatFilter]?.includes(conversation.id));
   const desktopStoryItems = desktopStories.data?.length ? desktopStories.data.slice(0, 8).map(story => ({ id: story.id, label: story.authorName })) : import.meta.env.DEV ? previewConversations.map(conversation => ({ id: conversation.id, label: conversationTitle(conversation) })) : [];
-  const selected = conversationSource.find(conversation => conversation.id === selectedConversationId) ?? (isPreviewConversation ? previewConversations.find(conversation => conversation.id === selectedConversationId) : chatPreviewMode === "detail" ? previewConversations[0] : undefined);
+  const selected = conversationSource.find(conversation => conversation.id === selectedConversationId) ?? (isPreviewConversation ? previewConversations.find(conversation => conversation.id === selectedConversationId) : undefined);
   const selectedPresence = selected ? getConversationPresence(selected, filteredChatList.findIndex(conversation => conversation.id === selected.id)) : null;
+
+  const startChatWithProfile = (profile: AppUser) => {
+    if (!user) return;
+    if (profile.id === user.id || (profile.username && profile.username === user.username)) {
+      toast.info("That is your profile.");
+      return;
+    }
+    const existingDirect = conversationSource.find(conversation =>
+      conversation.kind === "direct"
+      && conversation.memberIds.length === 2
+      && conversation.memberIds.includes(user.id)
+      && conversation.memberIds.includes(profile.id)
+    );
+    if (existingDirect) {
+      setSelectedConversationId(existingDirect.id);
+      setConversationSearch("");
+      if (isMobile) setMobileDetail(true);
+      return;
+    }
+
+    chatMutations.create.mutate(
+      {
+        kind: "direct",
+        title: profile.name || (profile.username ? `@${profile.username}` : "Private chat"),
+        memberIds: [profile.id],
+      },
+      {
+        onSuccess: conversationId => {
+          setLocallyCreatedConversations(current => [
+            {
+              id: conversationId,
+              kind: "direct",
+              title: profile.name || (profile.username ? `@${profile.username}` : "Private chat"),
+              mutedUntil: null,
+              lastMessageAt: new Date(),
+              previewMessage: "",
+              previewStatus: "sent",
+              memberIds: [user.id, profile.id].sort(),
+            },
+            ...current.filter(item => item.id !== conversationId),
+          ]);
+          setSelectedConversationId(conversationId);
+          setConversationSearch("");
+          if (isMobile) setMobileDetail(true);
+          toast.success("Chat started");
+        },
+        onError: error => toast.error(error.message),
+      },
+    );
+  };
 
   const handleCreate = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!user) return toast.error("Sign in to create a chat");
     const parsedMembers = memberIds.split(",").map(value => value.trim()).filter(Boolean);
     if (!parsedMembers.length) return toast.error("Enter at least one valid Savanna user ID");
     if (creationMode === "group" && !groupTitle.trim()) return toast.error("Give the group a short name");
@@ -218,6 +303,19 @@ export default function MessagesPage() {
       { kind: creationMode, title: creationMode === "group" ? groupTitle.trim() : undefined, memberIds: parsedMembers },
       {
         onSuccess: conversationId => {
+          setLocallyCreatedConversations(current => [
+            {
+              id: conversationId,
+              kind: creationMode,
+              title: creationMode === "group" ? groupTitle.trim() : null,
+              mutedUntil: null,
+              lastMessageAt: new Date(),
+              previewMessage: "",
+              previewStatus: "sent",
+              memberIds: [user.id, ...parsedMembers].filter(Boolean).sort(),
+            },
+            ...current.filter(item => item.id !== conversationId),
+          ]);
           setSelectedConversationId(conversationId);
           setMemberIds("");
           setGroupTitle("");
@@ -244,7 +342,7 @@ export default function MessagesPage() {
     if (isPreviewConversation) return toast.info("Development preview - messages are not sent or saved.");
     if (attachment) {
       chatMutations.sendAttachment.mutate(
-        { conversationId: selectedConversationId, file: attachment },
+        { conversationId: selectedConversationId, memberIds: selected?.memberIds ?? [], file: attachment },
         {
           onSuccess: () => {
             setAttachment(null);
@@ -257,7 +355,7 @@ export default function MessagesPage() {
     }
     if (draft.trim()) {
       chatMutations.send.mutate(
-        { conversationId: selectedConversationId, body: draft.trim() },
+        { conversationId: selectedConversationId, memberIds: selected?.memberIds ?? [], body: draft.trim() },
         {
           onSuccess: () => setDraft(""),
           onError: error => toast.error(error.message),
@@ -281,6 +379,48 @@ export default function MessagesPage() {
   };
 
   const filterTabs = ([["all", "All"], ["direct", "Chats"], ["group", "Groups"], ["merchant_support", "Support"]] as const);
+
+  const renderUsernameResults = (variant: "mobile" | "desktop") => {
+    if (!isUsernameSearch) return null;
+    const compact = variant === "mobile";
+    return (
+      <div className={cn("space-y-2", compact ? "mx-2 mt-3" : "mt-3")}>
+        {usernameResults.isLoading ? (
+          <div className="flex items-center gap-2 rounded-2xl bg-[#D9A441]/10 px-4 py-3 text-xs font-semibold text-[#9a6410]">
+            <Loader2 className="size-4 animate-spin" /> Searching usernames
+          </div>
+        ) : usernameResults.data?.length ? (
+          usernameResults.data.map(profile => {
+            const displayName = profile.name || (profile.username ? `@${profile.username}` : "Savanna user");
+            return (
+              <div key={profile.id} className="flex items-center gap-3 rounded-2xl bg-white px-3 py-3 shadow-[0_8px_22px_rgba(94,58,11,0.035)] dark:bg-[#202C33]">
+                <span className="savanna-brand-token grid size-10 shrink-0 place-items-center overflow-hidden rounded-full text-sm font-semibold">
+                  {profile.photoURL ? <img src={profile.photoURL} alt="" className="size-full rounded-full object-cover" /> : displayName.slice(0, 1).toUpperCase()}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold text-[#151A17] dark:text-[#E9EDEF]">{displayName}</span>
+                  <span className="block truncate text-xs text-[#5F6861] dark:text-[#9AA1A6]">@{profile.username}</span>
+                </span>
+                <Button
+                  type="button"
+                  onClick={() => startChatWithProfile(profile)}
+                  disabled={chatMutations.create.isPending}
+                  className="savanna-brand-token h-10 rounded-full px-4 text-xs shadow-none"
+                >
+                  {chatMutations.create.isPending ? <Loader2 className="mr-1.5 size-4 animate-spin" /> : <MobileNavIcon name="Messages" active size={18} />}
+                  Chat
+                </Button>
+              </div>
+            );
+          })
+        ) : (
+          <div className="rounded-2xl bg-[#D9A441]/10 px-4 py-3 text-xs font-semibold text-[#9a6410]">
+            No username found for @{normalizedUsernameSearch}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const startVideoCall = () => toast.info("Video calling arrives with the next release.");
   const startVoiceCall = () => toast.info("Voice calling arrives with the next release.");
@@ -525,6 +665,7 @@ export default function MessagesPage() {
             <AnimatedSearchIcon size={16} />
             <input value={conversationSearch} onChange={event => setConversationSearch(event.target.value)} placeholder="Search chats or people" aria-label="Search chats or people" className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-[#a5947e] dark:bg-[#23282C]" />
           </label>
+          {renderUsernameResults("mobile")}
           <div className="story-rail mt-4 flex gap-2 overflow-x-auto px-3 pb-1" role="tablist" aria-label="Chat filters">
             {filterTabs.map(([value, label]) => <button key={value} role="tab" aria-selected={chatFilter === value} onClick={() => setChatFilter(value)} className={`shrink-0 rounded-full px-3 py-2 text-xs font-semibold ${chatFilter === value ? "bg-[#e3a43c] text-[#3a260e]" : "bg-[#f4f0e8] text-[#715d43] dark:bg-[#2b2118] dark:text-[#dac7a9]"}`}>{label}</button>)}
             {customTabs.map(tab => <button key={tab} role="tab" aria-selected={chatFilter === tab} onClick={() => setChatFilter(tab)} className={`shrink-0 rounded-full px-3 py-2 text-xs font-semibold ${chatFilter === tab ? "bg-[#e3a43c] text-[#3a260e]" : "bg-[#f4f0e8] text-[#715d43] dark:bg-[#2b2118] dark:text-[#dac7a9]"}`}>{tab}</button>)}
@@ -552,6 +693,7 @@ export default function MessagesPage() {
             <AnimatedSearchIcon size={17} />
             <input value={conversationSearch} onChange={event => setConversationSearch(event.target.value)} placeholder="Search chats or people" aria-label="Search conversations" className="min-w-0 flex-1 bg-transparent outline-none" />
           </label>
+          {renderUsernameResults("desktop")}
           <DesktopStoryRail items={desktopStoryItems} onCreateStory={() => setStoryComposerOpen(true)} />
           <div className="savanna-desktop-message-tabs flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Desktop chat filters">
             {filterTabs.map(([value, label]) => <button key={value} role="tab" aria-selected={chatFilter === value} onClick={() => setChatFilter(value)} data-active={chatFilter === value} className="shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold">{label}</button>)}

@@ -1,19 +1,22 @@
 import type { AppUser } from "@/lib/userProfile";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  addDoc,
   collection,
   doc,
+  getDoc,
   getDocs,
   limit,
+  onSnapshot,
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
   type DocumentData,
-  updateDoc,
   where,
+  writeBatch,
 } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { useEffect } from "react";
 import { getFirebaseStorage, getFirestoreDb } from "./firebase";
 
 export type FirebaseConversationKind = "direct" | "group" | "merchant_support";
@@ -24,6 +27,7 @@ export type FirebaseConversationListItem = {
   kind: FirebaseConversationKind;
   title: string | null;
   mutedUntil: Date | string | null;
+  lastMessageAt?: Date | string | null;
   previewMessage?: string;
   previewStatus?: FirebaseMessageStatus;
   /**
@@ -88,9 +92,60 @@ function mapConversation(id: string, data: DocumentData): FirebaseConversationLi
     kind: (data.kind as FirebaseConversationKind) ?? "direct",
     title: typeof data.title === "string" ? data.title : null,
     mutedUntil: data.mutedUntil ? toDate(data.mutedUntil) : null,
+    lastMessageAt: data.lastMessageAt ? toDate(data.lastMessageAt) : null,
     previewMessage: typeof data.lastMessagePreview === "string" ? data.lastMessagePreview : undefined,
     previewStatus: (data.lastMessageStatus as FirebaseMessageStatus | undefined) ?? undefined,
     memberIds: Array.isArray(data.memberIds) ? data.memberIds.map(String) : [],
+  };
+}
+
+function conversationRef(conversationId: string) {
+  return doc(getFirestoreDb(), "conversations", conversationId);
+}
+
+function conversationInboxRef(memberId: string, conversationId: string) {
+  return doc(getFirestoreDb(), "users", memberId, "conversationRefs", conversationId);
+}
+
+function conversationInboxQuery(uid: string) {
+  return query(
+    collection(getFirestoreDb(), "users", uid, "conversationRefs"),
+    orderBy("lastMessageAt", "desc"),
+    limit(80),
+  );
+}
+
+function messagesQuery(conversationId: string, uid: string) {
+  return query(
+    collection(getFirestoreDb(), "conversations", conversationId, "messages"),
+    where("memberIds", "array-contains", uid),
+    limit(120),
+  );
+}
+
+function inboxPayload(input: {
+  conversationId: string;
+  kind: FirebaseConversationKind;
+  title: string | null;
+  memberIds: string[];
+  lastMessageAt: ReturnType<typeof serverTimestamp>;
+  lastMessagePreview: string;
+  lastMessageStatus?: FirebaseMessageStatus | null;
+  storefrontId?: string | null;
+  storefrontSlug?: string | null;
+}) {
+  return {
+    conversationId: input.conversationId,
+    kind: input.kind,
+    title: input.title,
+    memberIds: input.memberIds,
+    mutedUntil: null,
+    storefrontId: input.storefrontId ?? null,
+    storefrontSlug: input.storefrontSlug ?? null,
+    updatedAt: serverTimestamp(),
+    lastMessageAt: input.lastMessageAt,
+    lastMessagePreview: input.lastMessagePreview,
+    lastMessageStatus: input.lastMessageStatus ?? null,
   };
 }
 
@@ -139,77 +194,121 @@ export async function createFirebaseConversation(input: CreateConversationInput)
   const db = getFirestoreDb();
   const memberIds = uniqueMembers(input.memberIds);
   if (!memberIds.length) throw new Error("A conversation needs at least one member");
+  const kind = input.kind ?? "direct";
+  if (kind === "direct" && memberIds.length !== 2) {
+    throw new Error("Choose another user to start a chat.");
+  }
 
-  const conversationRef = await addDoc(collection(db, "conversations"), {
-    kind: input.kind ?? "direct",
+  const timestamp = serverTimestamp();
+  const payload = {
+    kind,
     title: input.title ?? null,
     memberIds,
+    directKey: kind === "direct" ? memberIds.join("__") : null,
     storefrontId: input.storefrontId ?? null,
     storefrontSlug: input.storefrontSlug ?? null,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-    lastMessageAt: serverTimestamp(),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    lastMessageAt: timestamp,
     lastMessagePreview: "",
-  });
+  };
 
-  return conversationRef.id;
+  const conversationDoc = kind === "direct"
+    ? doc(db, "conversations", `direct_${memberIds.join("__")}`)
+    : doc(collection(db, "conversations"));
+  const conversationId = conversationDoc.id;
+  const batch = writeBatch(db);
+  batch.set(conversationDoc, kind === "direct" ? payload : { ...payload, directKey: null }, { merge: kind === "direct" });
+  for (const memberId of memberIds) {
+    batch.set(conversationInboxRef(memberId, conversationId), inboxPayload({
+      conversationId,
+      kind,
+      title: input.title ?? null,
+      memberIds,
+      lastMessageAt: timestamp,
+      lastMessagePreview: "",
+      storefrontId: input.storefrontId ?? null,
+      storefrontSlug: input.storefrontSlug ?? null,
+    }), { merge: true });
+  }
+  await batch.commit();
+
+  return conversationId;
 }
 
 export async function sendFirebaseMessage(input: {
   conversationId: string;
   senderId: string;
+  memberIds?: string[];
   body: string;
   status?: FirebaseMessageStatus;
   attachmentPath?: string | null;
+  storyId?: string | null;
 }) {
   const db = getFirestoreDb();
   const body = input.body.trim();
   if (!body && !input.attachmentPath) throw new Error("Write a message first");
+  const conversationSnapshot = await getDoc(conversationRef(input.conversationId));
+  const conversationData = conversationSnapshot?.data() as DocumentData | undefined;
+  const memberIds = uniqueMembers(input.memberIds?.length ? input.memberIds : (Array.isArray(conversationData?.memberIds) ? conversationData.memberIds.map(String) : [input.senderId]));
+  const kind = (conversationData?.kind as FirebaseConversationKind | undefined) ?? "direct";
+  const title = typeof conversationData?.title === "string" ? conversationData.title : null;
+  const timestamp = serverTimestamp();
+  const messageRef = doc(collection(db, "conversations", input.conversationId, "messages"));
+  const batch = writeBatch(db);
 
-  await addDoc(collection(db, "conversations", input.conversationId, "messages"), {
+  batch.set(messageRef, {
     senderId: input.senderId,
+    memberIds,
     body,
     attachmentPath: input.attachmentPath ?? null,
+    storyId: input.storyId ?? null,
     status: input.status ?? "sent",
-    createdAt: serverTimestamp(),
+    createdAt: timestamp,
   });
 
-  await updateDoc(doc(db, "conversations", input.conversationId), {
-    updatedAt: serverTimestamp(),
-    lastMessageAt: serverTimestamp(),
+  batch.update(conversationRef(input.conversationId), {
+    updatedAt: timestamp,
+    lastMessageAt: timestamp,
     lastMessagePreview: body || "Attachment",
     lastMessageStatus: input.status ?? "sent",
   });
+  for (const memberId of memberIds) {
+    batch.set(conversationInboxRef(memberId, input.conversationId), inboxPayload({
+      conversationId: input.conversationId,
+      kind,
+      title,
+      memberIds,
+      lastMessageAt: timestamp,
+      lastMessagePreview: body || "Attachment",
+      lastMessageStatus: input.status ?? "sent",
+      storefrontId: typeof conversationData?.storefrontId === "string" ? conversationData.storefrontId : null,
+      storefrontSlug: typeof conversationData?.storefrontSlug === "string" ? conversationData.storefrontSlug : null,
+    }), { merge: true });
+  }
+  await batch.commit();
 }
 
 export async function listFirebaseConversations(user?: AppUser | null) {
   if (!user) return [];
-  const snapshot = await getDocs(
-    query(
-      collection(getFirestoreDb(), "conversations"),
-      where("memberIds", "array-contains", user.id),
-      orderBy("lastMessageAt", "desc"),
-      limit(80),
-    ),
-  );
-  return snapshot.docs.map(item => mapConversation(item.id, item.data()));
+  const snapshot = await getDocs(conversationInboxQuery(user.id));
+  return snapshot.docs
+    .map(item => mapConversation(item.id, item.data()))
+    .sort((left, right) => new Date(right.lastMessageAt ?? 0).getTime() - new Date(left.lastMessageAt ?? 0).getTime());
 }
 
-export async function listFirebaseMessages(conversationId?: string | null) {
-  if (!conversationId) return [];
-  const snapshot = await getDocs(
-    query(
-      collection(getFirestoreDb(), "conversations", conversationId, "messages"),
-      orderBy("createdAt", "asc"),
-      limit(120),
-    ),
-  );
-  return snapshot.docs.map(item => mapMessage(item.id, item.data()));
+export async function listFirebaseMessages(conversationId?: string | null, user?: AppUser | null) {
+  if (!conversationId || !user) return [];
+  const snapshot = await getDocs(messagesQuery(conversationId, user.id));
+  return snapshot.docs
+    .map(item => mapMessage(item.id, item.data()))
+    .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime());
 }
 
 export async function sendFirebaseAttachment(input: {
   conversationId: string;
   sender: AppUser;
+  memberIds?: string[];
   file: File;
 }) {
   const path = `conversations/${input.conversationId}/${input.sender.id}/${storageName(input.file)}`;
@@ -217,9 +316,18 @@ export async function sendFirebaseAttachment(input: {
   await uploadBytes(storageRef, input.file, { contentType: input.file.type });
   const url = await getDownloadURL(storageRef);
   const db = getFirestoreDb();
+  const conversationSnapshot = await getDoc(conversationRef(input.conversationId));
+  const conversationData = conversationSnapshot.data() as DocumentData | undefined;
+  const memberIds = uniqueMembers(input.memberIds?.length ? input.memberIds : (Array.isArray(conversationData?.memberIds) ? conversationData.memberIds.map(String) : [input.sender.id]));
+  const kind = (conversationData?.kind as FirebaseConversationKind | undefined) ?? "direct";
+  const title = typeof conversationData?.title === "string" ? conversationData.title : null;
+  const timestamp = serverTimestamp();
+  const messageRef = doc(collection(db, "conversations", input.conversationId, "messages"));
+  const batch = writeBatch(db);
 
-  await addDoc(collection(db, "conversations", input.conversationId, "messages"), {
+  batch.set(messageRef, {
     senderId: input.sender.id,
+    memberIds,
     body: "",
     attachmentPath: path,
     attachmentUrl: url,
@@ -227,15 +335,29 @@ export async function sendFirebaseAttachment(input: {
     attachmentMimeType: input.file.type,
     attachmentSize: input.file.size,
     status: "sent",
-    createdAt: serverTimestamp(),
+    createdAt: timestamp,
   });
 
-  await updateDoc(doc(db, "conversations", input.conversationId), {
-    updatedAt: serverTimestamp(),
-    lastMessageAt: serverTimestamp(),
+  batch.update(conversationRef(input.conversationId), {
+    updatedAt: timestamp,
+    lastMessageAt: timestamp,
     lastMessagePreview: input.file.name,
     lastMessageStatus: "sent",
   });
+  for (const memberId of memberIds) {
+    batch.set(conversationInboxRef(memberId, input.conversationId), inboxPayload({
+      conversationId: input.conversationId,
+      kind,
+      title,
+      memberIds,
+      lastMessageAt: timestamp,
+      lastMessagePreview: input.file.name,
+      lastMessageStatus: "sent",
+      storefrontId: typeof conversationData?.storefrontId === "string" ? conversationData.storefrontId : null,
+      storefrontSlug: typeof conversationData?.storefrontSlug === "string" ? conversationData.storefrontSlug : null,
+    }), { merge: true });
+  }
+  await batch.commit();
 }
 
 export async function createSupportConversation(input: {
@@ -253,30 +375,69 @@ export async function createSupportConversation(input: {
     storefrontSlug: input.storefrontSlug,
   });
 
-  const db = getFirestoreDb();
-  await addDoc(collection(db, "conversations", conversationId, "messages"), {
+  await sendFirebaseMessage({
+    conversationId,
     senderId: input.viewer.id,
+    memberIds: [input.viewer.id, input.ownerUserId],
     body: `I have a question about ${input.storefrontName}.`,
-    status: "sent",
-    createdAt: serverTimestamp(),
   });
 
   return conversationId;
 }
 
 export function useFirebaseConversations(user?: AppUser | null) {
+  const queryClient = useQueryClient();
+  const uid = user?.id ?? null;
+  const queryKey = chatKeys.conversations(uid);
+  useEffect(() => {
+    if (!uid) return;
+    return onSnapshot(
+      conversationInboxQuery(uid),
+      snapshot => {
+        queryClient.setQueryData(
+          chatKeys.conversations(uid),
+          snapshot.docs
+            .map(item => mapConversation(item.id, item.data()))
+            .sort((left, right) => new Date(right.lastMessageAt ?? 0).getTime() - new Date(left.lastMessageAt ?? 0).getTime()),
+        );
+      },
+      error => {
+        console.error("[Firestore] Conversation inbox listener failed", error);
+      },
+    );
+  }, [queryClient, uid]);
+
   return useQuery({
-    queryKey: chatKeys.conversations(user?.id),
+    queryKey,
     queryFn: () => listFirebaseConversations(user),
     enabled: Boolean(user),
   });
 }
 
-export function useFirebaseMessages(conversationId?: string | null, enabled = true) {
+export function useFirebaseMessages(conversationId?: string | null, user?: AppUser | null, enabled = true) {
+  const queryClient = useQueryClient();
+  const uid = user?.id ?? null;
+  const queryKey = chatKeys.messages(conversationId);
+  useEffect(() => {
+    if (!enabled || !conversationId || !uid) return;
+    return onSnapshot(
+      messagesQuery(conversationId, uid),
+      snapshot => {
+        const nextMessages = snapshot.docs
+          .map(item => mapMessage(item.id, item.data()))
+          .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime());
+        queryClient.setQueryData(chatKeys.messages(conversationId), nextMessages);
+      },
+      error => {
+        console.error("[Firestore] Message listener failed", error);
+      },
+    );
+  }, [conversationId, enabled, queryClient, uid]);
+
   return useQuery({
-    queryKey: chatKeys.messages(conversationId),
-    queryFn: () => listFirebaseMessages(conversationId),
-    enabled: enabled && Boolean(conversationId),
+    queryKey,
+    queryFn: () => listFirebaseMessages(conversationId, user),
+    enabled: enabled && Boolean(conversationId && user),
   });
 }
 
@@ -296,16 +457,16 @@ export function useFirebaseChatMutations(user?: AppUser | null) {
       onSuccess: conversationId => invalidateConversation(conversationId),
     }),
     send: useMutation({
-      mutationFn: async (input: { conversationId: string; body: string }) => {
+      mutationFn: async (input: { conversationId: string; memberIds: string[]; body: string }) => {
         if (!user) throw new Error("Sign in to send a message");
-        await sendFirebaseMessage({ conversationId: input.conversationId, senderId: user.id, body: input.body });
+        await sendFirebaseMessage({ conversationId: input.conversationId, senderId: user.id, memberIds: input.memberIds, body: input.body });
       },
       onSuccess: (_result, input) => invalidateConversation(input.conversationId),
     }),
     sendAttachment: useMutation({
-      mutationFn: async (input: { conversationId: string; file: File }) => {
+      mutationFn: async (input: { conversationId: string; memberIds: string[]; file: File }) => {
         if (!user) throw new Error("Sign in to send an attachment");
-        await sendFirebaseAttachment({ conversationId: input.conversationId, sender: user, file: input.file });
+        await sendFirebaseAttachment({ conversationId: input.conversationId, sender: user, memberIds: input.memberIds, file: input.file });
       },
       onSuccess: (_result, input) => invalidateConversation(input.conversationId),
     }),
@@ -324,13 +485,12 @@ export async function replyToStoryInFirebase(input: {
     memberIds: [input.viewer.id, input.storyAuthorUserId],
   });
 
-  const db = getFirestoreDb();
-  await addDoc(collection(db, "conversations", conversationId, "messages"), {
+  await sendFirebaseMessage({
+    conversationId,
     senderId: input.viewer.id,
+    memberIds: [input.viewer.id, input.storyAuthorUserId],
     body: input.body.trim(),
     storyId: input.storyId,
-    status: "sent",
-    createdAt: serverTimestamp(),
   });
 
   return conversationId;

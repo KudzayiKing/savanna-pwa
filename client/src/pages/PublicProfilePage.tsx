@@ -1,24 +1,32 @@
-import { SafetyActions } from "@/components/SafetyActions";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { MobileNavIcon } from "@/components/AnimatedNavIcons";
 import { SavannaShell } from "@/components/SavannaShell";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/_core/hooks/useAuth";
-import { listFirebaseStoriesForAuthor } from "@/lib/firebaseStories";
+import { startLogin } from "@/const";
+import { useFirebaseChatMutations } from "@/lib/firebaseChat";
+import { listFirebaseStoriesForAuthor, type FirebaseStory } from "@/lib/firebaseStories";
 import { getPublicFirebaseStorefrontForOwner } from "@/lib/firebaseShops";
-import { getUserProfile } from "@/lib/userProfile";
-import { useQuery } from "@tanstack/react-query";
+import { followUser, getUserProfile, isFollowingUser, unfollowUser } from "@/lib/userProfile";
+import { cn } from "@/lib/utils";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
-  ArrowRight,
   BriefcaseBusiness,
+  Heart,
   Image as ImageIcon,
   Loader2,
   MapPin,
+  MessageCircle,
+  MoreVertical,
   Play,
   Store,
+  UserCheck,
+  UserPlus,
   UserRound,
   Video,
 } from "lucide-react";
-import { Link, useRoute } from "wouter";
+import { toast } from "sonner";
+import { Link, useLocation, useRoute } from "wouter";
 
 function formatStoryTime(value: Date | string) {
   const date = new Date(value);
@@ -26,12 +34,50 @@ function formatStoryTime(value: Date | string) {
   return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(date);
 }
 
+function storyLabel(story: FirebaseStory, index: number) {
+  if (story.productName) return story.productName;
+  if (story.textBody) return story.textBody;
+  return story.isMemory ? `Memory ${index + 1}` : `Story ${index + 1}`;
+}
+
+function StoryTile({ story, index, initial }: { story: FirebaseStory; index: number; initial: string }) {
+  const media = story.media?.[0];
+  const isVideo = media?.type === "video";
+
+  return (
+    <article className="savanna-public-profile-tile group relative aspect-[3/4] overflow-hidden rounded-[8px] bg-[#D9A441]/20">
+      {media?.url && media.type === "image" ? <img src={media.url} alt="" className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" /> : null}
+      {media?.url && isVideo ? <video src={media.url} className="absolute inset-0 h-full w-full object-cover" muted playsInline preload="metadata" /> : null}
+      {!media?.url ? (
+        <div className="absolute inset-0 grid place-items-center bg-[#D9A441]/20 text-[#D9A441]">
+          <span className="font-display text-4xl font-semibold">{initial}</span>
+        </div>
+      ) : null}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/10 to-transparent" />
+      <div className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/25 px-2 py-1 text-[10px] font-semibold text-white backdrop-blur">
+        {isVideo ? <Video className="size-3" /> : <ImageIcon className="size-3" />}
+        {story.isMemory ? "Memory" : "Story"}
+      </div>
+      <div className="absolute bottom-2 left-2 right-2">
+        <p className="line-clamp-2 text-xs font-semibold leading-4 text-white">{storyLabel(story, index)}</p>
+        <p className="mt-1 text-[10px] font-medium text-white/75">{formatStoryTime(story.publishedAt)}</p>
+      </div>
+    </article>
+  );
+}
+
 export default function PublicProfilePage() {
   const [, params] = useRoute("/people/:userId");
+  const [, navigate] = useLocation();
+  const queryClient = useQueryClient();
   const { user } = useAuth();
+  const chatMutations = useFirebaseChatMutations(user);
   const userId = params?.userId ?? "";
+  const profileQueryKey = ["firebase", "public-profile", userId, user?.id ?? "guest"];
+  const followQueryKey = ["firebase", "profile-follow", user?.id ?? "guest", userId];
+
   const profile = useQuery({
-    queryKey: ["firebase", "public-profile", userId, user?.id ?? "guest"],
+    queryKey: profileQueryKey,
     enabled: Boolean(userId),
     queryFn: async () => {
       const [profile, stories, business] = await Promise.all([
@@ -45,9 +91,32 @@ export default function PublicProfilePage() {
     retry: false,
   });
 
+  const followState = useQuery({
+    queryKey: followQueryKey,
+    queryFn: () => isFollowingUser(user?.id, userId),
+    enabled: Boolean(user && userId && user.id !== userId),
+  });
+
+  const followMutation = useMutation({
+    mutationFn: async () => {
+      if (!user) {
+        startLogin();
+        return;
+      }
+      if (user.id === userId) return;
+      if (followState.data) await unfollowUser(user, userId);
+      else await followUser(user, userId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: followQueryKey });
+      queryClient.invalidateQueries({ queryKey: ["firebase", "stories"] });
+    },
+    onError: error => toast.error(error instanceof Error ? error.message : "Follow could not be updated"),
+  });
+
   if (profile.isLoading) {
     return (
-      <SavannaShell>
+      <SavannaShell hideMobileHeader hideDesktopHeader>
         <div className="grid min-h-[60vh] place-items-center">
           <Loader2 className="size-6 animate-spin text-[#D9A441]" />
         </div>
@@ -57,12 +126,12 @@ export default function PublicProfilePage() {
 
   if (!profile.data) {
     return (
-      <SavannaShell>
-        <section className="grid min-h-[60vh] place-items-center rounded-[30px] border border-dashed border-[#eadfca] bg-white text-center">
+      <SavannaShell hideMobileHeader hideDesktopHeader>
+        <section className="savanna-public-profile-page grid min-h-[60vh] place-items-center rounded-[30px] border border-dashed border-[#eadfca] bg-white p-8 text-center dark:border-[#26343A] dark:bg-[#111B21]">
           <div>
             <UserRound className="mx-auto size-8 text-[#D9A441]" />
-            <h1 className="mt-4 font-display text-3xl font-semibold tracking-[-0.05em] text-[#151A17]">This profile is unavailable.</h1>
-            <Link href="/home" className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-[#9a6410]">
+            <h1 className="mt-4 font-display text-3xl font-semibold tracking-[-0.05em] text-[#151A17] dark:text-[#E9EDEF]">This profile is unavailable.</h1>
+            <Link href="/messages" className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-[#D9A441]">
               <ArrowLeft className="size-4" /> Back to Savanna
             </Link>
           </div>
@@ -72,193 +141,147 @@ export default function PublicProfilePage() {
   }
 
   const item = profile.data.profile;
-  const stories = profile.data.stories.filter(story => !story.isMemory && !story.storefrontId);
-  const memories = profile.data.stories.filter(story => story.isMemory && !story.storefrontId);
+  const storyGridItems = profile.data.stories.filter(story => !story.storefrontId);
   const displayName = item.name || "Savanna user";
+  const firstName = displayName.split(/\s+/)[0] || displayName;
   const initial = displayName.slice(0, 1).toUpperCase();
+  const isOwnProfile = Boolean(user && user.id === item.id);
+  const isFollowing = Boolean(followState.data);
+  const actionColumns = profile.data.business && !isOwnProfile ? "grid-cols-[1fr_auto_auto]" : !isOwnProfile ? "grid-cols-[1fr_auto]" : "grid-cols-1";
+
+  const startMessage = () => {
+    if (!user) {
+      startLogin();
+      return;
+    }
+    if (isOwnProfile) return;
+    chatMutations.create.mutate(
+      {
+        kind: "direct",
+        title: displayName,
+        memberIds: [item.id],
+      },
+      {
+        onSuccess: conversationId => {
+          sessionStorage.setItem("savanna-open-conversation", conversationId);
+          sessionStorage.setItem("savanna-open-conversation-meta", JSON.stringify({
+            id: conversationId,
+            kind: "direct",
+            title: displayName,
+            peerUserId: item.id,
+          }));
+          navigate("/messages");
+        },
+        onError: error => toast.error(error.message),
+      },
+    );
+  };
 
   return (
-    <SavannaShell>
-      <div className="mx-auto max-w-[940px] space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <Link href="/home" className="inline-flex items-center gap-1 text-sm font-semibold text-[#9a6410]">
-            <ArrowLeft className="size-4" /> Back to Savanna
-          </Link>
-          <div className="inline-flex rounded-full border border-[#eadfca] bg-white p-1">
-            <span className="inline-flex h-10 items-center gap-2 rounded-full bg-[#D9A441]/20 px-4 text-sm font-semibold text-[#D9A441]">
-              <UserRound className="size-4" /> User
-            </span>
-            {profile.data.business ? (
-              <Link
-                href={`/shops/${profile.data.business.slug}`}
-                className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold text-[#5f6861] hover:bg-[#D9A441]/10 hover:text-[#9a6410]"
-              >
-                <BriefcaseBusiness className="size-4" /> Business
+    <SavannaShell hideMobileHeader hideDesktopHeader>
+      <div className="savanna-public-profile-page mx-auto max-w-[720px] space-y-5 pb-[calc(6rem+env(safe-area-inset-bottom))]">
+        <header className="savanna-public-profile-topbar savanna-glass-header sticky z-30 flex h-12 items-center justify-between rounded-[24px] border border-[#eadfca]/70 px-3 backdrop-blur-xl">
+          <button type="button" onClick={() => window.history.length > 1 ? window.history.back() : navigate("/messages")} className="grid size-9 place-items-center rounded-full text-[#151A17] dark:text-[#E9EDEF]" aria-label="Go back">
+            <ArrowLeft className="size-5" />
+          </button>
+          <p className="min-w-0 truncate text-sm font-semibold text-[#151A17] dark:text-[#E9EDEF]">{firstName}</p>
+          <button type="button" className="grid size-9 place-items-center rounded-full text-[#151A17] dark:text-[#E9EDEF]" aria-label="Profile actions">
+            <MoreVertical className="size-5" />
+          </button>
+        </header>
+
+        <section className="savanna-public-profile-card rounded-[30px] border border-[#eadfca] bg-white p-5 text-center shadow-[0_12px_28px_rgba(94,58,11,0.035)] dark:border-[#26343A] dark:bg-[#111B21]">
+          <span className="mx-auto grid size-24 place-items-center overflow-hidden rounded-full bg-[#D9A441]/20 font-display text-4xl font-semibold text-[#D9A441]">
+            {item.photoURL ? <img src={item.photoURL} alt="" className="size-full object-cover" /> : initial}
+          </span>
+          <h1 className="mt-4 font-display text-4xl font-semibold tracking-[-0.055em] text-[#151A17] dark:text-[#E9EDEF]">{displayName}</h1>
+          {item.username ? <p className="mt-1 text-sm font-semibold text-[#5F6861] dark:text-[#AEBAC1]">@{item.username}</p> : null}
+          {item.city || item.countryCode ? (
+            <p className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-[#5F6861] dark:text-[#AEBAC1]">
+              <MapPin className="size-3.5 text-[#D9A441]" />
+              {[item.city, item.countryCode].filter(Boolean).join(", ")}
+            </p>
+          ) : null}
+          {item.bio ? <p className="mx-auto mt-4 max-w-md text-sm leading-6 text-[#5F6861] dark:text-[#AEBAC1]">{item.bio}</p> : null}
+
+          <div className={cn("mt-6 grid gap-2", actionColumns)}>
+            <Button
+              type="button"
+              disabled={followMutation.isPending || isOwnProfile}
+              onClick={() => followMutation.mutate()}
+              className={cn(
+                "h-12 rounded-xl shadow-none",
+                isFollowing ? "bg-[#D9A441]/20 text-[#D9A441] hover:bg-[#D9A441]/25" : "savanna-brand-token",
+              )}
+            >
+              {followMutation.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : isFollowing ? <UserCheck className="mr-2 size-4" /> : <UserPlus className="mr-2 size-4" />}
+              {isOwnProfile ? "Your profile" : isFollowing ? "Following" : "Follow"}
+            </Button>
+            {!isOwnProfile ? (
+              <button type="button" onClick={startMessage} disabled={chatMutations.create.isPending} aria-label={`Message ${displayName}`} className="grid h-12 w-12 place-items-center rounded-xl bg-[#D9A441]/20 text-[#D9A441] disabled:opacity-60">
+                {chatMutations.create.isPending ? <Loader2 className="size-4 animate-spin" /> : <MobileNavIcon name="Messages" active size={21} />}
+              </button>
+            ) : null}
+            {profile.data.business && !isOwnProfile ? (
+              <Link href={`/shops/${profile.data.business.slug}`} aria-label={`${displayName}'s business page`} className="grid h-12 w-12 place-items-center rounded-xl bg-[#D9A441]/20 text-[#D9A441]">
+                <Store className="size-5" />
               </Link>
             ) : null}
-          </div>
-        </div>
-
-        <section className="overflow-hidden rounded-[30px] border border-[#eadfca] bg-white shadow-[0_14px_34px_rgba(94,58,11,0.04)]">
-          <div className="h-32 bg-[#D9A441]/20" />
-          <div className="px-5 pb-6 sm:px-7">
-            <div className="-mt-12 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-              <div className="flex items-end gap-4">
-                <span className="grid size-24 shrink-0 place-items-center overflow-hidden rounded-[30px] border-4 border-white bg-[#f8edcf] font-display text-4xl font-semibold text-[#D9A441]">
-                      {item.photoURL ? <img src={item.photoURL} alt="" className="h-full w-full object-cover" /> : initial}
-                </span>
-                <div className="pb-1">
-                  <h1 className="font-display text-4xl font-semibold tracking-[-0.055em] text-[#151A17]">{displayName}</h1>
-                  {item.city || item.countryCode ? (
-                    <p className="mt-2 flex items-center gap-2 text-sm text-[#5f6861]">
-                      <MapPin className="size-4 text-[#D9A441]" />
-                      {[item.city, item.countryCode].filter(Boolean).join(", ")}
-                    </p>
-                  ) : null}
-                </div>
-              </div>
-              <SafetyActions targetDomain="profile" targetId={item.id} targetLabel={displayName} blockUserId={item.id} />
-            </div>
-            {item.bio ? <p className="mt-6 max-w-2xl text-sm leading-7 text-[#5f6861]">{item.bio}</p> : null}
           </div>
         </section>
 
         {profile.data.business ? (
-          <Link
-            href={`/shops/${profile.data.business.slug}`}
-            className="group flex flex-col gap-4 rounded-[28px] border border-[#eadfca] bg-white p-5 shadow-[0_12px_28px_rgba(94,58,11,0.035)] sm:flex-row sm:items-center"
-          >
+          <Link href={`/shops/${profile.data.business.slug}`} className="savanna-public-profile-card group flex items-center gap-4 rounded-[24px] border border-[#eadfca] bg-white p-3 shadow-[0_10px_24px_rgba(94,58,11,0.03)] dark:border-[#26343A] dark:bg-[#111B21]">
             {profile.data.business.coverUrl ? (
-              <img src={profile.data.business.coverUrl} alt="" className="h-24 w-full rounded-[22px] object-cover sm:w-40" />
+              <img src={profile.data.business.coverUrl} alt="" className="size-16 rounded-[18px] object-cover" />
             ) : (
-              <span className="grid h-24 w-full place-items-center rounded-[22px] bg-[#D9A441]/20 text-[#D9A441] sm:w-40">
-                <Store className="size-7" />
+              <span className="grid size-16 place-items-center rounded-[18px] bg-[#D9A441]/20 text-[#D9A441]">
+                <BriefcaseBusiness className="size-6" />
               </span>
             )}
-            <span className="min-w-0 flex-1">
-              <span className="block text-xs font-semibold uppercase tracking-[0.16em] text-[#9a6410]">Business Page</span>
-              <span className="mt-1 block font-display text-2xl font-semibold tracking-[-0.045em] text-[#151A17]">{profile.data.business.name}</span>
-              <span className="mt-1 block text-sm text-[#5f6861]">{profile.data.business.category || "Savanna storefront"}</span>
+            <span className="min-w-0 flex-1 text-left">
+              <span className="block text-[11px] font-semibold uppercase tracking-[0.16em] text-[#D9A441]">Business page</span>
+              <span className="mt-1 block truncate text-base font-semibold text-[#151A17] dark:text-[#E9EDEF]">{profile.data.business.name}</span>
+              <span className="mt-0.5 block truncate text-xs text-[#5F6861] dark:text-[#AEBAC1]">{profile.data.business.category || "Savanna storefront"}</span>
             </span>
-            <ArrowRight className="size-5 text-[#D9A441] transition-transform group-hover:translate-x-1" />
           </Link>
         ) : null}
 
-        <section className="rounded-[30px] border border-[#eadfca] bg-white p-5 shadow-[0_12px_28px_rgba(94,58,11,0.035)] sm:p-6">
-          <div className="flex items-end justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#9a6410]">User Stories</p>
-              <h2 className="mt-1 font-display text-3xl font-semibold tracking-[-0.05em] text-[#151A17]">{displayName.split(/\s+/)[0]}'s story room</h2>
-            </div>
-            <span className="hidden rounded-full bg-[#D9A441]/20 px-3 py-1 text-xs font-semibold text-[#D9A441] sm:inline-flex">
-              {stories.length} active
-            </span>
+        <section className="savanna-public-profile-card overflow-hidden rounded-[24px] border border-[#eadfca] bg-white dark:border-[#26343A] dark:bg-[#111B21]">
+          <div className="grid grid-cols-2 border-b border-[#eadfca] dark:border-[#26343A]">
+            <button type="button" className="inline-flex h-12 items-center justify-center gap-2 border-b-2 border-[#D9A441] text-sm font-semibold text-[#D9A441]">
+              <ImageIcon className="size-4" /> Stories
+            </button>
+            <button type="button" className="inline-flex h-12 items-center justify-center gap-2 text-sm font-semibold text-[#8A938D] dark:text-[#AEBAC1]">
+              <Heart className="size-4" /> Memories
+            </button>
           </div>
 
-          {stories.length ? (
-            <div className="mt-5 flex gap-3 overflow-x-auto pb-2">
-              {stories.map((story, index) => (
-                <article
-                  key={story.id}
-                  className="relative flex h-[410px] w-[230px] shrink-0 flex-col justify-between overflow-hidden rounded-[30px] bg-[#151A17] p-4 text-white"
-                >
-                  {story.media?.[0]?.url && story.media[0].type === "image" ? <img src={story.media[0].url} alt="" className="absolute inset-0 h-full w-full object-cover" /> : null}
-                  {story.media?.[0]?.url && story.media[0].type === "video" ? <video src={story.media[0].url} className="absolute inset-0 h-full w-full object-cover" controls playsInline /> : null}
-                  <div className="absolute inset-0 bg-[#D9A441]/20" />
-                  <div className="absolute inset-0 bg-black/20" />
-                  <div className="relative flex items-center justify-between gap-3">
-                    <span className="grid size-10 place-items-center rounded-full bg-white/15 text-sm font-semibold text-[#F8E8C4]">
-                      {story.media?.[0]?.type === "video" ? <Video className="size-4" /> : story.media?.[0]?.type === "image" ? <ImageIcon className="size-4" /> : initial}
-                    </span>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-white/12 px-2.5 py-1 text-[11px] font-semibold text-[#F8E8C4]">
-                      <Play className="size-3 fill-current" /> {formatStoryTime(story.publishedAt)}
-                    </span>
-                  </div>
-                  <div className="relative">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#F8E8C4]">Story {index + 1}</p>
-                    <p className="mt-3 text-2xl font-semibold leading-8">{story.textBody || "A moment shared on Savanna."}</p>
-                  </div>
-                </article>
-              ))}
+          {storyGridItems.length ? (
+            <div className="grid grid-cols-3 gap-1 p-1">
+              {storyGridItems.map((story, index) => <StoryTile key={story.id} story={story} index={index} initial={initial} />)}
             </div>
           ) : (
-            <div className="mt-5 grid min-h-56 place-items-center rounded-[26px] border border-dashed border-[#eadfca] bg-[#fcfbf8] p-6 text-center">
+            <div className="grid min-h-72 place-items-center p-8 text-center">
               <div>
-                <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-[#D9A441]/20 text-[#D9A441]">
-                  <Play className="size-6" />
+                <span className="mx-auto grid size-16 place-items-center rounded-2xl bg-[#D9A441]/20 text-[#D9A441]">
+                  <Play className="size-7" />
                 </span>
-                <p className="mt-4 font-display text-2xl font-semibold tracking-[-0.045em] text-[#151A17]">No public stories yet.</p>
-                <p className="mt-2 max-w-md text-sm leading-6 text-[#5f6861]">When this user shares public stories, they will live here in a vertical story view.</p>
+                <p className="mt-4 font-display text-2xl font-semibold tracking-[-0.045em] text-[#151A17] dark:text-[#E9EDEF]">No public stories yet.</p>
+                <p className="mt-2 max-w-sm text-sm leading-6 text-[#5F6861] dark:text-[#AEBAC1]">When {firstName} shares public stories or memories, they will live here.</p>
               </div>
             </div>
           )}
         </section>
 
-        <section className="rounded-[30px] border border-[#eadfca] bg-white p-5 shadow-[0_12px_28px_rgba(94,58,11,0.035)] sm:p-6">
-          <div className="flex items-end justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#9a6410]">Memories</p>
-              <h2 className="mt-1 font-display text-3xl font-semibold tracking-[-0.05em] text-[#151A17]">Saved moments</h2>
-            </div>
-            <span className="hidden rounded-full bg-[#D9A441]/20 px-3 py-1 text-xs font-semibold text-[#D9A441] sm:inline-flex">
-              {memories.length} saved
-            </span>
-          </div>
-
-          {memories.length ? (
-            <div className="mt-5 flex gap-3 overflow-x-auto pb-2">
-              {memories.map((memory, index) => {
-                const media = memory.media?.[0];
-                const price = memory.productPriceMinor && memory.productCurrencyCode
-                  ? new Intl.NumberFormat(undefined, { style: "currency", currency: memory.productCurrencyCode, maximumFractionDigits: 2 }).format(memory.productPriceMinor / 100)
-                  : null;
-                return (
-                  <article
-                    key={memory.id}
-                    className="relative flex h-[410px] w-[230px] shrink-0 flex-col justify-between overflow-hidden rounded-[30px] bg-[#151A17] p-4 text-white"
-                  >
-                    {media?.url && media.type === "image" ? <img src={media.url} alt="" className="absolute inset-0 h-full w-full object-cover" /> : null}
-                    {media?.url && media.type === "video" ? <video src={media.url} className="absolute inset-0 h-full w-full object-cover" controls playsInline /> : null}
-                    {!media?.url ? <div className="absolute inset-0 bg-[#D9A441]/20" /> : null}
-                    <div className="absolute inset-0 bg-black/25" />
-                    <div className="relative flex items-center justify-between gap-3">
-                      <span className="grid size-10 place-items-center rounded-full bg-white/15 text-sm font-semibold text-[#F8E8C4]">
-                        {media?.type === "video" ? <Video className="size-4" /> : media?.type === "image" ? <ImageIcon className="size-4" /> : initial}
-                      </span>
-                      <span className="inline-flex items-center gap-1 rounded-full bg-white/12 px-2.5 py-1 text-[11px] font-semibold text-[#F8E8C4]">
-                        <Play className="size-3 fill-current" /> {formatStoryTime(memory.publishedAt)}
-                      </span>
-                    </div>
-                    <div className="relative">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#F8E8C4]">Memory {index + 1}</p>
-                      {memory.productName ? <p className="mt-2 text-lg font-semibold leading-6">{memory.productName}</p> : null}
-                      {price ? <p className="mt-1 text-sm font-semibold text-[#F8E8C4]">{price}</p> : null}
-                      <p className="mt-3 text-2xl font-semibold leading-8">{memory.textBody || memory.productDescription || "A saved moment on Savanna."}</p>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="mt-5 grid min-h-44 place-items-center rounded-[26px] border border-dashed border-[#eadfca] bg-white p-6 text-center">
-              <div>
-                <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-[#D9A441]/20 text-[#D9A441]">
-                  <Play className="size-6" />
-                </span>
-                <p className="mt-4 font-display text-2xl font-semibold tracking-[-0.045em] text-[#151A17]">No saved Memories yet.</p>
-                <p className="mt-2 max-w-md text-sm leading-6 text-[#5f6861]">Saved stories will stay here after the 24-hour story window closes.</p>
-              </div>
-            </div>
-          )}
-        </section>
-
-        <div className="flex justify-center">
-          <Link href="/messages">
-            <Button className="savanna-brand-token rounded-xl shadow-none">
+        {!isOwnProfile ? (
+          <div className="flex justify-center">
+            <Button type="button" onClick={startMessage} disabled={chatMutations.create.isPending} className="savanna-brand-token rounded-xl shadow-none">
+              {chatMutations.create.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <MessageCircle className="mr-2 size-4" />}
               Message on Savanna
             </Button>
-          </Link>
-        </div>
+          </div>
+        ) : null}
       </div>
     </SavannaShell>
   );

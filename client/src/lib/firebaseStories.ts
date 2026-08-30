@@ -160,7 +160,7 @@ export async function listFirebaseStories(user?: AppUser | null) {
 
   if (user) {
     queries.push(query(collection(db, "stories"), where("authorUserId", "==", user.id), orderBy("publishedAt", "desc"), limit(60)));
-    queries.push(query(collection(db, "stories"), where("customAudienceUserIds", "array-contains", user.id), orderBy("publishedAt", "desc"), limit(60)));
+    queries.push(query(collection(db, "stories"), where("audience", "==", "custom"), where("customAudienceUserIds", "array-contains", user.id), orderBy("publishedAt", "desc"), limit(60)));
   }
 
   const snapshots = await Promise.all(queries.map(item => getDocs(item)));
@@ -176,7 +176,11 @@ export async function listFirebaseStories(user?: AppUser | null) {
 }
 
 export async function listFirebaseStoriesForAuthor(authorUserId: string, viewer?: AppUser | null) {
-  const snapshot = await getDocs(query(collection(getFirestoreDb(), "stories"), where("authorUserId", "==", authorUserId), orderBy("publishedAt", "desc"), limit(80)));
+  const ownProfile = viewer?.id === authorUserId;
+  const storyQuery = ownProfile
+    ? query(collection(getFirestoreDb(), "stories"), where("authorUserId", "==", authorUserId), orderBy("publishedAt", "desc"), limit(80))
+    : query(collection(getFirestoreDb(), "stories"), where("authorUserId", "==", authorUserId), where("audience", "==", "public"), orderBy("publishedAt", "desc"), limit(80));
+  const snapshot = await getDocs(storyQuery);
   const now = new Date();
   return snapshot.docs
     .map(item => mapStory(item.id, item.data() as StoryDoc, viewer))

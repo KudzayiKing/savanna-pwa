@@ -33,11 +33,22 @@ export function ThemeProvider({
 
   useEffect(() => {
     const root = document.documentElement;
+    const themeColor = theme === "dark" ? "#111B21" : "#FFFFFF";
     if (theme === "dark") {
       root.classList.add("dark");
     } else {
       root.classList.remove("dark");
     }
+
+    let themeMeta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+    if (!themeMeta) {
+      themeMeta = document.createElement("meta");
+      themeMeta.name = "theme-color";
+      document.head.appendChild(themeMeta);
+    }
+    themeMeta.content = themeColor;
+    document.documentElement.style.backgroundColor = themeColor;
+    document.body.style.backgroundColor = themeColor;
 
     if (switchable) {
       localStorage.setItem("theme", theme);
