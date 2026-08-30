@@ -17,7 +17,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { getFirebaseStorage, getFirestoreDb } from "./firebase";
 
 export type FirebaseConversationKind = "direct" | "group" | "merchant_support";
@@ -29,6 +29,8 @@ export type FirebaseConversationListItem = {
   title: string | null;
   mutedUntil: Date | string | null;
   lastMessageAt?: Date | string | null;
+  lastMessageId?: string | null;
+  lastMessageSenderId?: string | null;
   previewMessage?: string;
   previewStatus?: FirebaseMessageStatus;
   /**
@@ -96,6 +98,8 @@ function mapConversation(id: string, data: DocumentData): FirebaseConversationLi
     title: typeof data.title === "string" ? data.title : null,
     mutedUntil: data.mutedUntil ? toDate(data.mutedUntil) : null,
     lastMessageAt: data.lastMessageAt ? toDate(data.lastMessageAt) : null,
+    lastMessageId: typeof data.lastMessageId === "string" ? data.lastMessageId : null,
+    lastMessageSenderId: typeof data.lastMessageSenderId === "string" ? data.lastMessageSenderId : null,
     previewMessage: typeof data.lastMessagePreview === "string" ? data.lastMessagePreview : undefined,
     previewStatus: (data.lastMessageStatus as FirebaseMessageStatus | undefined) ?? undefined,
     memberIds: Array.isArray(data.memberIds) ? data.memberIds.map(String) : [],
@@ -132,6 +136,8 @@ function inboxPayload(input: {
   title: string | null;
   memberIds: string[];
   lastMessageAt: ReturnType<typeof serverTimestamp>;
+  lastMessageId?: string | null;
+  lastMessageSenderId?: string | null;
   lastMessagePreview: string;
   lastMessageStatus?: FirebaseMessageStatus | null;
   storefrontId?: string | null;
@@ -147,6 +153,8 @@ function inboxPayload(input: {
     storefrontSlug: input.storefrontSlug ?? null,
     updatedAt: serverTimestamp(),
     lastMessageAt: input.lastMessageAt,
+    lastMessageId: input.lastMessageId ?? null,
+    lastMessageSenderId: input.lastMessageSenderId ?? null,
     lastMessagePreview: input.lastMessagePreview,
     lastMessageStatus: input.lastMessageStatus ?? null,
   };
@@ -223,6 +231,10 @@ async function markVisibleMessagesRead(conversationId: string, uid: string, docs
   const db = getFirestoreDb();
   const timestamp = serverTimestamp();
   const batch = writeBatch(db);
+  const conversationSnapshot = await getDoc(conversationRef(conversationId));
+  const conversationData = conversationSnapshot.data() as DocumentData | undefined;
+  const conversationMembers = Array.isArray(conversationData?.memberIds) ? conversationData.memberIds.map(String) : [];
+  const latestMessageId = typeof conversationData?.lastMessageId === "string" ? conversationData.lastMessageId : null;
   for (const item of unreadIncoming) {
     const messageRef = doc(db, "conversations", conversationId, "messages", item.id);
     batch.update(messageRef, {
@@ -238,6 +250,59 @@ async function markVisibleMessagesRead(conversationId: string, uid: string, docs
       readAt: timestamp,
       updatedAt: timestamp,
     }, { merge: true });
+  }
+  if (latestMessageId && unreadIncoming.some(item => item.id === latestMessageId) && conversationMembers.length <= 2) {
+    batch.update(conversationRef(conversationId), {
+      lastMessageStatus: "read",
+      updatedAt: timestamp,
+    });
+    for (const memberId of conversationMembers) {
+      batch.update(conversationInboxRef(memberId, conversationId), {
+        lastMessageStatus: "read",
+        updatedAt: timestamp,
+      });
+    }
+  }
+  await batch.commit();
+}
+
+async function markLatestMessageDelivered(conversation: FirebaseConversationListItem, uid: string) {
+  if (!conversation.lastMessageId) return;
+  if (!conversation.memberIds.includes(uid)) return;
+  if (!conversation.lastMessageSenderId || conversation.lastMessageSenderId === uid) return;
+
+  const db = getFirestoreDb();
+  const messageRef = doc(db, "conversations", conversation.id, "messages", conversation.lastMessageId);
+  const snapshot = await getDoc(messageRef);
+  if (!snapshot.exists()) return;
+  const data = snapshot.data();
+  const deliveredTo = Array.isArray(data.deliveredTo) ? data.deliveredTo.map(String) : [];
+  const readBy = Array.isArray(data.readBy) ? data.readBy.map(String) : [];
+  if (deliveredTo.includes(uid) || readBy.includes(uid)) return;
+
+  const timestamp = serverTimestamp();
+  const batch = writeBatch(db);
+  batch.update(messageRef, {
+    deliveredTo: arrayUnion(uid),
+    receiptUpdatedAt: timestamp,
+  });
+  batch.set(doc(messageRef, "receipts", uid), {
+    userId: uid,
+    status: "delivered",
+    deliveredAt: timestamp,
+    updatedAt: timestamp,
+  }, { merge: true });
+  if (conversation.memberIds.length <= 2) {
+    batch.update(conversationRef(conversation.id), {
+      lastMessageStatus: "delivered",
+      updatedAt: timestamp,
+    });
+    for (const memberId of conversation.memberIds) {
+      batch.update(conversationInboxRef(memberId, conversation.id), {
+        lastMessageStatus: "delivered",
+        updatedAt: timestamp,
+      });
+    }
   }
   await batch.commit();
 }
@@ -262,6 +327,8 @@ export async function createFirebaseConversation(input: CreateConversationInput)
     createdAt: timestamp,
     updatedAt: timestamp,
     lastMessageAt: timestamp,
+    lastMessageId: null,
+    lastMessageSenderId: null,
     lastMessagePreview: "",
   };
 
@@ -278,6 +345,8 @@ export async function createFirebaseConversation(input: CreateConversationInput)
       title: input.title ?? null,
       memberIds,
       lastMessageAt: timestamp,
+      lastMessageId: null,
+      lastMessageSenderId: null,
       lastMessagePreview: "",
       storefrontId: input.storefrontId ?? null,
       storefrontSlug: input.storefrontSlug ?? null,
@@ -324,6 +393,8 @@ export async function sendFirebaseMessage(input: {
   batch.update(conversationRef(input.conversationId), {
     updatedAt: timestamp,
     lastMessageAt: timestamp,
+    lastMessageId: messageRef.id,
+    lastMessageSenderId: input.senderId,
     lastMessagePreview: body || "Attachment",
     lastMessageStatus: input.status ?? "sent",
   });
@@ -334,6 +405,8 @@ export async function sendFirebaseMessage(input: {
       title,
       memberIds,
       lastMessageAt: timestamp,
+      lastMessageId: messageRef.id,
+      lastMessageSenderId: input.senderId,
       lastMessagePreview: body || "Attachment",
       lastMessageStatus: input.status ?? "sent",
       storefrontId: typeof conversationData?.storefrontId === "string" ? conversationData.storefrontId : null,
@@ -397,6 +470,8 @@ export async function sendFirebaseAttachment(input: {
   batch.update(conversationRef(input.conversationId), {
     updatedAt: timestamp,
     lastMessageAt: timestamp,
+    lastMessageId: messageRef.id,
+    lastMessageSenderId: input.sender.id,
     lastMessagePreview: input.file.name,
     lastMessageStatus: "sent",
   });
@@ -407,6 +482,8 @@ export async function sendFirebaseAttachment(input: {
       title,
       memberIds,
       lastMessageAt: timestamp,
+      lastMessageId: messageRef.id,
+      lastMessageSenderId: input.sender.id,
       lastMessagePreview: input.file.name,
       lastMessageStatus: "sent",
       storefrontId: typeof conversationData?.storefrontId === "string" ? conversationData.storefrontId : null,
@@ -445,17 +522,28 @@ export function useFirebaseConversations(user?: AppUser | null) {
   const queryClient = useQueryClient();
   const uid = user?.id ?? null;
   const queryKey = chatKeys.conversations(uid);
+  const deliveredKeys = useRef(new Set<string>());
   useEffect(() => {
     if (!uid) return;
     return onSnapshot(
       conversationInboxQuery(uid),
       snapshot => {
+        const nextConversations = snapshot.docs
+          .map(item => mapConversation(item.id, item.data()))
+          .sort((left, right) => new Date(right.lastMessageAt ?? 0).getTime() - new Date(left.lastMessageAt ?? 0).getTime());
         queryClient.setQueryData(
           chatKeys.conversations(uid),
-          snapshot.docs
-            .map(item => mapConversation(item.id, item.data()))
-            .sort((left, right) => new Date(right.lastMessageAt ?? 0).getTime() - new Date(left.lastMessageAt ?? 0).getTime()),
+          nextConversations,
         );
+        for (const conversation of nextConversations) {
+          const deliveryKey = `${conversation.id}:${conversation.lastMessageId ?? ""}:${uid}`;
+          if (!conversation.lastMessageId || deliveredKeys.current.has(deliveryKey)) continue;
+          deliveredKeys.current.add(deliveryKey);
+          void markLatestMessageDelivered(conversation, uid).catch(error => {
+            deliveredKeys.current.delete(deliveryKey);
+            console.error("[Firestore] Failed to mark message delivered", error);
+          });
+        }
       },
       error => {
         console.error("[Firestore] Conversation inbox listener failed", error);

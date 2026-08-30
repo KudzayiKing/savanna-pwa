@@ -459,7 +459,7 @@ describe("Savanna PWA assets", () => {
     expect(styles).toContain("border: 0 !important;");
     expect(messages).toContain("Development preview chat - no real conversation opened");
     expect(messages).toContain('if (status === "read") return <AnimatedCheckCheckIcon className="text-[#22C55E]" size={13} aria-label="Read" />;');
-    expect(messages).toContain('if (status === "delivered") return <AnimatedCheckCheckIcon size={13} aria-label="Delivered" />;');
+    expect(messages).toContain('if (status === "delivered") return <AnimatedCheckCheckIcon className="text-[#AEBAC1]" size={13} aria-label="Delivered" />;');
     expect(messages).toContain('<AnimatedCheckIcon className="text-[#AEBAC1]" size={13} aria-label="Sent" />');
     expect(messages).toContain("parseSavannaInvocation");
     expect(messages).toContain("answerConversationRecall");
@@ -467,9 +467,18 @@ describe("Savanna PWA assets", () => {
     expect(messages).toContain("View source message");
     expect(firebaseChat).toContain("deliveredTo: [input.senderId]");
     expect(firebaseChat).toContain("readBy: [input.senderId]");
+    expect(firebaseChat).toContain("lastMessageId: messageRef.id");
+    expect(firebaseChat).toContain("lastMessageSenderId: input.senderId");
+    expect(firebaseChat).toContain("markLatestMessageDelivered");
     expect(firebaseChat).toContain("markVisibleMessagesRead");
+    expect(firebaseChat).toContain("deliveredKeys.current.add(deliveryKey)");
+    expect(firebaseChat).toContain('lastMessageStatus: "delivered"');
+    expect(firebaseChat).toContain('lastMessageStatus: "read"');
     expect(firebaseChat).toContain('batch.set(doc(messageRef, "receipts", uid)');
+    expect(messages).toContain("if (!selectedConversationId || !conversations.data?.length) return;");
+    expect(messages).not.toContain("if (!selectedConversationId && conversations.data?.[0]) setSelectedConversationId");
     expect(firestoreRules).toContain("'deliveredTo', 'readBy', 'receiptUpdatedAt'");
+    expect(firestoreRules).toContain("'lastMessageId', 'lastMessageSenderId'");
     expect(firestoreRules).toContain("match /receipts/{uid}");
     expect(firestoreRules).toContain("request.resource.data.status in ['delivered', 'read']");
     expect(messages).not.toContain('previewStatus: "failed"');

@@ -706,7 +706,7 @@ button:not(:disabled), a {
   }
 
   .savanna-app [aria-label="Delivered"] {
-    color: #53BDEB !important;
+    color: #AEBAC1 !important;
   }
 }
 
@@ -826,7 +826,7 @@ button:not(:disabled), a {
     color: var(--chat-icon-muted) !important;
   }
 
-  .dark .savanna-app [aria-label="Delivered"] { color: var(--chat-read-blue) !important; }
+  .dark .savanna-app [aria-label="Delivered"] { color: #AEBAC1 !important; }
   .dark .savanna-app [aria-label="Failed"] { color: var(--chat-alert-red) !important; }
 }
 
@@ -1074,7 +1074,7 @@ button:not(:disabled), a {
 }
 
 :root:not(.dark) .savanna-app [aria-label="Delivered"] {
-  color: #53BDEB !important;
+  color: #AEBAC1 !important;
 }
 
 :root:not(.dark) .savanna-app [aria-label="Failed"] {
@@ -1568,7 +1568,7 @@ button:not(:disabled), a {
   }
 
   .dark .savanna-app .savanna-desktop-chat-row svg[aria-label="Delivered"] {
-    color: var(--chat-read-blue) !important;
+    color: #AEBAC1 !important;
   }
 }
 

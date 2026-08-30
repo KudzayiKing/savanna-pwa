@@ -110,6 +110,8 @@ await step("create conversation doc + both inbox rows", async () => {
     createdAt: timestamp,
     updatedAt: timestamp,
     lastMessageAt: timestamp,
+    lastMessageId: null,
+    lastMessageSenderId: null,
     lastMessagePreview: "",
   };
   const batch = writeBatch(db);
@@ -125,6 +127,8 @@ await step("create conversation doc + both inbox rows", async () => {
       storefrontSlug: null,
       updatedAt: timestamp,
       lastMessageAt: timestamp,
+      lastMessageId: null,
+      lastMessageSenderId: null,
       lastMessagePreview: "",
       lastMessageStatus: null,
     }, { merge: true });
@@ -152,6 +156,8 @@ await step("send message batch (message + conversation update + 2 inbox rows)", 
   batch.update(conversationRef(conversationId), {
     updatedAt: timestamp,
     lastMessageAt: timestamp,
+    lastMessageId: firstMessageId,
+    lastMessageSenderId: userA,
     lastMessagePreview: "hello",
     lastMessageStatus: "sent",
   });
@@ -166,6 +172,8 @@ await step("send message batch (message + conversation update + 2 inbox rows)", 
       storefrontSlug: null,
       updatedAt: timestamp,
       lastMessageAt: timestamp,
+      lastMessageId: firstMessageId,
+      lastMessageSenderId: userA,
       lastMessagePreview: "hello",
       lastMessageStatus: "sent",
     }, { merge: true });
@@ -192,6 +200,32 @@ await step("READ messages (array-contains query) as recipient", async () => {
   if (snap.size !== 1) throw new Error(`expected 1 message, got ${snap.size}`);
 });
 
+await step("recipient marks latest incoming message delivered", async () => {
+  const timestamp = serverTimestamp();
+  const batch = writeBatch(db);
+  batch.update(doc(db, "conversations", conversationId, "messages", firstMessageId), {
+    deliveredTo: [userA, userB],
+    receiptUpdatedAt: timestamp,
+  });
+  batch.update(conversationRef(conversationId), {
+    lastMessageStatus: "delivered",
+    updatedAt: timestamp,
+  });
+  for (const uid of memberIds) {
+    batch.update(inboxRef(uid, conversationId), {
+      lastMessageStatus: "delivered",
+      updatedAt: timestamp,
+    });
+  }
+  batch.set(doc(db, "conversations", conversationId, "messages", firstMessageId, "receipts", userB), {
+    userId: userB,
+    status: "delivered",
+    deliveredAt: timestamp,
+    updatedAt: timestamp,
+  }, { merge: true });
+  await batch.commit();
+});
+
 await step("recipient marks incoming message read", async () => {
   const timestamp = serverTimestamp();
   const batch = writeBatch(db);
@@ -201,6 +235,16 @@ await step("recipient marks incoming message read", async () => {
     status: "read",
     receiptUpdatedAt: timestamp,
   });
+  batch.update(conversationRef(conversationId), {
+    lastMessageStatus: "read",
+    updatedAt: timestamp,
+  });
+  for (const uid of memberIds) {
+    batch.update(inboxRef(uid, conversationId), {
+      lastMessageStatus: "read",
+      updatedAt: timestamp,
+    });
+  }
   batch.set(doc(db, "conversations", conversationId, "messages", firstMessageId, "receipts", userB), {
     userId: userB,
     status: "read",

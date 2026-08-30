@@ -105,7 +105,7 @@ function PrivateAttachment({ url, fileName, mimeType }: { url: string | null; fi
 
 function DeliveryIcon({ status }: { status: FirebaseMessageStatus }) {
   if (status === "read") return <AnimatedCheckCheckIcon className="text-[#22C55E]" size={13} aria-label="Read" />;
-  if (status === "delivered") return <AnimatedCheckCheckIcon size={13} aria-label="Delivered" />;
+  if (status === "delivered") return <AnimatedCheckCheckIcon className="text-[#AEBAC1]" size={13} aria-label="Delivered" />;
   if (status === "failed") return <X className="size-3 text-[#FF5B6B]" aria-label="Failed" />;
   return <AnimatedCheckIcon className="text-[#AEBAC1]" size={13} aria-label="Sent" />;
 }
@@ -179,7 +179,8 @@ export default function MessagesPage() {
   const communityMutations = useFirebaseCommunityMutations(user);
 
   useEffect(() => {
-    if (!selectedConversationId && conversations.data?.[0]) setSelectedConversationId(conversations.data[0].id);
+    if (!selectedConversationId || !conversations.data?.length) return;
+    if (!conversations.data.some(conversation => conversation.id === selectedConversationId)) setSelectedConversationId(null);
   }, [conversations.data, selectedConversationId]);
   useEffect(() => {
     if (import.meta.env.DEV && !isMobile && chatPreviewMode === "desktop" && previewConversations[0]) setSelectedConversationId(previewConversations[0].id);

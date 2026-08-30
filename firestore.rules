@@ -59,7 +59,8 @@ service cloud.firestore {
       return request.resource.data.keys().hasOnly([
           'kind', 'title', 'memberIds', 'directKey', 'storefrontId',
           'storefrontSlug', 'createdAt', 'updatedAt', 'lastMessageAt',
-          'lastMessagePreview', 'lastMessageStatus', 'mutedUntil'
+          'lastMessageId', 'lastMessageSenderId', 'lastMessagePreview',
+          'lastMessageStatus', 'mutedUntil'
         ])
         && request.resource.data.kind in ['direct', 'group', 'merchant_support']
         && request.resource.data.memberIds is list
@@ -132,7 +133,8 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly([
             'conversationId', 'kind', 'title', 'memberIds', 'mutedUntil',
             'storefrontId', 'storefrontSlug', 'updatedAt', 'lastMessageAt',
-            'lastMessagePreview', 'lastMessageStatus'
+            'lastMessageId', 'lastMessageSenderId', 'lastMessagePreview',
+            'lastMessageStatus'
           ]);
 
         allow delete: if false;
