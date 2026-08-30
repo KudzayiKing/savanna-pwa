@@ -16,7 +16,7 @@ const navigation = [
   { href: "/messages", label: "Messages" },
   { href: "/shops", label: "Shops" },
   { href: "/stories", label: "Stories" },
-  { href: "/profile", label: "Profile" },
+  { href: "/communities", label: "Communities" },
 ];
 
 const mobileNavigation = navigation;
@@ -38,7 +38,7 @@ export function SavannaShell({ children, context, hideChrome = false, hideMobile
   const [location] = useLocation();
   const { isAuthenticated, user } = useAuth();
   const isMessagesWorkspace = location === "/messages";
-  const usesIconRail = ["/messages", "/shops", "/stories", "/orders", "/profile"].includes(location);
+  const usesIconRail = ["/messages", "/shops", "/stories", "/communities", "/orders", "/profile"].includes(location);
   const profileAvatarUrl = user?.photoURL ?? null;
 
   return (

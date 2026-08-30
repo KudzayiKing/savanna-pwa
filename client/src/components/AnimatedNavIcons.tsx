@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 import { LazyMotion, domMin, m, motion, type Variants, useAnimation, useAnimationControls, useReducedMotion } from "framer-motion";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type HTMLAttributes, type MouseEvent } from "react";
 
-export type MobileNavIconName = "Home" | "Messages" | "Shops" | "Learn" | "Stories" | "Orders" | "Profile";
+export type MobileNavIconName = "Home" | "Messages" | "Shops" | "Learn" | "Stories" | "Communities" | "Orders" | "Profile";
 
 type AnimatedIconProps = {
   size?: number;
@@ -621,6 +621,41 @@ export function MobileNavIcon({ name, active, size = 22 }: MobileNavIconProps) {
               transition={{ duration: 0.72, delay: index * 0.035, ease: "easeInOut", times: [0, 0.22, 0.45, 0.68, 1] }}
             />
           ))}
+        </motion.g>
+      </motion.svg>
+    );
+  }
+
+  if (name === "Communities") {
+    const frontBubbleVariants: Variants = {
+      idle: { x: 0, opacity: 1 },
+      active: { x: [-5, 0], opacity: [0.45, 1] },
+    };
+    const backBubbleVariants: Variants = {
+      idle: { x: 0, opacity: 1 },
+      active: { x: [5, 0], opacity: [0.45, 1] },
+    };
+
+    return (
+      <motion.svg
+        aria-hidden="true"
+        data-active={active}
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{ overflow: "visible" }}
+        {...iconInteraction}
+      >
+        <motion.g initial="idle" animate={state} variants={backBubbleVariants} transition={{ duration: 0.44, ease: [0.23, 1, 0.32, 1] }}>
+          <path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1" />
+        </motion.g>
+        <motion.g initial="idle" animate={state} variants={frontBubbleVariants} transition={{ duration: 0.44, ease: [0.23, 1, 0.32, 1] }}>
+          <path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z" />
         </motion.g>
       </motion.svg>
     );

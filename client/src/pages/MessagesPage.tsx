@@ -1,6 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { AnimatedCheckCheckIcon, AnimatedPlusIcon, AnimatedSearchIcon, AnimatedSendIcon, MobileNavIcon } from "@/components/AnimatedNavIcons";
 import { MicIcon, type ChatIconHandle } from "@/components/AnimatedChatIcons";
+import { CommunityVisibilitySelect } from "@/components/CommunityVisibilitySelect";
 import { ConversationHeader } from "@/components/ConversationHeader";
 import { SafetyActions } from "@/components/SafetyActions";
 import { SavannaShell } from "@/components/SavannaShell";
@@ -20,6 +21,7 @@ import {
   type FirebaseConversationListItem,
   type FirebaseMessageStatus,
 } from "@/lib/firebaseChat";
+import { useFirebaseCommunityMutations, type FirebaseCommunityVisibility } from "@/lib/firebaseCommunities";
 import { useFirebaseStories } from "@/lib/firebaseStories";
 import { isSameUser, normalizeUsername, searchUserProfilesByUsername, type AppUser } from "@/lib/userProfile";
 import { cn } from "@/lib/utils";
@@ -32,6 +34,7 @@ import { useLocation } from "wouter";
 const allowedMimeTypes = ["image/jpeg", "image/png", "image/webp", "application/pdf", "audio/mpeg", "video/mp4"];
 
 type ConversationListItem = FirebaseConversationListItem;
+type CreationMode = FirebaseConversationKind | "community";
 
 const previewConversations: ConversationListItem[] = [];
 const desktopPreviewMessages: never[] = [];
@@ -43,6 +46,15 @@ type PresenceSnapshot = {
   typing: boolean;
   groupActivityCount: number;
 };
+
+function initialCommunityForm() {
+  return {
+    name: "",
+    description: "",
+    city: "",
+    visibility: "public" as FirebaseCommunityVisibility,
+  };
+}
 
 function conversationTitle(conversation: Pick<ConversationListItem, "kind" | "title">) {
   return conversation.title || (conversation.kind === "group" ? "Group chat" : "Private chat");
@@ -131,7 +143,6 @@ export default function MessagesPage() {
   const chatMutations = useFirebaseChatMutations(user);
   const [draft, setDraft] = useState("");
   const [attachment, setAttachment] = useState<File | null>(null);
-  const [creationMode, setCreationMode] = useState<FirebaseConversationKind>("direct");
   const [memberIds, setMemberIds] = useState("");
   const [groupTitle, setGroupTitle] = useState("");
   const [conversationSearch, setConversationSearch] = useState("");
@@ -144,6 +155,8 @@ export default function MessagesPage() {
   const [mobileDetail, setMobileDetail] = useState(chatPreviewMode === "detail");
   const detailHistoryPushed = useRef(false);
   const [newChatOpen, setNewChatOpen] = useState(chatPreviewMode === "drawer");
+  const [creationMode, setCreationMode] = useState<CreationMode>("direct");
+  const [communityForm, setCommunityForm] = useState(initialCommunityForm);
   const [customTabs, setCustomTabs] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem("savanna-message-tabs") ?? "[]"); } catch { return []; }
   });
@@ -159,6 +172,7 @@ export default function MessagesPage() {
     queryFn: () => searchUserProfilesByUsername(conversationSearch, user),
     enabled: Boolean(user && isUsernameSearch),
   });
+  const communityMutations = useFirebaseCommunityMutations(user);
 
   useEffect(() => {
     if (!selectedConversationId && conversations.data?.[0]) setSelectedConversationId(conversations.data[0].id);
@@ -295,7 +309,27 @@ export default function MessagesPage() {
 
   const handleCreate = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!user) return toast.error("Sign in to create a chat");
+    if (!user) return toast.error(creationMode === "community" ? "Sign in to create a community" : "Sign in to create a chat");
+    if (creationMode === "community") {
+      communityMutations.create.mutate(
+        {
+          name: communityForm.name,
+          description: communityForm.description,
+          city: communityForm.city,
+          visibility: communityForm.visibility,
+        },
+        {
+          onSuccess: () => {
+            setCommunityForm(initialCommunityForm());
+            setNewChatOpen(false);
+            navigate("/communities");
+            toast.success("Community created");
+          },
+          onError: error => toast.error(error.message),
+        },
+      );
+      return;
+    }
     const parsedMembers = memberIds.split(",").map(value => value.trim()).filter(Boolean);
     if (!parsedMembers.length) return toast.error("Enter at least one valid Savanna user ID");
     if (creationMode === "group" && !groupTitle.trim()) return toast.error("Give the group a short name");
@@ -506,18 +540,38 @@ export default function MessagesPage() {
     <Drawer open={newChatOpen} onOpenChange={setNewChatOpen}>
       <DrawerContent className="savanna-new-chat-drawer rounded-t-[28px] border-[#ead2a4] bg-[#fffaf0] dark:border-[#5b4833] dark:bg-[#21180f]">
         <DrawerHeader className="text-left">
-          <DrawerTitle className="font-display text-2xl text-[#3d2d1a] dark:text-[#fff8ed]">New chat</DrawerTitle>
-          <DrawerDescription>Start a private direct or group conversation.</DrawerDescription>
+          <DrawerTitle className="font-display text-2xl text-[#3d2d1a] dark:text-[#fff8ed]">Create</DrawerTitle>
+          <DrawerDescription>Start a private chat, group conversation, or community.</DrawerDescription>
         </DrawerHeader>
         <form className="space-y-3 px-4" onSubmit={handleCreate}>
           <div className="savanna-new-chat-tabs flex rounded-xl bg-[#f5e4bf] p-1">
             <button type="button" data-active={creationMode === "direct"} onClick={() => setCreationMode("direct")} className={`flex-1 rounded-lg py-2 text-xs font-semibold ${creationMode === "direct" ? "bg-white text-[#7b4a0d] shadow-sm" : "text-[#7b4a0d]"}`}>Chat</button>
             <button type="button" data-active={creationMode === "group"} onClick={() => setCreationMode("group")} className={`flex-1 rounded-lg py-2 text-xs font-semibold ${creationMode === "group" ? "bg-white text-[#7b4a0d] shadow-sm" : "text-[#7b4a0d]"}`}>Group</button>
+            <button type="button" data-active={creationMode === "community"} onClick={() => setCreationMode("community")} className={`flex-1 rounded-lg py-2 text-xs font-semibold ${creationMode === "community" ? "bg-white text-[#7b4a0d] shadow-sm" : "text-[#7b4a0d]"}`}>Community</button>
           </div>
-          {creationMode === "group" ? <Input value={groupTitle} onChange={event => setGroupTitle(event.target.value)} placeholder="Group name" className="savanna-new-chat-input bg-white dark:bg-[#2a2119]" /> : null}
-          <Input value={memberIds} onChange={event => setMemberIds(event.target.value)} placeholder={creationMode === "group" ? "User IDs, comma-separated" : "Savanna user ID"} aria-label="Savanna user ID" className="savanna-new-chat-input bg-white dark:bg-[#2a2119]" />
+          {creationMode === "community" ? (
+            <>
+              <Input value={communityForm.name} onChange={event => setCommunityForm(current => ({ ...current, name: event.target.value }))} placeholder="Community name" className="savanna-new-chat-input bg-white dark:bg-[#2a2119]" />
+              <Input value={communityForm.city} onChange={event => setCommunityForm(current => ({ ...current, city: event.target.value }))} placeholder="City or area" className="savanna-new-chat-input bg-white dark:bg-[#2a2119]" />
+              <textarea
+                value={communityForm.description}
+                onChange={event => setCommunityForm(current => ({ ...current, description: event.target.value }))}
+                placeholder="What is this community for?"
+                className="savanna-new-chat-input min-h-20 w-full resize-none rounded-xl border border-[#ead2a4] bg-white px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[#D9A441]/35 dark:bg-[#2a2119]"
+              />
+              <CommunityVisibilitySelect value={communityForm.visibility} onChange={visibility => setCommunityForm(current => ({ ...current, visibility }))} />
+            </>
+          ) : (
+            <>
+              {creationMode === "group" ? <Input value={groupTitle} onChange={event => setGroupTitle(event.target.value)} placeholder="Group name" className="savanna-new-chat-input bg-white dark:bg-[#2a2119]" /> : null}
+              <Input value={memberIds} onChange={event => setMemberIds(event.target.value)} placeholder={creationMode === "group" ? "User IDs, comma-separated" : "Savanna user ID"} aria-label="Savanna user ID" className="savanna-new-chat-input bg-white dark:bg-[#2a2119]" />
+            </>
+          )}
           <DrawerFooter className="px-0">
-            <Button type="submit" disabled={chatMutations.create.isPending} className="savanna-brand-token rounded-xl">{chatMutations.create.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <AnimatedPlusIcon className="mr-2 size-4" />}Create chat</Button>
+            <Button type="submit" disabled={chatMutations.create.isPending || communityMutations.create.isPending} className="savanna-brand-token rounded-xl">
+              {chatMutations.create.isPending || communityMutations.create.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <AnimatedPlusIcon className="mr-2 size-4" />}
+              {creationMode === "community" ? "Create community" : "Create chat"}
+            </Button>
           </DrawerFooter>
         </form>
       </DrawerContent>

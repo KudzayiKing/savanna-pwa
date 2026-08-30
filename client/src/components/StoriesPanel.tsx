@@ -1,5 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
-import { AnimatedPlusIcon, AnimatedSearchIcon } from "@/components/AnimatedNavIcons";
+import { AnimatedPlusIcon, UserIcon } from "@/components/AnimatedNavIcons";
 import { SafetyActions } from "@/components/SafetyActions";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -372,7 +372,6 @@ export function MobileStoriesHeader() {
   const [composing, setComposing] = useState(false);
   const [activeGroupIndex, setActiveGroupIndex] = useState<number | null>(null);
   const [activeStoryIndex, setActiveStoryIndex] = useState(0);
-  const [searchPulse, setSearchPulse] = useState(0);
   const storyPreviewParams = new URLSearchParams(window.location.search);
   const previewCompact = import.meta.env.DEV && storyPreviewParams.get("stories") === "compact";
   const previewStoriesEnabled = import.meta.env.DEV && !followingStories.length;
@@ -453,9 +452,9 @@ export function MobileStoriesHeader() {
           {collapsedStoriesCluster}
           <Link href="/" aria-label="Savanna messages" className="flex shrink-0 items-center whitespace-nowrap text-[26px] leading-none"><span className="savanna-wordmark">Savanna</span></Link>
         </div>
-        <div className="flex shrink-0 items-center">
-          <Button variant="ghost" size="icon" onPointerDown={() => setSearchPulse(current => current + 1)} aria-label="Search Savanna" className="size-11 rounded-full"><AnimatedSearchIcon className="size-5" size={20} pulse={searchPulse} /></Button>
-        </div>
+        <Link href={isAuthenticated ? "/profile" : "/login"} aria-label="Open profile" className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-full text-[#151A17] dark:text-[#E9EDEF]">
+          {ownStoryAvatarUrl ? <img src={ownStoryAvatarUrl} alt="" className="size-8 rounded-full object-cover" /> : <UserIcon size={22} />}
+        </Link>
       </div>
       <section
         aria-label="Stories"

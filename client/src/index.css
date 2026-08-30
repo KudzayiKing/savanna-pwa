@@ -2495,6 +2495,20 @@ button:not(:disabled), a {
   background: var(--chat-bg) !important;
 }
 
+.savanna-app .savanna-route-communities .savanna-community-card {
+  box-shadow: 0 12px 28px rgba(21, 26, 23, 0.04);
+}
+
+.dark .savanna-app .savanna-route-communities {
+  color: var(--chat-text) !important;
+}
+
+.dark .savanna-app .savanna-route-communities .savanna-community-card {
+  background: var(--chat-surface) !important;
+  border-color: var(--chat-border) !important;
+  box-shadow: none !important;
+}
+
 .savanna-app :is([class~="bg-[#24482f]"], [class~="bg-[#31583a]"], [class~="bg-[#1b3b25]"])[class~="text-white"] {
   color: #151A17 !important;
 }

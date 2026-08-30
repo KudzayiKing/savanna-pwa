@@ -42,6 +42,19 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/conversations/$(conversationId));
     }
 
+    function communityPath(communityId) {
+      return /databases/$(database)/documents/communities/$(communityId);
+    }
+
+    function communityMemberPath(communityId, uid) {
+      return /databases/$(database)/documents/communities/$(communityId)/members/$(uid);
+    }
+
+    function isCommunityMember(communityId) {
+      return signedIn()
+        && exists(communityMemberPath(communityId, request.auth.uid));
+    }
+
     function validConversationCreate() {
       return request.resource.data.keys().hasOnly([
           'kind', 'title', 'memberIds', 'directKey', 'storefrontId',
@@ -256,6 +269,72 @@ service cloud.firestore {
       allow read: if signedIn();
       allow write: if isSelf(uid)
         && request.resource.data.keys().hasOnly(['uid', 'state', 'lastChanged']);
+    }
+
+    // --- Communities ------------------------------------------------------
+
+    match /communities/{communityId} {
+      allow read: if resource.data.visibility == 'public'
+        || isCommunityMember(communityId);
+
+      allow create: if signedIn()
+        && request.resource.data.ownerUserId == request.auth.uid
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 3
+        && request.resource.data.visibility in ['public', 'private']
+        && request.resource.data.memberCount == 1
+        && request.resource.data.keys().hasOnly([
+          'ownerUserId', 'name', 'slug', 'description', 'city', 'countryCode',
+          'visibility', 'memberCount', 'linkedStorefrontIds', 'createdAt',
+          'updatedAt'
+        ]);
+
+      allow update: if signedIn()
+        && (
+          (
+            resource.data.ownerUserId == request.auth.uid
+            && request.resource.data.ownerUserId == request.auth.uid
+            && request.resource.data.keys().hasOnly([
+              'ownerUserId', 'name', 'slug', 'description', 'city',
+              'countryCode', 'visibility', 'memberCount', 'linkedStorefrontIds',
+              'createdAt', 'updatedAt'
+            ])
+          )
+          || (
+            resource.data.visibility == 'public'
+            && !exists(communityMemberPath(communityId, request.auth.uid))
+            && existsAfter(communityMemberPath(communityId, request.auth.uid))
+            && request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['memberCount', 'updatedAt'])
+            && request.resource.data.memberCount == resource.data.memberCount + 1
+          )
+        );
+
+      allow delete: if false;
+
+      match /members/{uid} {
+        allow read: if get(communityPath(communityId)).data.visibility == 'public'
+          || isCommunityMember(communityId);
+
+        allow create: if isSelf(uid)
+          && request.resource.data.userId == uid
+          && request.resource.data.role in ['owner', 'moderator', 'member']
+          && request.resource.data.keys().hasOnly([
+            'userId', 'role', 'displayName', 'photoURL', 'joinedAt'
+          ])
+          && (
+            (
+              getAfter(communityPath(communityId)).data.ownerUserId == uid
+              && request.resource.data.role == 'owner'
+            )
+            || (
+              get(communityPath(communityId)).data.visibility == 'public'
+              && request.resource.data.role == 'member'
+            )
+          );
+
+        allow update, delete: if false;
+      }
     }
 
     // --- Stories and Memories --------------------------------------------

@@ -276,10 +276,12 @@ describe("Savanna PWA assets", () => {
       learn,
       orders,
       storiesPage,
+      communitiesPage,
       app,
       firebaseStories,
       firebaseShops,
       firebaseChat,
+      firebaseCommunities,
       firestoreRules,
       storageRules,
       firestoreIndexes,
@@ -294,10 +296,12 @@ describe("Savanna PWA assets", () => {
       readFile(resolve(projectRoot, "client/src/pages/LearnPage.tsx"), "utf8"),
       readFile(resolve(projectRoot, "client/src/pages/OrdersPage.tsx"), "utf8"),
       readFile(resolve(projectRoot, "client/src/pages/StoriesPage.tsx"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/pages/CommunitiesPage.tsx"), "utf8"),
       readFile(resolve(projectRoot, "client/src/App.tsx"), "utf8"),
       readFile(resolve(projectRoot, "client/src/lib/firebaseStories.ts"), "utf8"),
       readFile(resolve(projectRoot, "client/src/lib/firebaseShops.ts"), "utf8"),
       readFile(resolve(projectRoot, "client/src/lib/firebaseChat.ts"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/lib/firebaseCommunities.ts"), "utf8"),
       readFile(resolve(projectRoot, "firestore.rules"), "utf8"),
       readFile(resolve(projectRoot, "storage.rules"), "utf8"),
       readFile(resolve(projectRoot, "firestore.indexes.json"), "utf8"),
@@ -308,7 +312,8 @@ describe("Savanna PWA assets", () => {
     expect(shell).toContain("navigation.map((item) =>");
     expect(shell).toContain("mobileNavigation.map((item) =>");
     expect(shell).toContain('{ href: "/stories", label: "Stories" }');
-    expect(shell).toContain('{ href: "/profile", label: "Profile" }');
+    expect(shell).toContain('{ href: "/communities", label: "Communities" }');
+    expect(shell).not.toContain('{ href: "/profile", label: "Profile" }');
     expect(shell).not.toContain('{ href: "/orders", label: "Orders" }');
     expect(shell).toContain('import { AnimatedPlusIcon, MobileNavIcon, type MobileNavIconName } from "@/components/AnimatedNavIcons";');
     expect(shell).toContain('<MobileNavIcon name={item.label as MobileNavIconName} active={active} size={22} />');
@@ -348,13 +353,15 @@ describe("Savanna PWA assets", () => {
     expect(styles).toContain("backdrop-filter: saturate(180%) blur(24px);");
     expect(styles).not.toContain("inset 0 1px 0 rgba(255, 255, 255, 0.66)");
     expect(stories).toContain("savanna-mobile-header-spacer lg:hidden");
-    expect(stories).not.toContain('href="/profile" aria-label="Open profile"');
+    expect(stories).toContain('href={isAuthenticated ? "/profile" : "/login"}');
+    expect(stories).toContain('aria-label="Open profile"');
     expect(stories).toContain("{ownStoryAvatarUrl ? <img src={ownStoryAvatarUrl}");
     expect(stories).not.toContain("<UserIcon size={21} />");
     expect(stories).not.toContain('const [menuPulse, setMenuPulse] = useState(0);');
-    expect(stories).toContain('const [searchPulse, setSearchPulse] = useState(0);');
+    expect(stories).not.toContain('const [searchPulse, setSearchPulse] = useState(0);');
     expect(stories).not.toContain('onPointerDown={() => setMenuPulse(current => current + 1)}');
     expect(stories).not.toContain('AnimatedMenuIcon className="size-5" size={20} pulse={menuPulse}');
+    expect(stories).not.toContain('AnimatedSearchIcon className="size-5" size={20} pulse={searchPulse}');
     expect(stories).not.toContain('aria-label="Notifications"');
     expect(stories).not.toContain('Switch to ${theme');
     expect(stories).toContain("flex shrink-0 flex-col items-center gap-1");
@@ -375,13 +382,29 @@ describe("Savanna PWA assets", () => {
     expect(stories).toContain("aria-label={`Story ${(index ?? 0) + 1} of ${total}`}");
     expect(stories).toContain("Share a Story");
     expect(stories).not.toContain("from the desktop panel for now");
-    expect(animatedIcons).toContain('MobileNavIconName = "Home" | "Messages" | "Shops" | "Learn" | "Stories" | "Orders" | "Profile"');
+    expect(animatedIcons).toContain('MobileNavIconName = "Home" | "Messages" | "Shops" | "Learn" | "Stories" | "Communities" | "Orders" | "Profile"');
     expect(animatedIcons).toContain('if (name === "Stories")');
+    expect(animatedIcons).toContain('if (name === "Communities")');
+    expect(animatedIcons).toContain("frontBubbleVariants");
+    expect(animatedIcons).toContain("backBubbleVariants");
+    expect(animatedIcons).toContain('d="M14 9a2 2 0 0 1-2 2H6l-4 4V4');
     expect(animatedIcons).toContain("const movingLineVariants: Variants");
     expect(animatedIcons).toContain('y: [0, -4.5, 0, -4.5, 0]');
     expect(animatedIcons).toContain("variants={movingLineVariants}");
     expect(app).toContain('const StoriesPage = lazy(() => import("./pages/StoriesPage"));');
+    expect(app).toContain('const CommunitiesPage = lazy(() => import("./pages/CommunitiesPage"));');
     expect(app).toContain('<Route path="/stories" component={StoriesPage} />');
+    expect(app).toContain('<Route path="/communities" component={CommunitiesPage} />');
+    expect(communitiesPage).toContain("savanna-route-communities");
+    expect(communitiesPage).toContain('MobileNavIcon name="Communities" active size={16}');
+    expect(communitiesPage).toContain("useFirebaseCommunities");
+    expect(communitiesPage).toContain("useFirebaseCommunityMutations");
+    expect(communitiesPage).toContain("Create community");
+    expect(communitiesPage).toContain("Joined community");
+    expect(communitiesPage).toContain("Groups");
+    expect(communitiesPage).toContain("Channels");
+    expect(communitiesPage).toContain("Shops");
+    expect(communitiesPage).toContain("Automation");
     expect(storiesPage).toContain('type StoryDiscoveryTab = "for_you" | "near_you" | "following" | "shops" | "community";');
     expect(storiesPage).toContain("buildStoriesFeedItems");
     expect(storiesPage).toContain("StoryAdContext");
@@ -405,6 +428,16 @@ describe("Savanna PWA assets", () => {
     expect(messages).toContain("savanna-message-tab-membership");
     expect(messages).toContain("setMobileDetail(true)");
     expect(messages).toContain("DrawerContent");
+    expect(messages).toContain('type CreationMode = FirebaseConversationKind | "community";');
+    expect(messages).toContain('useFirebaseCommunityMutations(user)');
+    expect(messages).toContain('data-active={creationMode === "community"}');
+    expect(messages).toContain('"Create community"');
+    expect(firebaseCommunities).toContain('collection(db, "communities")');
+    expect(firebaseCommunities).toContain("createFirebaseCommunity");
+    expect(firebaseCommunities).toContain("joinFirebaseCommunity");
+    expect(firestoreRules).toContain("match /communities/{communityId}");
+    expect(firestoreRules).toContain("match /members/{uid}");
+    expect(firestoreIndexes).toContain('"collectionGroup": "communities"');
     expect(messages).not.toContain('id="savanna-new-chat"');
     expect(messages).toContain("bottom-[calc(5.5rem+env(safe-area-inset-bottom))]");
     expect(messages).toContain('mx-2 mt-2 flex h-11 items-center gap-2 rounded-2xl');
@@ -435,8 +468,10 @@ describe("Savanna PWA assets", () => {
     expect(messages).toContain('AnimatedPlusIcon size={16}');
     expect(messages).toContain('AnimatedPlusIcon size={20}');
     expect(messages).toContain('text-[#5f6861] dark:text-[#9AA1A6]');
-    expect(stories).toContain('onPointerDown={() => setSearchPulse(current => current + 1)}');
-    expect(stories).toContain('AnimatedSearchIcon className="size-5" size={20} pulse={searchPulse}');
+    expect(stories).toContain('aria-label="Open profile"');
+    expect(stories).toContain("<UserIcon size={22} />");
+    expect(stories).not.toContain('onPointerDown={() => setSearchPulse(current => current + 1)}');
+    expect(stories).not.toContain('AnimatedSearchIcon className="size-5" size={20} pulse={searchPulse}');
     expect(animatedIcons).toContain("export function AnimatedCheckCheckIcon");
     expect(animatedIcons).toContain("export function AnimatedPlusIcon");
     expect(animatedIcons).toContain("export function AnimatedSearchIcon");

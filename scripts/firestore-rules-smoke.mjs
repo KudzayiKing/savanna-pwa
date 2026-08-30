@@ -85,6 +85,8 @@ results.push(`userA=${userA}\nuserB=${userB}`);
 
 const conversationRef = id => doc(db, "conversations", id);
 const inboxRef = (uid, id) => doc(db, "users", uid, "conversationRefs", id);
+const communityRef = id => doc(db, "communities", id);
+const communityMemberRef = (communityId, uid) => doc(db, "communities", communityId, "members", uid);
 
 // Mirrors messagesQuery() in client/src/lib/firebaseChat.ts
 const messagesQuery = (conversationId, uid) =>
@@ -193,7 +195,64 @@ await step("READ conversation doc as recipient", () => getDoc(conversationRef(co
 await step("READ own inbox list as recipient", () =>
   getDocs(query(collection(db, "users", userB, "conversationRefs"), orderBy("lastMessageAt", "desc"), limit(80))));
 
-// --- 4. a user who is NOT a member must be denied --------------------------
+// --- 4. communities can be created, listed, and joined ---------------------
+await signOut(auth);
+await signInWithEmailAndPassword(auth, "a@savanna.test", PASSWORD);
+
+const communityId = "harare-builders";
+
+await step("create public community doc + owner member row", async () => {
+  const timestamp = serverTimestamp();
+  const batch = writeBatch(db);
+  batch.set(communityRef(communityId), {
+    ownerUserId: userA,
+    name: "Harare Builders",
+    slug: "harare-builders",
+    description: "A community for builders testing Savanna.",
+    city: "Harare",
+    countryCode: "ZW",
+    visibility: "public",
+    memberCount: 1,
+    linkedStorefrontIds: [],
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  });
+  batch.set(communityMemberRef(communityId, userA), {
+    userId: userA,
+    role: "owner",
+    displayName: "User A",
+    photoURL: null,
+    joinedAt: timestamp,
+  });
+  await batch.commit();
+});
+
+await step("list public communities", async () => {
+  const snap = await getDocs(query(collection(db, "communities"), where("visibility", "==", "public"), orderBy("updatedAt", "desc"), limit(80)));
+  if (snap.size !== 1) throw new Error(`expected 1 community, got ${snap.size}`);
+});
+
+await signOut(auth);
+await signInWithEmailAndPassword(auth, "b@savanna.test", PASSWORD);
+
+await step("join public community (member row + count increment)", async () => {
+  const timestamp = serverTimestamp();
+  const batch = writeBatch(db);
+  batch.set(communityMemberRef(communityId, userB), {
+    userId: userB,
+    role: "member",
+    displayName: "User B",
+    photoURL: null,
+    joinedAt: timestamp,
+  });
+  batch.update(communityRef(communityId), {
+    memberCount: 2,
+    updatedAt: timestamp,
+  });
+  await batch.commit();
+});
+
+// --- 5. a user who is NOT a member must be denied --------------------------
 // A non-member's array-contains query returns zero rows and is allowed — the
 // filter itself excludes them, so that result proves nothing about the rules.
 // Direct reads by document id bypass the filter entirely, which is what makes
