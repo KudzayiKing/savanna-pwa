@@ -667,11 +667,11 @@ export default function MessagesPage() {
           </label>
           {renderUsernameResults("mobile")}
           <div className="story-rail mt-4 flex gap-2 overflow-x-auto px-3 pb-1" role="tablist" aria-label="Chat filters">
-            {filterTabs.map(([value, label]) => <button key={value} role="tab" aria-selected={chatFilter === value} onClick={() => setChatFilter(value)} className={`shrink-0 rounded-full px-3 py-2 text-xs font-semibold ${chatFilter === value ? "bg-[#e3a43c] text-[#3a260e]" : "bg-[#f4f0e8] text-[#715d43] dark:bg-[#2b2118] dark:text-[#dac7a9]"}`}>{label}</button>)}
-            {customTabs.map(tab => <button key={tab} role="tab" aria-selected={chatFilter === tab} onClick={() => setChatFilter(tab)} className={`shrink-0 rounded-full px-3 py-2 text-xs font-semibold ${chatFilter === tab ? "bg-[#e3a43c] text-[#3a260e]" : "bg-[#f4f0e8] text-[#715d43] dark:bg-[#2b2118] dark:text-[#dac7a9]"}`}>{tab}</button>)}
+            {filterTabs.map(([value, label]) => <button key={value} role="tab" aria-selected={chatFilter === value} onClick={() => setChatFilter(value)} className={`shrink-0 rounded-full px-3 py-2 text-xs font-semibold ${chatFilter === value ? "bg-[#e3a43c] text-[#3a260e] dark:bg-[#23282C] dark:text-[#D9A441]" : "bg-[#f4f0e8] text-[#715d43] dark:bg-[#2b2118] dark:text-[#dac7a9]"}`}>{label}</button>)}
+            {customTabs.map(tab => <button key={tab} role="tab" aria-selected={chatFilter === tab} onClick={() => setChatFilter(tab)} className={`shrink-0 rounded-full px-3 py-2 text-xs font-semibold ${chatFilter === tab ? "bg-[#e3a43c] text-[#3a260e] dark:bg-[#23282C] dark:text-[#D9A441]" : "bg-[#f4f0e8] text-[#715d43] dark:bg-[#2b2118] dark:text-[#dac7a9]"}`}>{tab}</button>)}
             <button onClick={addCustomTab} className="savanna-brand-token grid size-8 shrink-0 place-items-center rounded-full" aria-label="Create a chat tab"><AnimatedPlusIcon size={16} /></button>
           </div>
-          <div className="mt-3 divide-y-0 px-0">
+          <div className="savanna-mobile-chat-rows mt-3 divide-y-0 px-2">
             {conversations.isLoading ? <div className="grid min-h-48 place-items-center"><Loader2 className="size-5 animate-spin text-[#9a6410]" /></div> : filteredChatList.length ? filteredChatList.map(renderChatRow) : <div className="grid min-h-56 place-items-center"><MessageCircle className="size-8 text-[#d2a34f]" /></div>}
           </div>
           <Button onClick={() => setNewChatOpen(true)} size="icon" className="savanna-brand-token fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-4 z-40 size-12 rounded-full shadow-none" aria-label="Start a new chat"><AnimatedPlusIcon size={20} /></Button>

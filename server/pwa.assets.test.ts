@@ -98,6 +98,9 @@ describe("Savanna PWA assets", () => {
     expect(userProfile).toContain("isFollowingUser");
     expect(userProfile).toContain("followUser");
     expect(userProfile).toContain("unfollowUser");
+    expect(userProfile).toContain("listFollowedUserIds");
+    expect(userProfile).toContain("useFollowedUserIds");
+    expect(userProfile).toContain('"users", followerUid, "following", followingUid');
     expect(userProfile).toContain("searchUserProfilesByUsername");
     expect(userProfile).toContain("runTransaction");
     expect(userProfile).toContain("phoneNumber: null");
@@ -126,17 +129,22 @@ describe("Savanna PWA assets", () => {
     expect(publicProfile).toContain("@{item.username}");
     expect(publicProfile).toContain("<SavannaShell hideMobileHeader hideDesktopHeader>");
     expect(publicProfile).toContain("savanna-public-profile-page");
+    expect(publicProfile).toContain("savanna-public-profile-identity");
+    expect(publicProfile).toContain("savanna-public-profile-tabs");
+    expect(publicProfile).toContain("savanna-public-profile-grid");
     expect(publicProfile).toContain("followMutation");
     expect(publicProfile).toContain("startMessage");
     expect(publicProfile).toContain("{!isOwnProfile ? (");
     expect(publicProfile).toContain('sessionStorage.setItem("savanna-open-conversation"');
     expect(publicProfile).toContain("Following");
+    expect(publicProfile).not.toContain("savanna-public-profile-card");
     expect(publicProfile).not.toContain("Follower");
     expect(publicProfile).not.toContain("followers");
     expect(publicProfile).not.toContain('href="/messages" aria-label={`Message ${displayName}`}');
     expect(firestoreRules).toContain("match /publicProfiles/{uid}");
     expect(firestoreRules).toContain("match /usernames/{usernameLower}");
     expect(firestoreRules).toContain("match /follows/{followId}");
+    expect(firestoreRules).toContain("match /following/{followingUid}");
     expect(firestoreRules).toContain("request.resource.data.followerUserId == request.auth.uid");
     expect(firestoreRules).toContain("match /conversationRefs/{conversationId}");
     expect(firestoreRules).toContain("request.resource.data.conversationId == conversationId");
@@ -195,12 +203,13 @@ describe("Savanna PWA assets", () => {
   });
 
   it("keeps the SAVANNA Ramabhadra wordmark in the supplied Gold color", async () => {
-    const [shell, styles, html, db, orders, paymentCatalog, merchantStudio] = await Promise.all([
+    const [shell, styles, html, db, orders, storiesPage, paymentCatalog, merchantStudio] = await Promise.all([
       readFile(resolve(projectRoot, "client/src/components/SavannaShell.tsx"), "utf8"),
       readFile(resolve(projectRoot, "client/src/index.css"), "utf8"),
       readFile(resolve(projectRoot, "client/index.html"), "utf8"),
       readFile(resolve(projectRoot, "server/db.ts"), "utf8"),
       readFile(resolve(projectRoot, "client/src/pages/OrdersPage.tsx"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/pages/StoriesPage.tsx"), "utf8"),
       readFile(resolve(projectRoot, "server/payments/catalog.ts"), "utf8"),
       readFile(resolve(projectRoot, "client/src/pages/MerchantStudioPage.tsx"), "utf8"),
     ]);
@@ -235,6 +244,9 @@ describe("Savanna PWA assets", () => {
     expect(orders).toContain('ready: "savanna-order-status bg-[#FFFDF7] text-[#53BDEB]"');
     expect(orders).toContain('completed: "savanna-order-status bg-[#FFFDF7] text-[#D9A441]"');
     expect(orders).toContain('cancelled: "savanna-order-status bg-[#FFFDF7] text-[#FF5B6B]"');
+    expect(storiesPage).toContain("savanna-route-stories");
+    expect(storiesPage).toContain("StoryDiscoveryTab");
+    expect(storiesPage).toContain("StoryAdContext");
     expect(styles).toContain('[class~="bg-[#24482f]"],');
     expect(styles).toContain("background-color: #D9A441 !important;");
     expect(styles).toContain('[class~="hover:bg-[#1b3b25]"]:hover { background-color: #E8B64A !important; }');
@@ -263,6 +275,7 @@ describe("Savanna PWA assets", () => {
       shops,
       learn,
       orders,
+      storiesPage,
       app,
       firebaseStories,
       firebaseShops,
@@ -280,6 +293,7 @@ describe("Savanna PWA assets", () => {
       readFile(resolve(projectRoot, "client/src/pages/ShopsPage.tsx"), "utf8"),
       readFile(resolve(projectRoot, "client/src/pages/LearnPage.tsx"), "utf8"),
       readFile(resolve(projectRoot, "client/src/pages/OrdersPage.tsx"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/pages/StoriesPage.tsx"), "utf8"),
       readFile(resolve(projectRoot, "client/src/App.tsx"), "utf8"),
       readFile(resolve(projectRoot, "client/src/lib/firebaseStories.ts"), "utf8"),
       readFile(resolve(projectRoot, "client/src/lib/firebaseShops.ts"), "utf8"),
@@ -293,7 +307,9 @@ describe("Savanna PWA assets", () => {
     expect(shell).toContain("const mobileNavigation = navigation;");
     expect(shell).toContain("navigation.map((item) =>");
     expect(shell).toContain("mobileNavigation.map((item) =>");
+    expect(shell).toContain('{ href: "/stories", label: "Stories" }');
     expect(shell).toContain('{ href: "/profile", label: "Profile" }');
+    expect(shell).not.toContain('{ href: "/orders", label: "Orders" }');
     expect(shell).toContain('import { AnimatedPlusIcon, MobileNavIcon, type MobileNavIconName } from "@/components/AnimatedNavIcons";');
     expect(shell).toContain('<MobileNavIcon name={item.label as MobileNavIconName} active={active} size={22} />');
     expect(shell).toContain('<MobileNavIcon name={item.label as MobileNavIconName} active={active} size={21} />');
@@ -305,6 +321,8 @@ describe("Savanna PWA assets", () => {
     expect(stories).toContain("const ownStoryInitial =");
     expect(stories).toContain("return storyColors[Math.abs(value) % storyColors.length];");
     expect(stories).toContain("useFirebaseStories(user, true)");
+    expect(stories).toContain("filterStoriesForFollowingHeader");
+    expect(stories).toContain("useFollowedUserIds");
     expect(stories).toContain("usePublishFirebaseStory");
     expect(stories).toContain("useReactToFirebaseStory");
     expect(stories).toContain("useReplyToFirebaseStory");
@@ -317,7 +335,7 @@ describe("Savanna PWA assets", () => {
     expect(stories).toContain('absolute -bottom-0.5 -right-0.5 grid size-5');
     expect(stories).not.toContain("Preview Stories — development only");
     expect(styles).not.toContain("border: 1px dashed");
-    expect(stories).toContain('const previewStoriesEnabled = import.meta.env.DEV && !stories.data?.length');
+    expect(stories).toContain('const previewStoriesEnabled = import.meta.env.DEV && !followingStories.length');
     expect(stories).toContain('compact ? "hidden" : "block"');
     expect(stories).not.toContain('text-[10px] font-semibold uppercase tracking-[0.16em] text-[#9a6410]">Stories</p>');
     expect(stories).toContain("const expandedHeight = Math.min(116, 78 + pull)");
@@ -347,7 +365,8 @@ describe("Savanna PWA assets", () => {
     expect(stories).toContain('aria-label="Collapsed Stories cluster"');
     expect(stories).toContain('className="savanna-collapsed-story-cluster flex shrink-0 items-center"');
     expect(stories).toContain('text-[#5f6861] dark:text-[#9AA1A6]">Your Story</span>');
-    expect(stories).toContain('discoveryLabel && discoveryLabel !== "Yours" ? discoveryLabel : group.authorName.split(" ")[0]');
+    expect(stories).not.toContain("const discoveryLabel = group.items[0]?.discovery?.label");
+    expect(stories).toContain('{group.authorName.split(" ")[0]}</span>');
     expect(stories).toContain("groupedStories.slice(0, 3).map");
     expect(stories).toContain("grid size-8 shrink-0 place-items-center rounded-full");
     expect(stories).toContain('groupIndex ? "-ml-1.5" : ""');
@@ -356,6 +375,30 @@ describe("Savanna PWA assets", () => {
     expect(stories).toContain("aria-label={`Story ${(index ?? 0) + 1} of ${total}`}");
     expect(stories).toContain("Share a Story");
     expect(stories).not.toContain("from the desktop panel for now");
+    expect(animatedIcons).toContain('MobileNavIconName = "Home" | "Messages" | "Shops" | "Learn" | "Stories" | "Orders" | "Profile"');
+    expect(animatedIcons).toContain('if (name === "Stories")');
+    expect(animatedIcons).toContain("const movingLineVariants: Variants");
+    expect(animatedIcons).toContain('y: [0, -4.5, 0, -4.5, 0]');
+    expect(animatedIcons).toContain("variants={movingLineVariants}");
+    expect(app).toContain('const StoriesPage = lazy(() => import("./pages/StoriesPage"));');
+    expect(app).toContain('<Route path="/stories" component={StoriesPage} />');
+    expect(storiesPage).toContain('type StoryDiscoveryTab = "for_you" | "near_you" | "following" | "shops" | "community";');
+    expect(storiesPage).toContain("buildStoriesFeedItems");
+    expect(storiesPage).toContain("StoryAdContext");
+    expect(storiesPage).toContain("adsEnabled = false");
+    expect(storiesPage).toContain("savanna-story-filter-pill");
+    expect(storiesPage).toContain('activeTab === tab.value ? "border-[#D9A441]/30 bg-[#D9A441]/20 text-[#D9A441]"');
+    expect(storiesPage).toContain("For You");
+    expect(storiesPage).toContain("Near You");
+    expect(storiesPage).toContain("Following");
+    expect(storiesPage).toContain("Shops");
+    expect(storiesPage).toContain("Community");
+    expect(storiesPage).toContain("useCommentFirebaseStory");
+    expect(storiesPage).toContain("useFirebaseStoryComments");
+    expect(storiesPage).toContain("useReplyToFirebaseStory");
+    expect(storiesPage).toContain("navigator.share");
+    expect(storiesPage).toContain("Visit shop");
+    expect(storiesPage).toContain("Contextual placement ready.");
     expect(messages).toContain("Search chats or people");
     expect(messages).toContain("Create a chat tab");
     expect(messages).toContain('const filterTabs = ([["all", "All"], ["direct", "Chats"], ["group", "Groups"], ["merchant_support", "Support"]] as const);');
@@ -366,6 +409,8 @@ describe("Savanna PWA assets", () => {
     expect(messages).toContain("bottom-[calc(5.5rem+env(safe-area-inset-bottom))]");
     expect(messages).toContain('mx-2 mt-2 flex h-11 items-center gap-2 rounded-2xl');
     expect(messages).toContain('overflow-x-auto px-3 pb-1');
+    expect(messages).toContain("savanna-mobile-chat-rows mt-3 divide-y-0 px-2");
+    expect(messages).toContain('dark:bg-[#23282C] dark:text-[#D9A441]');
     expect(messages).toContain('savanna-mobile-messages-canvas -mx-4');
     expect(messages).not.toContain(">Chats</h1>");
     expect(messages).toContain("const previewConversations: ConversationListItem[] = [];");
@@ -409,7 +454,18 @@ describe("Savanna PWA assets", () => {
     expect(animatedIcons).toContain('if (name === "Profile")');
     expect(animatedIcons).toContain('useAnimationControls');
     expect(animatedIcons).toContain('const [hovered, setHovered] = useState(false);');
-    expect(animatedIcons).toContain('onPointerEnter: () => setHovered(true)');
+    expect(animatedIcons).toContain('const [pressed, setPressed] = useState(false);');
+    expect(animatedIcons).toContain('const [canHover, setCanHover] = useState(false);');
+    expect(animatedIcons).toContain("const pressTimer = useRef<number | null>(null);");
+    expect(animatedIcons).toContain("const playPressAnimation = useCallback");
+    expect(animatedIcons).toContain("pressTimer.current = window.setTimeout");
+    expect(animatedIcons).toContain("}, 760);");
+    expect(animatedIcons).toContain('const state = !reducedMotion && (hovered || pressed) ? "active" : "idle";');
+    expect(animatedIcons).toContain('window.matchMedia("(hover: hover) and (pointer: fine)")');
+    expect(animatedIcons).toContain('onPointerEnter: () => { if (canHover) setHovered(true); }');
+    expect(animatedIcons).toContain('onPointerDown: () => { if (!canHover) playPressAnimation(); }');
+    expect(animatedIcons).toContain('onTouchStart: () => { if (!canHover) playPressAnimation(); }');
+    expect(animatedIcons).toContain("data-active={active}");
     expect(animatedIcons).toContain('controls.start("active").then(() => controls.start("idle"));');
     expect(animatedIcons).toContain('initial="idle" animate={state}');
     expect(profile).toContain("Choose how Savanna looks on this device.");
@@ -431,7 +487,8 @@ describe("Savanna PWA assets", () => {
     expect(styles).toContain(".savanna-app .savanna-profile-page .savanna-profile-topbar");
     expect(styles).toContain(".savanna-app .savanna-profile-page .savanna-profile-header");
     expect(styles).toContain(".savanna-app .savanna-public-profile-page .savanna-public-profile-topbar");
-    expect(styles).toContain(".savanna-app .savanna-public-profile-page .savanna-public-profile-card");
+    expect(styles).toContain(".savanna-app .savanna-public-profile-page .savanna-public-profile-identity");
+    expect(styles).toContain(".savanna-app .savanna-public-profile-page .savanna-public-profile-grid");
     expect(styles).toContain("@media (max-width: 1023px)");
     expect(styles).toContain("env(safe-area-inset-top)");
     expect(styles).toContain(".savanna-app .savanna-profile-page .savanna-username-field input:focus-visible");
@@ -492,6 +549,7 @@ describe("Savanna PWA assets", () => {
     expect(styles).toContain(".dark .savanna-app .savanna-route-shops");
     expect(styles).toContain(".dark .savanna-app .savanna-route-learn");
     expect(styles).toContain(".dark .savanna-app .savanna-route-orders");
+    expect(styles).toContain(".dark .savanna-app .savanna-route-stories");
     expect(styles).toContain(".dark .savanna-app .savanna-profile-page");
     expect(styles).toContain(".dark .savanna-new-chat-drawer");
     expect(styles).toContain(".dark .savanna-app .savanna-desktop-messages");
@@ -517,6 +575,10 @@ describe("Savanna PWA assets", () => {
     expect(firebaseStories).toContain("uploadBytes(storageRef, input.file");
     expect(firebaseStories).toContain("getDownloadURL(storageRef)");
     expect(firebaseStories).toContain("replyToStoryInFirebase");
+    expect(firebaseStories).toContain("filterStoriesForFollowingHeader");
+    expect(firebaseStories).toContain("commentOnFirebaseStory");
+    expect(firebaseStories).toContain("useFirebaseStoryComments");
+    expect(firebaseStories).toContain("useCommentFirebaseStory");
     expect(firebaseShops).toContain('collection(getFirestoreDb(), "storefronts")');
     expect(firebaseShops).toContain('collection(getFirestoreDb(), "products")');
     expect(firebaseShops).toContain("useFirebaseStorefronts");
@@ -529,6 +591,8 @@ describe("Savanna PWA assets", () => {
     expect(firebaseChat).toContain("sendFirebaseAttachment");
     expect(firebaseChat).toContain("createSupportConversation");
     expect(firestoreRules).toContain("match /stories/{storyId}");
+    expect(firestoreRules).toContain("match /comments/{commentId}");
+    expect(firestoreRules).toContain("'userId', 'userName', 'userPhotoURL', 'body', 'createdAt'");
     expect(firestoreRules).toContain("match /storefronts/{storefrontId}");
     expect(firestoreRules).toContain("match /products/{productId}");
     expect(firestoreRules).toContain("match /orders/{orderId}");
@@ -567,6 +631,7 @@ describe("Savanna PWA assets", () => {
     expect(styles).toContain("border-right: 1px solid var(--chat-border) !important;");
     expect(styles).toContain(".savanna-desktop-chat-rows .savanna-chat-row[data-active=\"true\"]");
     expect(styles).toContain(".dark .savanna-app .savanna-chat-row {");
+    expect(styles).toContain(".dark .savanna-app .savanna-mobile-messages-canvas [role=\"tablist\"] [role=\"tab\"][aria-selected=\"true\"]");
     expect(styles).toContain(".savanna-app .savanna-collapsed-story-cluster button + button");
     expect(messages).toContain('aria-label="Desktop chat filters"');
     expect(messages).toContain("const filteredChatList = filteredConversations.filter");

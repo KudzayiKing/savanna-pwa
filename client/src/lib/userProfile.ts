@@ -16,6 +16,7 @@ import {
   type FieldValue,
 } from "firebase/firestore";
 import type { User } from "firebase/auth";
+import { useQuery } from "@tanstack/react-query";
 import { getFirestoreDb } from "./firebase";
 
 /**
@@ -162,6 +163,10 @@ function usernamesCollection(usernameLower: string) {
 
 function followsCollection(followerUid: string, followingUid: string) {
   return doc(getFirestoreDb(), "follows", `${followerUid}__${followingUid}`);
+}
+
+function followingCollection(followerUid: string, followingUid: string) {
+  return doc(getFirestoreDb(), "users", followerUid, "following", followingUid);
 }
 
 function publicProfileWrite(uid: string, data: UserDoc) {
@@ -399,20 +404,53 @@ export async function updateUserProfile(
 
 export async function isFollowingUser(followerUid: string | null | undefined, followingUid: string | null | undefined): Promise<boolean> {
   if (!followerUid || !followingUid || followerUid === followingUid) return false;
-  const snapshot = await getDoc(followsCollection(followerUid, followingUid));
-  return snapshot.exists();
+  const [legacySnapshot, privateIndexSnapshot] = await Promise.all([
+    getDoc(followsCollection(followerUid, followingUid)),
+    getDoc(followingCollection(followerUid, followingUid)),
+  ]);
+  if (legacySnapshot.exists() && !privateIndexSnapshot.exists()) {
+    void setDoc(followingCollection(followerUid, followingUid), {
+      followerUserId: followerUid,
+      followingUserId: followingUid,
+      createdAt: serverTimestamp(),
+    }).catch(error => {
+      console.warn("[Firestore] Failed to backfill following index", error);
+    });
+  }
+  return legacySnapshot.exists() || privateIndexSnapshot.exists();
+}
+
+export async function listFollowedUserIds(followerUid: string | null | undefined): Promise<string[]> {
+  if (!followerUid) return [];
+  const snapshot = await getDocs(query(collection(getFirestoreDb(), "users", followerUid, "following"), orderBy("createdAt", "desc"), limit(400)));
+  return snapshot.docs.map(item => item.id);
 }
 
 export async function followUser(follower: AppUser, followingUid: string): Promise<void> {
   if (follower.id === followingUid) throw new Error("You cannot follow yourself.");
-  await setDoc(followsCollection(follower.id, followingUid), {
+  const payload = {
     followerUserId: follower.id,
     followingUserId: followingUid,
     createdAt: serverTimestamp(),
-  });
+  };
+  await Promise.all([
+    setDoc(followsCollection(follower.id, followingUid), payload),
+    setDoc(followingCollection(follower.id, followingUid), payload),
+  ]);
 }
 
 export async function unfollowUser(follower: AppUser, followingUid: string): Promise<void> {
   if (follower.id === followingUid) return;
-  await deleteDoc(followsCollection(follower.id, followingUid));
+  await Promise.all([
+    deleteDoc(followsCollection(follower.id, followingUid)),
+    deleteDoc(followingCollection(follower.id, followingUid)),
+  ]);
+}
+
+export function useFollowedUserIds(user?: AppUser | null, enabled = true) {
+  return useQuery({
+    queryKey: ["firebase", "following", user?.id ?? "guest"],
+    queryFn: () => listFollowedUserIds(user?.id),
+    enabled: enabled && Boolean(user),
+  });
 }

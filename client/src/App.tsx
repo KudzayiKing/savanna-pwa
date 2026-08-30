@@ -32,6 +32,7 @@ const PublicProfilePage = lazy(() => import("./pages/PublicProfilePage"));
 const ProductDetailPage = lazy(() => import("./pages/ProductDetailPage"));
 const ShopsPage = lazy(() => import("./pages/ShopsPage"));
 const StorefrontPage = lazy(() => import("./pages/StorefrontPage"));
+const StoriesPage = lazy(() => import("./pages/StoriesPage"));
 
 /**
  * Shown while a route chunk downloads.
@@ -65,6 +66,7 @@ function Router() {
         <Route path="/shops/:slug/products/:productId" component={ProductDetailPage} />
         <Route path="/shops/:slug" component={StorefrontPage} />
         <Route path="/shops" component={ShopsPage} />
+        <Route path="/stories" component={StoriesPage} />
         <Route path="/learn/manage"><Redirect to="/shops/manage" /></Route>
         <Route path="/learn/:slug"><Redirect to="/shops" /></Route>
         <Route path="/learn"><Redirect to="/shops" /></Route>

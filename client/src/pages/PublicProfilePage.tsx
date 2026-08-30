@@ -11,12 +11,9 @@ import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
-  BriefcaseBusiness,
   Heart,
   Image as ImageIcon,
   Loader2,
-  MapPin,
-  MessageCircle,
   MoreVertical,
   Play,
   Store,
@@ -147,7 +144,6 @@ export default function PublicProfilePage() {
   const initial = displayName.slice(0, 1).toUpperCase();
   const isOwnProfile = Boolean(user && user.id === item.id);
   const isFollowing = Boolean(followState.data);
-  const actionColumns = profile.data.business && !isOwnProfile ? "grid-cols-[1fr_auto_auto]" : !isOwnProfile ? "grid-cols-[1fr_auto]" : "grid-cols-1";
 
   const startMessage = () => {
     if (!user) {
@@ -179,7 +175,7 @@ export default function PublicProfilePage() {
 
   return (
     <SavannaShell hideMobileHeader hideDesktopHeader>
-      <div className="savanna-public-profile-page mx-auto max-w-[720px] space-y-5 pb-[calc(6rem+env(safe-area-inset-bottom))]">
+      <div className="savanna-public-profile-page mx-auto max-w-[720px] pb-[calc(6rem+env(safe-area-inset-bottom))]">
         <header className="savanna-public-profile-topbar savanna-glass-header sticky z-30 flex h-12 items-center justify-between rounded-[24px] border border-[#eadfca]/70 px-3 backdrop-blur-xl">
           <button type="button" onClick={() => window.history.length > 1 ? window.history.back() : navigate("/messages")} className="grid size-9 place-items-center rounded-full text-[#151A17] dark:text-[#E9EDEF]" aria-label="Go back">
             <ArrowLeft className="size-5" />
@@ -190,21 +186,32 @@ export default function PublicProfilePage() {
           </button>
         </header>
 
-        <section className="savanna-public-profile-card rounded-[30px] border border-[#eadfca] bg-white p-5 text-center shadow-[0_12px_28px_rgba(94,58,11,0.035)] dark:border-[#26343A] dark:bg-[#111B21]">
-          <span className="mx-auto grid size-24 place-items-center overflow-hidden rounded-full bg-[#D9A441]/20 font-display text-4xl font-semibold text-[#D9A441]">
-            {item.photoURL ? <img src={item.photoURL} alt="" className="size-full object-cover" /> : initial}
-          </span>
-          <h1 className="mt-4 font-display text-4xl font-semibold tracking-[-0.055em] text-[#151A17] dark:text-[#E9EDEF]">{displayName}</h1>
-          {item.username ? <p className="mt-1 text-sm font-semibold text-[#5F6861] dark:text-[#AEBAC1]">@{item.username}</p> : null}
-          {item.city || item.countryCode ? (
-            <p className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-[#5F6861] dark:text-[#AEBAC1]">
-              <MapPin className="size-3.5 text-[#D9A441]" />
-              {[item.city, item.countryCode].filter(Boolean).join(", ")}
-            </p>
-          ) : null}
-          {item.bio ? <p className="mx-auto mt-4 max-w-md text-sm leading-6 text-[#5F6861] dark:text-[#AEBAC1]">{item.bio}</p> : null}
+        <section className="savanna-public-profile-identity pt-7">
+          <div className="grid grid-cols-[92px_minmax(0,1fr)] items-center gap-4">
+            <span className="grid size-[92px] place-items-center overflow-hidden rounded-full bg-[#D9A441]/20 font-display text-4xl font-semibold text-[#D9A441]">
+              {item.photoURL ? <img src={item.photoURL} alt="" className="size-full object-cover" /> : initial}
+            </span>
+            <div className="min-w-0">
+              <h1 className="truncate font-display text-[30px] font-semibold leading-tight text-[#151A17] sm:text-[34px] dark:text-[#E9EDEF]">{displayName}</h1>
+              {item.username ? <p className="mt-1 truncate text-base font-semibold text-[#5F6861] dark:text-[#AEBAC1]">@{item.username}</p> : null}
+              {item.city || item.countryCode ? (
+                <p className="mt-1 truncate text-xs font-semibold text-[#8A938D] dark:text-[#8F9AA0]">
+                  {[item.city, item.countryCode].filter(Boolean).join(", ")}
+                </p>
+              ) : null}
+            </div>
+          </div>
 
-          <div className={cn("mt-6 grid gap-2", actionColumns)}>
+          {item.bio ? <p className="mt-5 text-[15px] leading-7 text-[#5F6861] dark:text-[#AEBAC1]">{item.bio}</p> : null}
+
+          {profile.data.business ? (
+            <Link href={`/shops/${profile.data.business.slug}`} className="mt-4 inline-flex max-w-full items-center gap-2 rounded-full bg-[#D9A441]/20 px-4 py-2 text-sm font-semibold text-[#D9A441]">
+              <Store className="size-4 shrink-0" />
+              <span className="truncate">{profile.data.business.name}</span>
+            </Link>
+          ) : null}
+
+          <div className={cn("mt-5 grid gap-2", isOwnProfile ? "grid-cols-1" : "grid-cols-[1fr_1fr]")}>
             <Button
               type="button"
               disabled={followMutation.isPending || isOwnProfile}
@@ -218,37 +225,16 @@ export default function PublicProfilePage() {
               {isOwnProfile ? "Your profile" : isFollowing ? "Following" : "Follow"}
             </Button>
             {!isOwnProfile ? (
-              <button type="button" onClick={startMessage} disabled={chatMutations.create.isPending} aria-label={`Message ${displayName}`} className="grid h-12 w-12 place-items-center rounded-xl bg-[#D9A441]/20 text-[#D9A441] disabled:opacity-60">
+              <Button type="button" onClick={startMessage} disabled={chatMutations.create.isPending} className="h-12 rounded-xl bg-[#D9A441]/20 text-[#D9A441] shadow-none hover:bg-[#D9A441]/25">
                 {chatMutations.create.isPending ? <Loader2 className="size-4 animate-spin" /> : <MobileNavIcon name="Messages" active size={21} />}
-              </button>
-            ) : null}
-            {profile.data.business && !isOwnProfile ? (
-              <Link href={`/shops/${profile.data.business.slug}`} aria-label={`${displayName}'s business page`} className="grid h-12 w-12 place-items-center rounded-xl bg-[#D9A441]/20 text-[#D9A441]">
-                <Store className="size-5" />
-              </Link>
+                <span className="ml-2">Message</span>
+              </Button>
             ) : null}
           </div>
         </section>
 
-        {profile.data.business ? (
-          <Link href={`/shops/${profile.data.business.slug}`} className="savanna-public-profile-card group flex items-center gap-4 rounded-[24px] border border-[#eadfca] bg-white p-3 shadow-[0_10px_24px_rgba(94,58,11,0.03)] dark:border-[#26343A] dark:bg-[#111B21]">
-            {profile.data.business.coverUrl ? (
-              <img src={profile.data.business.coverUrl} alt="" className="size-16 rounded-[18px] object-cover" />
-            ) : (
-              <span className="grid size-16 place-items-center rounded-[18px] bg-[#D9A441]/20 text-[#D9A441]">
-                <BriefcaseBusiness className="size-6" />
-              </span>
-            )}
-            <span className="min-w-0 flex-1 text-left">
-              <span className="block text-[11px] font-semibold uppercase tracking-[0.16em] text-[#D9A441]">Business page</span>
-              <span className="mt-1 block truncate text-base font-semibold text-[#151A17] dark:text-[#E9EDEF]">{profile.data.business.name}</span>
-              <span className="mt-0.5 block truncate text-xs text-[#5F6861] dark:text-[#AEBAC1]">{profile.data.business.category || "Savanna storefront"}</span>
-            </span>
-          </Link>
-        ) : null}
-
-        <section className="savanna-public-profile-card overflow-hidden rounded-[24px] border border-[#eadfca] bg-white dark:border-[#26343A] dark:bg-[#111B21]">
-          <div className="grid grid-cols-2 border-b border-[#eadfca] dark:border-[#26343A]">
+        <section className="savanna-public-profile-stories mt-7">
+          <div className="savanna-public-profile-tabs grid grid-cols-2 border-b border-[#DDE3DC] dark:border-[#26343A]">
             <button type="button" className="inline-flex h-12 items-center justify-center gap-2 border-b-2 border-[#D9A441] text-sm font-semibold text-[#D9A441]">
               <ImageIcon className="size-4" /> Stories
             </button>
@@ -258,11 +244,11 @@ export default function PublicProfilePage() {
           </div>
 
           {storyGridItems.length ? (
-            <div className="grid grid-cols-3 gap-1 p-1">
+            <div className="savanna-public-profile-grid grid grid-cols-3 gap-1 pt-1">
               {storyGridItems.map((story, index) => <StoryTile key={story.id} story={story} index={index} initial={initial} />)}
             </div>
           ) : (
-            <div className="grid min-h-72 place-items-center p-8 text-center">
+            <div className="savanna-public-profile-empty grid min-h-72 place-items-center px-6 py-12 text-center">
               <div>
                 <span className="mx-auto grid size-16 place-items-center rounded-2xl bg-[#D9A441]/20 text-[#D9A441]">
                   <Play className="size-7" />
@@ -273,15 +259,6 @@ export default function PublicProfilePage() {
             </div>
           )}
         </section>
-
-        {!isOwnProfile ? (
-          <div className="flex justify-center">
-            <Button type="button" onClick={startMessage} disabled={chatMutations.create.isPending} className="savanna-brand-token rounded-xl shadow-none">
-              {chatMutations.create.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <MessageCircle className="mr-2 size-4" />}
-              Message on Savanna
-            </Button>
-          </div>
-        ) : null}
       </div>
     </SavannaShell>
   );

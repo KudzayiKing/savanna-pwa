@@ -15,7 +15,7 @@ import { Link, useLocation } from "wouter";
 const navigation = [
   { href: "/messages", label: "Messages" },
   { href: "/shops", label: "Shops" },
-  { href: "/orders", label: "Orders" },
+  { href: "/stories", label: "Stories" },
   { href: "/profile", label: "Profile" },
 ];
 
@@ -38,7 +38,7 @@ export function SavannaShell({ children, context, hideChrome = false, hideMobile
   const [location] = useLocation();
   const { isAuthenticated, user } = useAuth();
   const isMessagesWorkspace = location === "/messages";
-  const usesIconRail = ["/messages", "/shops", "/orders", "/profile"].includes(location);
+  const usesIconRail = ["/messages", "/shops", "/stories", "/orders", "/profile"].includes(location);
   const profileAvatarUrl = user?.photoURL ?? null;
 
   return (

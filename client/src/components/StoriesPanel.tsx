@@ -5,12 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
   type FirebaseStory,
+  filterStoriesForFollowingHeader,
   useFirebaseStories,
   usePublishFirebaseStory,
   useReactToFirebaseStory,
   useReplyToFirebaseStory,
   useViewFirebaseStory,
 } from "@/lib/firebaseStories";
+import { useFollowedUserIds } from "@/lib/userProfile";
 import { Bookmark, ChevronRight, Heart, Image as ImageIcon, Loader2, MessageCircle, Send, ShoppingBag, Sparkles, Type, Video, X } from "lucide-react";
 import { type ChangeEvent, type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -360,7 +362,9 @@ export function StoriesPanel() {
 
 export function MobileStoriesHeader() {
   const { isAuthenticated, user } = useAuth();
+  const followedUserIds = useFollowedUserIds(user, true);
   const stories = useFirebaseStories(user, true);
+  const followingStories = useMemo(() => filterStoriesForFollowingHeader(stories.data ?? [], user, followedUserIds.data ?? []), [followedUserIds.data, stories.data, user]);
   const view = useViewFirebaseStory();
   const [compact, setCompact] = useState(false);
   const [pull, setPull] = useState(0);
@@ -371,7 +375,7 @@ export function MobileStoriesHeader() {
   const [searchPulse, setSearchPulse] = useState(0);
   const storyPreviewParams = new URLSearchParams(window.location.search);
   const previewCompact = import.meta.env.DEV && storyPreviewParams.get("stories") === "compact";
-  const previewStoriesEnabled = import.meta.env.DEV && !stories.data?.length;
+  const previewStoriesEnabled = import.meta.env.DEV && !followingStories.length;
 
   useEffect(() => {
     let frame = 0;
@@ -399,7 +403,7 @@ export function MobileStoriesHeader() {
   ] : [];
   const ownStoryInitial = (user?.name?.trim().slice(0, 1) || "S").toUpperCase();
   const ownStoryAvatarUrl = user?.photoURL ?? null;
-  const storySource = (stories.data?.length ? stories.data : previewStories) as StoryItem[];
+  const storySource = (followingStories.length ? followingStories : previewStories) as StoryItem[];
   const groupedStories = useMemo(() => {
     const groups = new Map<string, { authorUserId: string; authorName: string; items: StoryItem[] }>();
     for (const story of storySource) {
@@ -469,8 +473,7 @@ export function MobileStoriesHeader() {
               <span className="whitespace-nowrap text-[10px] font-medium text-[#5f6861] dark:text-[#9AA1A6]">Your Story</span>
             </div>
             {stories.isLoading ? <div className="savanna-brand-token grid size-14 shrink-0 place-items-center rounded-full"><Loader2 className="size-3.5 animate-spin" /></div> : groupedStories.slice(0, 8).map((group, groupIndex) => {
-              const discoveryLabel = group.items[0]?.discovery?.label;
-              return <div key={group.authorUserId} className="flex shrink-0 flex-col items-center gap-1"><button onClick={() => openGroup(groupIndex)} aria-label={`Open ${group.authorName}'s Stories`} className="savanna-brand-token grid size-14 shrink-0 place-items-center rounded-full text-xs font-semibold transition-all duration-300">{group.authorName.slice(0, 1).toUpperCase()}</button><span className="max-w-16 truncate text-center text-[10px] font-medium text-[#5f6861] dark:text-[#9AA1A6]">{discoveryLabel && discoveryLabel !== "Yours" ? discoveryLabel : group.authorName.split(" ")[0]}</span></div>;
+              return <div key={group.authorUserId} className="flex shrink-0 flex-col items-center gap-1"><button onClick={() => openGroup(groupIndex)} aria-label={`Open ${group.authorName}'s Stories`} className="savanna-brand-token grid size-14 shrink-0 place-items-center rounded-full text-xs font-semibold transition-all duration-300">{group.authorName.slice(0, 1).toUpperCase()}</button><span className="max-w-16 truncate text-center text-[10px] font-medium text-[#5f6861] dark:text-[#9AA1A6]">{group.authorName.split(" ")[0]}</span></div>;
             })}
           </div>
         </div>

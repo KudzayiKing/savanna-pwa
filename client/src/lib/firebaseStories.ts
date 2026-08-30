@@ -55,6 +55,15 @@ export type FirebaseStory = {
   primaryMediaType: "image" | "video" | null;
 };
 
+export type FirebaseStoryComment = {
+  id: string;
+  userId: string;
+  userName: string;
+  userPhotoURL: string | null;
+  body: string;
+  createdAt: Date;
+};
+
 type StoryDoc = Omit<
   FirebaseStory,
   "id" | "createdAt" | "publishedAt" | "expiresAt" | "deletedAt" | "discovery"
@@ -78,6 +87,14 @@ type PublishStoryInput = {
   productPriceMinor?: number;
   productCurrencyCode?: string;
   file?: File | null;
+};
+
+type StoryCommentDoc = {
+  userId?: string | null;
+  userName?: string | null;
+  userPhotoURL?: string | null;
+  body?: string | null;
+  createdAt?: Timestamp | Date | FieldValue | null;
 };
 
 const storiesKey = ["firebase", "stories"] as const;
@@ -150,6 +167,17 @@ function mapStory(id: string, data: StoryDoc, viewer?: AppUser | null): Firebase
   return story;
 }
 
+function mapStoryComment(id: string, data: StoryCommentDoc): FirebaseStoryComment {
+  return {
+    id,
+    userId: data.userId ?? "",
+    userName: data.userName ?? "Savanna user",
+    userPhotoURL: data.userPhotoURL ?? null,
+    body: data.body ?? "",
+    createdAt: asDate(data.createdAt),
+  };
+}
+
 export async function listFirebaseStories(user?: AppUser | null) {
   const db = getFirestoreDb();
   const now = new Date();
@@ -173,6 +201,11 @@ export async function listFirebaseStories(user?: AppUser | null) {
   }
 
   return Array.from(seen.values()).sort((left, right) => right.discovery.score - left.discovery.score || right.publishedAt.getTime() - left.publishedAt.getTime());
+}
+
+export function filterStoriesForFollowingHeader(stories: FirebaseStory[] = [], user?: AppUser | null, followedUserIds: string[] = []) {
+  const following = new Set(followedUserIds);
+  return stories.filter(story => story.authorUserId === user?.id || following.has(story.authorUserId));
 }
 
 export async function listFirebaseStoriesForAuthor(authorUserId: string, viewer?: AppUser | null) {
@@ -250,6 +283,25 @@ export async function reactToFirebaseStory(storyId: string, user: AppUser, emoji
   }, { merge: true });
 }
 
+export async function commentOnFirebaseStory(storyId: string, user: AppUser, body: string) {
+  const cleanBody = body.trim();
+  if (!cleanBody) throw new Error("Write a comment first.");
+  if (cleanBody.length > 280) throw new Error("Comments must be 280 characters or fewer.");
+  await addDoc(collection(getFirestoreDb(), "stories", storyId, "comments"), {
+    userId: user.id,
+    userName: user.name || user.username || "Savanna user",
+    userPhotoURL: user.photoURL ?? null,
+    body: cleanBody,
+    createdAt: serverTimestamp(),
+  });
+}
+
+export async function listFirebaseStoryComments(storyId: string) {
+  if (!storyId) return [];
+  const snapshot = await getDocs(query(collection(getFirestoreDb(), "stories", storyId, "comments"), orderBy("createdAt", "desc"), limit(40)));
+  return snapshot.docs.map(item => mapStoryComment(item.id, item.data() as StoryCommentDoc));
+}
+
 export async function replyToFirebaseStory(story: FirebaseStory, user: AppUser, body: string) {
   if (story.authorUserId === user.id) throw new Error("You cannot reply to your own Story");
   return replyToStoryInFirebase({ viewer: user, storyAuthorUserId: story.authorUserId, storyId: story.id, body });
@@ -280,6 +332,22 @@ export function useViewFirebaseStory() {
 export function useReactToFirebaseStory() {
   return useMutation({
     mutationFn: ({ storyId, user, emoji }: { storyId: string; user: AppUser; emoji: string }) => reactToFirebaseStory(storyId, user, emoji),
+  });
+}
+
+export function useFirebaseStoryComments(storyId?: string | null, enabled = true) {
+  return useQuery({
+    queryKey: ["firebase", "story-comments", storyId ?? ""],
+    queryFn: () => listFirebaseStoryComments(storyId ?? ""),
+    enabled: enabled && Boolean(storyId),
+  });
+}
+
+export function useCommentFirebaseStory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ storyId, user, body }: { storyId: string; user: AppUser; body: string }) => commentOnFirebaseStory(storyId, user, body),
+    onSuccess: (_data, variables) => queryClient.invalidateQueries({ queryKey: ["firebase", "story-comments", variables.storyId] }),
   });
 }
 

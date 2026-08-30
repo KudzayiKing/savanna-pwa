@@ -1841,7 +1841,7 @@ button:not(:disabled), a {
   }
 }
 
-/* Mobile Messages stays edge-to-edge like the established chat list; utility hover
+/* Mobile Messages rows align with the search field inset; utility hover
    tokens must not promote every row to the filled search-control surface in dark mode. */
 @media (max-width: 1023px) {
   html,
@@ -1853,7 +1853,7 @@ button:not(:disabled), a {
   }
 
   .dark .savanna-app .savanna-chat-row {
-    border-radius: 0 !important;
+    border-radius: 1rem !important;
     background: transparent !important;
   }
 
@@ -1862,7 +1862,13 @@ button:not(:disabled), a {
   }
 
   .dark .savanna-app .savanna-chat-row[data-active="true"] {
-    background: color-mix(in srgb, var(--chat-gold) 20%, transparent) !important;
+    background: var(--chat-surface) !important;
+  }
+
+  .dark .savanna-app .savanna-mobile-messages-canvas [role="tablist"] [role="tab"][aria-selected="true"] {
+    background: #23282C !important;
+    background-color: #23282C !important;
+    color: var(--chat-gold) !important;
   }
 
   .savanna-app .savanna-collapsed-story-cluster {
@@ -2423,6 +2429,7 @@ button:not(:disabled), a {
 
 .savanna-app .savanna-public-profile-page {
   min-height: 100dvh;
+  padding-inline: clamp(1rem, 4vw, 2rem);
 }
 
 .savanna-app .savanna-public-profile-page .savanna-public-profile-topbar {
@@ -2438,10 +2445,20 @@ button:not(:disabled), a {
   background-clip: padding-box;
 }
 
-.savanna-app .savanna-public-profile-page .savanna-public-profile-card {
-  background: #FFFFFF !important;
-  border-color: #DDE3DC !important;
-  box-shadow: 0 12px 28px rgba(21, 26, 23, 0.045) !important;
+.savanna-app .savanna-public-profile-page .savanna-public-profile-identity {
+  color: #151A17;
+}
+
+.savanna-app .savanna-public-profile-page .savanna-public-profile-tabs {
+  margin-inline: calc(clamp(1rem, 4vw, 2rem) * -1);
+}
+
+.savanna-app .savanna-public-profile-page .savanna-public-profile-grid {
+  margin-inline: calc(clamp(1rem, 4vw, 2rem) * -1);
+}
+
+.savanna-app .savanna-public-profile-page .savanna-public-profile-empty {
+  margin-inline: calc(clamp(1rem, 4vw, 2rem) * -1);
 }
 
 .dark .savanna-app .savanna-public-profile-page .savanna-public-profile-topbar {
@@ -2453,10 +2470,29 @@ button:not(:disabled), a {
   box-shadow: none !important;
 }
 
-.dark .savanna-app .savanna-public-profile-page .savanna-public-profile-card {
-  background: var(--chat-surface) !important;
-  border-color: var(--chat-border) !important;
-  box-shadow: none !important;
+.dark .savanna-app .savanna-public-profile-page .savanna-public-profile-identity {
+  color: var(--chat-text);
+}
+
+.savanna-app .savanna-route-stories {
+  color-scheme: dark;
+}
+
+.savanna-app .savanna-route-stories [class~="snap-y"] {
+  scrollbar-width: none;
+}
+
+.savanna-app .savanna-route-stories [class~="snap-y"]::-webkit-scrollbar,
+.savanna-app .savanna-route-stories .savanna-story-filter-pill::-webkit-scrollbar {
+  display: none;
+}
+
+.savanna-app .savanna-route-stories .savanna-story-filter-pill {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+}
+
+.dark .savanna-app .savanna-route-stories {
+  background: var(--chat-bg) !important;
 }
 
 .savanna-app :is([class~="bg-[#24482f]"], [class~="bg-[#31583a]"], [class~="bg-[#1b3b25]"])[class~="text-white"] {

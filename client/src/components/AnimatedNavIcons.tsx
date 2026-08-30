@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 import { LazyMotion, domMin, m, motion, type Variants, useAnimation, useAnimationControls, useReducedMotion } from "framer-motion";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type HTMLAttributes, type MouseEvent } from "react";
 
-export type MobileNavIconName = "Home" | "Messages" | "Shops" | "Learn" | "Orders" | "Profile";
+export type MobileNavIconName = "Home" | "Messages" | "Shops" | "Learn" | "Stories" | "Orders" | "Profile";
 
 type AnimatedIconProps = {
   size?: number;
@@ -509,12 +509,43 @@ export function AnimatedShoppingBagIcon({ size = 18, ...props }: AnimatedIconPro
 export function MobileNavIcon({ name, active, size = 22 }: MobileNavIconProps) {
   const reducedMotion = useReducedMotion();
   const [hovered, setHovered] = useState(false);
-  const state = !reducedMotion && (active || hovered) ? "active" : "idle";
-  const hoverMotion = reducedMotion ? {} : { onPointerEnter: () => setHovered(true), onPointerLeave: () => setHovered(false), onFocus: () => setHovered(true), onBlur: () => setHovered(false) };
+  const [pressed, setPressed] = useState(false);
+  const [canHover, setCanHover] = useState(false);
+  const pressTimer = useRef<number | null>(null);
+  const state = !reducedMotion && (hovered || pressed) ? "active" : "idle";
+  const playPressAnimation = useCallback(() => {
+    if (pressTimer.current) window.clearTimeout(pressTimer.current);
+    setPressed(true);
+    pressTimer.current = window.setTimeout(() => {
+      setPressed(false);
+      pressTimer.current = null;
+    }, 760);
+  }, []);
+  const iconInteraction = reducedMotion ? {} : {
+    onPointerEnter: () => { if (canHover) setHovered(true); },
+    onPointerLeave: () => { setHovered(false); },
+    onPointerDown: () => { if (!canHover) playPressAnimation(); },
+    onTouchStart: () => { if (!canHover) playPressAnimation(); },
+    onFocus: () => { if (canHover) setHovered(true); },
+    onBlur: () => { setHovered(false); },
+  };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const hoverQuery = window.matchMedia("(hover: hover) and (pointer: fine)");
+    const syncHoverCapability = () => setCanHover(hoverQuery.matches);
+    syncHoverCapability();
+    hoverQuery.addEventListener("change", syncHoverCapability);
+    return () => hoverQuery.removeEventListener("change", syncHoverCapability);
+  }, []);
+
+  useEffect(() => () => {
+    if (pressTimer.current) window.clearTimeout(pressTimer.current);
+  }, []);
 
   if (name === "Home") {
     return (
-      <motion.svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ overflow: "visible" }} {...hoverMotion}>
+      <motion.svg aria-hidden="true" data-active={active} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ overflow: "visible" }} {...iconInteraction}>
         <motion.path d="M3 10.8 12 3l9 7.8" initial="idle" animate={state} variants={{ idle: { pathLength: 1, opacity: 1 }, active: { pathLength: [0.2, 1], opacity: [0.35, 1] } }} transition={iconTransition} />
         <motion.path d="M5.5 10.5V20h13v-9.5" initial="idle" animate={state} variants={{ idle: { y: 0, opacity: 1 }, active: { y: [1.5, 0], opacity: [0.45, 1] } }} transition={{ ...iconTransition, delay: 0.08 }} />
         <motion.path d="M9.5 20v-5.5h5V20" initial="idle" animate={state} variants={{ idle: { scaleY: 1, opacity: 1 }, active: { scaleY: [0.25, 1], opacity: [0, 1] } }} transition={{ ...iconTransition, delay: 0.16 }} style={{ transformBox: "view-box", transformOrigin: "12px 20px" }} />
@@ -524,7 +555,7 @@ export function MobileNavIcon({ name, active, size = 22 }: MobileNavIconProps) {
 
   if (name === "Messages") {
     return (
-      <motion.svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ overflow: "visible" }} {...hoverMotion}>
+      <motion.svg aria-hidden="true" data-active={active} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ overflow: "visible" }} {...iconInteraction}>
         <motion.path d="M3.2 16.2a2 2 0 0 1 .1 1.15l-1.05 3.25a1 1 0 0 0 1.23 1.17l3.38-1a2 2 0 0 1 1.1.1 10 10 0 1 0-4.75-4.67" initial="idle" animate={state} variants={{ idle: { pathLength: 1, opacity: 1 }, active: { pathLength: [0.28, 1], opacity: [0.35, 1] } }} transition={iconTransition} />
         {[8, 12, 16].map((x, index) => <motion.path key={x} d={`M${x} 12h.01`} initial="idle" animate={state} variants={{ idle: { scale: 1, opacity: 1 }, active: { scale: [0, 1.28, 1], opacity: [0, 1, 1] } }} transition={{ ...iconTransition, delay: 0.12 + index * 0.08 }} style={{ transformBox: "view-box", transformOrigin: `${x}px 12px` }} />)}
       </motion.svg>
@@ -533,7 +564,7 @@ export function MobileNavIcon({ name, active, size = 22 }: MobileNavIconProps) {
 
   if (name === "Shops") {
     return (
-      <motion.svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ overflow: "visible" }} {...hoverMotion}>
+      <motion.svg aria-hidden="true" data-active={active} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ overflow: "visible" }} {...iconInteraction}>
         {[
           "M2 11h20",
           "m3.5 11 1.6 7.4a2 2 0 0 0 2 1.6h9.8a2 2 0 0 0 2-1.6l1.7-7.4",
@@ -549,7 +580,7 @@ export function MobileNavIcon({ name, active, size = 22 }: MobileNavIconProps) {
 
   if (name === "Learn") {
     return (
-      <motion.svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ overflow: "visible" }} {...hoverMotion}>
+      <motion.svg aria-hidden="true" data-active={active} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ overflow: "visible" }} {...iconInteraction}>
         <motion.g initial="idle" animate={state} variants={{ idle: { scale: 1, rotate: 0, y: 0 }, active: { scale: [1, 1.04, 1], rotate: [0, -8, 8, -8, 0], y: [0, -2, 0] } }} transition={{ duration: 0.6, ease: "easeInOut", times: [0, 0.2, 0.5, 0.8, 1] }} style={{ transformBox: "view-box", transformOrigin: "12px 12px" }}>
           <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20" />
           <path d="M8 11h8" />
@@ -559,9 +590,45 @@ export function MobileNavIcon({ name, active, size = 22 }: MobileNavIconProps) {
     );
   }
 
+  if (name === "Stories") {
+    const movingLineVariants: Variants = {
+      idle: { y: 0, opacity: 1 },
+      active: {
+        y: [0, -4.5, 0, -4.5, 0],
+        opacity: [1, 0.35, 1, 0.35, 1],
+      },
+    };
+
+    return (
+      <motion.svg aria-hidden="true" data-active={active} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ overflow: "visible" }} {...iconInteraction}>
+        <motion.g initial="idle" animate={state} variants={{ idle: { scale: 1 }, active: { scale: [1, 1.03, 1] } }} transition={{ duration: 0.62, ease: "easeInOut" }} style={{ transformBox: "view-box", transformOrigin: "12px 12px" }}>
+          <rect width="18" height="18" x="3" y="3" rx="2" />
+          <path d="M7 3v18" />
+          <path d="M17 3v18" />
+          {[
+            "M3 7.5h4",
+            "M17 7.5h4",
+            "M3 12h18",
+            "M3 16.5h4",
+            "M17 16.5h4",
+          ].map((path, index) => (
+            <motion.path
+              key={path}
+              d={path}
+              initial="idle"
+              animate={state}
+              variants={movingLineVariants}
+              transition={{ duration: 0.72, delay: index * 0.035, ease: "easeInOut", times: [0, 0.22, 0.45, 0.68, 1] }}
+            />
+          ))}
+        </motion.g>
+      </motion.svg>
+    );
+  }
+
   if (name === "Profile") {
     return (
-      <motion.svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...hoverMotion}>
+      <motion.svg aria-hidden="true" data-active={active} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...iconInteraction}>
         <motion.path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" strokeDasharray="40" initial="idle" animate={state} variants={{ idle: { strokeDashoffset: 0, opacity: 1 }, active: { strokeDashoffset: [40, 0], opacity: [0.3, 1] } }} transition={{ duration: 0.6, ease: "easeInOut" }} />
         <motion.circle cx="12" cy="7" r="4" initial="idle" animate={state} variants={{ idle: { scale: 1, opacity: 1 }, active: { scale: [0.6, 1.2, 1], opacity: [0, 1] } }} transition={{ duration: 0.5, ease: "easeOut", delay: 0.2 }} style={{ transformBox: "view-box", transformOrigin: "12px 7px" }} />
       </motion.svg>
@@ -569,7 +636,7 @@ export function MobileNavIcon({ name, active, size = 22 }: MobileNavIconProps) {
   }
 
   return (
-    <motion.svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...hoverMotion}>
+    <motion.svg aria-hidden="true" data-active={active} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...iconInteraction}>
       <motion.g initial="idle" animate={state} variants={{ idle: { scaleX: 1, scaleY: 1, y: 0 }, active: { y: [-4, 0, 0], scaleY: [1, 0.86, 1.05, 1], scaleX: [1, 1.12, 0.98, 1] } }} transition={{ duration: 0.48, ease: [0.23, 1, 0.32, 1] }} style={{ transformBox: "view-box", transformOrigin: "12px 22px" }}>
         <motion.path d="M16 10a4 4 0 0 1-8 0" initial="idle" animate={state} variants={{ idle: { scale: 1, opacity: 1 }, active: { scale: [0.5, 1.15, 1], opacity: [0, 1, 1] } }} transition={{ ...iconTransition, delay: 0.1 }} style={{ transformBox: "view-box", transformOrigin: "12px 11px" }} />
         <path d="M3.1 6.03h17.8" />

@@ -124,6 +124,18 @@ service cloud.firestore {
 
         allow delete: if false;
       }
+
+      match /following/{followingUid} {
+        allow read, delete: if isSelf(uid);
+
+        allow create, update: if isSelf(uid)
+          && followingUid != uid
+          && request.resource.data.followerUserId == uid
+          && request.resource.data.followingUserId == followingUid
+          && request.resource.data.keys().hasOnly([
+            'followerUserId', 'followingUserId', 'createdAt'
+          ]);
+      }
     }
 
     match /publicProfiles/{uid} {
@@ -282,6 +294,20 @@ service cloud.firestore {
         allow create, update: if signedIn()
           && request.resource.data.userId == request.auth.uid;
         allow read: if signedIn();
+      }
+
+      match /comments/{commentId} {
+        allow read: if get(/databases/$(database)/documents/stories/$(storyId)).data.audience == 'public'
+          || signedIn();
+        allow create: if signedIn()
+          && request.resource.data.userId == request.auth.uid
+          && request.resource.data.body is string
+          && request.resource.data.body.size() > 0
+          && request.resource.data.body.size() <= 280
+          && request.resource.data.keys().hasOnly([
+            'userId', 'userName', 'userPhotoURL', 'body', 'createdAt'
+          ]);
+        allow update, delete: if false;
       }
     }
 
