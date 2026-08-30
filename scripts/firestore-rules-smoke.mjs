@@ -87,6 +87,7 @@ const conversationRef = id => doc(db, "conversations", id);
 const inboxRef = (uid, id) => doc(db, "users", uid, "conversationRefs", id);
 const communityRef = id => doc(db, "communities", id);
 const communityMemberRef = (communityId, uid) => doc(db, "communities", communityId, "members", uid);
+const memoryRef = (uid, id) => doc(db, "users", uid, "memories", id);
 
 // Mirrors messagesQuery() in client/src/lib/firebaseChat.ts
 const messagesQuery = (conversationId, uid) =>
@@ -259,6 +260,80 @@ await step("READ conversation doc as recipient", () => getDoc(conversationRef(co
 
 await step("READ own inbox list as recipient", () =>
   getDocs(query(collection(db, "users", userB, "conversationRefs"), orderBy("lastMessageAt", "desc"), limit(80))));
+
+await step("recipient replies to a source message", async () => {
+  const timestamp = serverTimestamp();
+  const batch = writeBatch(db);
+  const replyRef = doc(collection(db, "conversations", conversationId, "messages"));
+  batch.set(replyRef, {
+    senderId: userB,
+    memberIds,
+    body: "replying with context",
+    attachmentPath: null,
+    storyId: null,
+    status: "sent",
+    deliveredTo: [userB],
+    readBy: [userB],
+    replyToMessageId: firstMessageId,
+    replyToSenderId: userA,
+    replyToSnippet: "hello",
+    reactions: {},
+    savedBy: [],
+    memoryPrompt: null,
+    createdAt: timestamp,
+  });
+  batch.update(conversationRef(conversationId), {
+    updatedAt: timestamp,
+    lastMessageAt: timestamp,
+    lastMessageId: replyRef.id,
+    lastMessageSenderId: userB,
+    lastMessagePreview: "replying with context",
+    lastMessageStatus: "sent",
+  });
+  for (const uid of memberIds) {
+    batch.set(inboxRef(uid, conversationId), {
+      conversationId,
+      kind: "direct",
+      title: null,
+      memberIds,
+      mutedUntil: null,
+      storefrontId: null,
+      storefrontSlug: null,
+      updatedAt: timestamp,
+      lastMessageAt: timestamp,
+      lastMessageId: replyRef.id,
+      lastMessageSenderId: userB,
+      lastMessagePreview: "replying with context",
+      lastMessageStatus: "sent",
+    }, { merge: true });
+  }
+  await batch.commit();
+});
+
+await step("recipient reacts to and saves a message memory", async () => {
+  const timestamp = serverTimestamp();
+  const batch = writeBatch(db);
+  batch.update(doc(db, "conversations", conversationId, "messages", firstMessageId), {
+    reactions: { heart: [userB] },
+    savedBy: [userB],
+    memoryPrompt: "hello",
+    memoryUpdatedAt: timestamp,
+    reactionUpdatedAt: timestamp,
+  });
+  batch.set(memoryRef(userB, `message_${firstMessageId}`), {
+    ownerUserId: userB,
+    sourceType: "message",
+    conversationId,
+    conversationTitle: "Private chat",
+    messageId: firstMessageId,
+    senderUserId: userA,
+    snippet: "hello",
+    sourceCreatedAt: timestamp,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  }, { merge: true });
+  await batch.commit();
+});
 
 // --- 4. communities can be created, listed, and joined ---------------------
 await signOut(auth);

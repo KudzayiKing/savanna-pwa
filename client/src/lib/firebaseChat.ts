@@ -1,6 +1,7 @@
 import type { AppUser } from "@/lib/userProfile";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  arrayRemove,
   arrayUnion,
   collection,
   doc,
@@ -11,7 +12,6 @@ import {
   orderBy,
   query,
   serverTimestamp,
-  setDoc,
   type DocumentData,
   where,
   writeBatch,
@@ -22,6 +22,14 @@ import { getFirebaseStorage, getFirestoreDb } from "./firebase";
 
 export type FirebaseConversationKind = "direct" | "group" | "merchant_support";
 export type FirebaseMessageStatus = "sending" | "sent" | "delivered" | "read" | "failed" | "deleted";
+export type FirebaseMessageReactionKey = "heart" | "thumbs_up" | "laugh" | "pray";
+
+export const FIREBASE_MESSAGE_REACTIONS: Array<{ key: FirebaseMessageReactionKey; label: string }> = [
+  { key: "heart", label: "Heart" },
+  { key: "thumbs_up", label: "Like" },
+  { key: "laugh", label: "Laugh" },
+  { key: "pray", label: "Thanks" },
+];
 
 export type FirebaseConversationListItem = {
   id: string;
@@ -59,6 +67,14 @@ export type FirebaseMessage = {
   status: FirebaseMessageStatus;
   deliveredTo: string[];
   readBy: string[];
+  replyTo: {
+    messageId: string;
+    senderUserId: string;
+    snippet: string;
+  } | null;
+  reactions: Partial<Record<FirebaseMessageReactionKey, string[]>>;
+  savedBy: string[];
+  memoryPrompt: string | null;
 };
 
 type CreateConversationInput = {
@@ -89,6 +105,21 @@ function toDate(value: unknown) {
 function storageName(file: File) {
   const extension = file.name.split(".").pop()?.toLowerCase() || "bin";
   return `${crypto.randomUUID()}.${extension}`;
+}
+
+function messageSnippet(value: string) {
+  const trimmed = value.trim().replace(/\s+/g, " ");
+  return trimmed.length > 120 ? `${trimmed.slice(0, 117)}...` : trimmed;
+}
+
+function mapMessageReactions(value: unknown): Partial<Record<FirebaseMessageReactionKey, string[]>> {
+  if (!value || typeof value !== "object") return {};
+  const data = value as Record<string, unknown>;
+  return FIREBASE_MESSAGE_REACTIONS.reduce<Partial<Record<FirebaseMessageReactionKey, string[]>>>((next, reaction) => {
+    const userIds = data[reaction.key];
+    if (Array.isArray(userIds)) next[reaction.key] = userIds.map(String);
+    return next;
+  }, {});
 }
 
 function mapConversation(id: string, data: DocumentData): FirebaseConversationListItem {
@@ -215,6 +246,16 @@ function mapMessage(id: string, data: DocumentData, viewerId?: string | null): F
     status: messageReceiptStatus(data, viewerId),
     deliveredTo: Array.isArray(data.deliveredTo) ? data.deliveredTo.map(String) : [],
     readBy: Array.isArray(data.readBy) ? data.readBy.map(String) : [],
+    replyTo: typeof data.replyToMessageId === "string" && typeof data.replyToSenderId === "string"
+      ? {
+          messageId: data.replyToMessageId,
+          senderUserId: data.replyToSenderId,
+          snippet: typeof data.replyToSnippet === "string" ? data.replyToSnippet : "",
+        }
+      : null,
+    reactions: mapMessageReactions(data.reactions),
+    savedBy: Array.isArray(data.savedBy) ? data.savedBy.map(String) : [],
+    memoryPrompt: typeof data.memoryPrompt === "string" ? data.memoryPrompt : null,
   };
 }
 
@@ -365,6 +406,8 @@ export async function sendFirebaseMessage(input: {
   status?: FirebaseMessageStatus;
   attachmentPath?: string | null;
   storyId?: string | null;
+  replyTo?: FirebaseMessage["replyTo"];
+  memoryPrompt?: string | null;
 }) {
   const db = getFirestoreDb();
   const body = input.body.trim();
@@ -387,6 +430,12 @@ export async function sendFirebaseMessage(input: {
     status: input.status ?? "sent",
     deliveredTo: [input.senderId],
     readBy: [input.senderId],
+    replyToMessageId: input.replyTo?.messageId ?? null,
+    replyToSenderId: input.replyTo?.senderUserId ?? null,
+    replyToSnippet: input.replyTo?.snippet ? messageSnippet(input.replyTo.snippet) : null,
+    reactions: {},
+    savedBy: [],
+    memoryPrompt: input.memoryPrompt ?? null,
     createdAt: timestamp,
   });
 
@@ -437,6 +486,7 @@ export async function sendFirebaseAttachment(input: {
   sender: AppUser;
   memberIds?: string[];
   file: File;
+  replyTo?: FirebaseMessage["replyTo"];
 }) {
   const path = `conversations/${input.conversationId}/${input.sender.id}/${storageName(input.file)}`;
   const storageRef = ref(getFirebaseStorage(), path);
@@ -464,6 +514,12 @@ export async function sendFirebaseAttachment(input: {
     status: "sent",
     deliveredTo: [input.sender.id],
     readBy: [input.sender.id],
+    replyToMessageId: input.replyTo?.messageId ?? null,
+    replyToSenderId: input.replyTo?.senderUserId ?? null,
+    replyToSnippet: input.replyTo?.snippet ? messageSnippet(input.replyTo.snippet) : null,
+    reactions: {},
+    savedBy: [],
+    memoryPrompt: null,
     createdAt: timestamp,
   });
 
@@ -490,6 +546,54 @@ export async function sendFirebaseAttachment(input: {
       storefrontSlug: typeof conversationData?.storefrontSlug === "string" ? conversationData.storefrontSlug : null,
     }), { merge: true });
   }
+  await batch.commit();
+}
+
+export async function toggleFirebaseMessageReaction(input: {
+  conversationId: string;
+  messageId: string;
+  userId: string;
+  reaction: FirebaseMessageReactionKey;
+  active: boolean;
+}) {
+  const reactionAllowed = FIREBASE_MESSAGE_REACTIONS.some(item => item.key === input.reaction);
+  if (!reactionAllowed) throw new Error("Choose a supported reaction.");
+  const db = getFirestoreDb();
+  const batch = writeBatch(db);
+  batch.update(doc(db, "conversations", input.conversationId, "messages", input.messageId), {
+    [`reactions.${input.reaction}`]: input.active ? arrayRemove(input.userId) : arrayUnion(input.userId),
+    reactionUpdatedAt: serverTimestamp(),
+  });
+  await batch.commit();
+}
+
+export async function saveFirebaseMessageMemory(input: {
+  user: AppUser;
+  conversationId: string;
+  conversationTitle: string;
+  message: FirebaseMessage;
+}) {
+  const db = getFirestoreDb();
+  const timestamp = serverTimestamp();
+  const snippet = messageSnippet(input.message.contentType === "attachment" ? "Private attachment" : input.message.payload);
+  const batch = writeBatch(db);
+  batch.set(doc(db, "users", input.user.id, "memories", `message_${input.message.id}`), {
+    ownerUserId: input.user.id,
+    sourceType: "message",
+    conversationId: input.conversationId,
+    conversationTitle: input.conversationTitle,
+    messageId: input.message.id,
+    senderUserId: input.message.senderUserId,
+    snippet,
+    sourceCreatedAt: input.message.createdAt,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  }, { merge: true });
+  batch.update(doc(db, "conversations", input.conversationId, "messages", input.message.id), {
+    savedBy: arrayUnion(input.user.id),
+    memoryPrompt: snippet,
+    memoryUpdatedAt: timestamp,
+  });
   await batch.commit();
 }
 
@@ -604,16 +708,30 @@ export function useFirebaseChatMutations(user?: AppUser | null) {
       onSuccess: conversationId => invalidateConversation(conversationId),
     }),
     send: useMutation({
-      mutationFn: async (input: { conversationId: string; memberIds: string[]; body: string }) => {
+      mutationFn: async (input: { conversationId: string; memberIds: string[]; body: string; replyTo?: FirebaseMessage["replyTo"] }) => {
         if (!user) throw new Error("Sign in to send a message");
-        await sendFirebaseMessage({ conversationId: input.conversationId, senderId: user.id, memberIds: input.memberIds, body: input.body });
+        await sendFirebaseMessage({ conversationId: input.conversationId, senderId: user.id, memberIds: input.memberIds, body: input.body, replyTo: input.replyTo });
       },
       onSuccess: (_result, input) => invalidateConversation(input.conversationId),
     }),
     sendAttachment: useMutation({
-      mutationFn: async (input: { conversationId: string; memberIds: string[]; file: File }) => {
+      mutationFn: async (input: { conversationId: string; memberIds: string[]; file: File; replyTo?: FirebaseMessage["replyTo"] }) => {
         if (!user) throw new Error("Sign in to send an attachment");
-        await sendFirebaseAttachment({ conversationId: input.conversationId, sender: user, memberIds: input.memberIds, file: input.file });
+        await sendFirebaseAttachment({ conversationId: input.conversationId, sender: user, memberIds: input.memberIds, file: input.file, replyTo: input.replyTo });
+      },
+      onSuccess: (_result, input) => invalidateConversation(input.conversationId),
+    }),
+    react: useMutation({
+      mutationFn: async (input: { conversationId: string; messageId: string; reaction: FirebaseMessageReactionKey; active: boolean }) => {
+        if (!user) throw new Error("Sign in to react");
+        await toggleFirebaseMessageReaction({ ...input, userId: user.id });
+      },
+      onSuccess: (_result, input) => invalidateConversation(input.conversationId),
+    }),
+    saveMemory: useMutation({
+      mutationFn: async (input: { conversationId: string; conversationTitle: string; message: FirebaseMessage }) => {
+        if (!user) throw new Error("Sign in to save memories");
+        await saveFirebaseMessageMemory({ ...input, user });
       },
       onSuccess: (_result, input) => invalidateConversation(input.conversationId),
     }),

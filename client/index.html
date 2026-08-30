@@ -10,10 +10,66 @@
     <meta name="application-name" content="Savanna" />
     <meta name="description" content="A thoughtful space for private conversations, local commerce, and learning." />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <!-- TODO: iOS ignores SVG here and falls back to a page screenshot. Ship a
-         180x180 PNG (icons/apple-touch-icon.png) and point this at it. -->
-    <link rel="apple-touch-icon" href="/icons/icon.svg" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
     <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
+    <style>
+      /**
+       * Pre-React splash. Shows the animated mark while the bundle downloads;
+       * main.tsx fades it out once the app has mounted (ErrorBoundary removes
+       * it directly so a broken boot never hides behind it).
+       *
+       * Colors follow the app theme: the inline script below mirrors
+       * ThemeContext's resolution (?theme= param, then localStorage.theme) and
+       * adds `.dark` to <html> before first paint, so a dark-mode user never
+       * sees a light flash. The bubble dots are cutouts of the page background,
+       * so they swap with it too.
+       */
+      #splash {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #fcfaf4;
+        opacity: 1;
+        visibility: visible;
+        transition: opacity 0.45s ease, visibility 0.45s, background-color 0.3s ease;
+      }
+      #splash.hide {
+        opacity: 0;
+        visibility: hidden;
+      }
+      #splash svg {
+        width: min(62vmin, 320px);
+        height: auto;
+      }
+      #splash .dot {
+        fill: #fcfaf4;
+      }
+      .dark #splash {
+        background: #111b21;
+      }
+      .dark #splash .dot {
+        fill: #111b21;
+      }
+    </style>
+    <script>
+      (function () {
+        try {
+          var requested = new URLSearchParams(window.location.search).get("theme");
+          var stored = window.localStorage.getItem("theme");
+          var dark = requested === "dark" || (requested !== "light" && stored === "dark");
+          if (dark) {
+            document.documentElement.classList.add("dark");
+            document.documentElement.style.backgroundColor = "#111B21";
+          }
+        } catch (e) {
+          /* localStorage unavailable (privacy mode): stay light */
+        }
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600;6..72,700&family=Ramabhadra&display=swap" rel="stylesheet" />
@@ -21,6 +77,84 @@
   </head>
 
   <body>
+    <div id="splash" aria-hidden="true">
+      <!-- Animated Savanna mark. Inlined (rather than <img src>) so the dot
+           fill can follow the theme via the rules above. Keyframes are
+           prefixed `sv-` and selectors scoped to #splash because an inline
+           SVG <style> applies to the whole document. -->
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1254 1254">
+        <style>
+          #splash .bob, #splash .wing, #splash .tail, #splash .bubble { transform-box: view-box; }
+          #splash .bob { animation: sv-bob 3.8s ease-in-out infinite; }
+          #splash .wing { animation: sv-flap 1.9s ease-in-out infinite; }
+          #splash .tail { animation: sv-swish 2.6s ease-in-out infinite; }
+          #splash .bubble { animation: sv-float 4.4s ease-in-out infinite; }
+          #splash .w1 { transform-origin: 235px 118px; }
+          #splash .w2 { transform-origin: 232px 292px; animation-delay: 0.07s; }
+          #splash .w3 { transform-origin: 296px 448px; animation-delay: 0.14s; }
+          #splash .w4 { transform-origin: 394px 580px; animation-delay: 0.21s; }
+          #splash .w5 { transform-origin: 482px 608px; animation-delay: 0.1s; }
+          #splash .t1 { transform-origin: 828px 614px; }
+          #splash .t2 { transform-origin: 602px 882px; animation-delay: -1.3s; }
+          #splash .bubble { transform-origin: 940px 458px; }
+          #splash .dot { animation: sv-blink 1.5s ease-in-out infinite; }
+          #splash .d2 { animation-delay: 0.25s; }
+          #splash .d3 { animation-delay: 0.5s; }
+          @keyframes sv-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-16px); } }
+          @keyframes sv-flap { 0%, 100% { transform: rotate(-1.2deg); } 50% { transform: rotate(3.2deg); } }
+          @keyframes sv-swish { 0%, 100% { transform: rotate(-2.2deg); } 50% { transform: rotate(2.6deg); } }
+          @keyframes sv-float { 0%, 100% { transform: translate(0, 0) rotate(0.6deg); } 50% { transform: translate(-7px, -12px) rotate(-1deg); } }
+          @keyframes sv-blink { 0%, 100% { opacity: 0.3; } 40% { opacity: 1; } }
+          @media (prefers-reduced-motion: reduce) {
+            #splash .bob, #splash .wing, #splash .tail, #splash .bubble, #splash .dot { animation: none; }
+          }
+        </style>
+        <defs>
+          <linearGradient id="sv-bird-grad" x1="0.15" y1="0" x2="0.55" y2="1">
+            <stop offset="0" stop-color="#FCE666"/>
+            <stop offset="0.45" stop-color="#F5C11E"/>
+            <stop offset="1" stop-color="#DE8F00"/>
+          </linearGradient>
+        </defs>
+        <g class="bob">
+          <g class="wing w1">
+            <path fill="url(#sv-bird-grad)" fill-rule="evenodd" d="M213.6 87.9 C213.2 95.5 213.1 102.7 213.4 104.1 C213.7 105.4 214.2 111.0 214.5 116.5 C218.4 187.7 256.4 254.6 315.2 293.6 C348.7 315.8 383.1 328.4 454.5 344.4 C493.5 353.2 504.6 356.1 521.5 362.2 C577.6 382.6 626.4 419.4 672.5 475.7 C675.7 479.7 678.5 482.8 678.8 482.6 C679.4 481.9 671.4 458.9 665.0 442.5 C631.2 357.2 577.6 299.9 491.0 256.5 C472.0 246.9 452.8 238.8 424.0 228.0 C388.3 214.7 366.2 205.6 347.5 196.5 C289.1 168.1 248.6 132.2 219.4 82.8 L214.3 74.1 L213.6 87.9 Z"/>
+            <path fill="none" stroke="#8A4A02" stroke-width="5" stroke-linejoin="round" d="M213.6 87.9 C213.2 95.5 213.1 102.7 213.4 104.1 C213.7 105.4 214.2 111.0 214.5 116.5 C218.4 187.7 256.4 254.6 315.2 293.6 C348.7 315.8 383.1 328.4 454.5 344.4 C493.5 353.2 504.6 356.1 521.5 362.2 C577.6 382.6 626.4 419.4 672.5 475.7 C675.7 479.7 678.5 482.8 678.8 482.6 C679.4 481.9 671.4 458.9 665.0 442.5 C631.2 357.2 577.6 299.9 491.0 256.5 C472.0 246.9 452.8 238.8 424.0 228.0 C388.3 214.7 366.2 205.6 347.5 196.5 C289.1 168.1 248.6 132.2 219.4 82.8 L214.3 74.1 L213.6 87.9 Z"/>
+          </g>
+          <g class="wing w2">
+            <path fill="url(#sv-bird-grad)" fill-rule="evenodd" d="M210.6 263.7 C210.9 265.8 212.9 274.1 215.0 282.1 C233.6 352.5 279.1 405.4 347.0 435.3 C372.8 446.6 395.3 452.6 449.5 462.5 C489.1 469.8 519.4 483.5 540.3 503.8 C544.5 508.0 548.0 511.1 548.0 510.7 C548.0 508.7 545.3 497.7 541.9 486.0 C526.5 432.1 499.8 395.0 463.3 376.6 C447.8 368.8 434.1 364.4 390.5 353.0 C305.3 330.8 261.3 309.3 221.0 270.4 L210.1 259.8 L210.6 263.7 Z"/>
+            <path fill="none" stroke="#8A4A02" stroke-width="5" stroke-linejoin="round" d="M210.6 263.7 C210.9 265.8 212.9 274.1 215.0 282.1 C233.6 352.5 279.1 405.4 347.0 435.3 C372.8 446.6 395.3 452.6 449.5 462.5 C489.1 469.8 519.4 483.5 540.3 503.8 C544.5 508.0 548.0 511.1 548.0 510.7 C548.0 508.7 545.3 497.7 541.9 486.0 C526.5 432.1 499.8 395.0 463.3 376.6 C447.8 368.8 434.1 364.4 390.5 353.0 C305.3 330.8 261.3 309.3 221.0 270.4 L210.1 259.8 L210.6 263.7 Z"/>
+          </g>
+          <g class="wing w3">
+            <path fill="url(#sv-bird-grad)" fill-rule="evenodd" d="M271.6 433.8 C280.1 457.7 297.6 484.5 317.6 504.4 C352.2 538.7 396.4 556.9 466.0 565.5 C511.2 571.1 538.7 582.5 563.3 605.9 C568.3 610.6 571.7 613.4 571.0 612.1 C567.8 605.9 561.7 585.1 558.4 568.6 L554.8 550.5 L548.9 541.4 C542.2 531.2 526.1 514.8 516.5 508.3 C492.6 492.3 467.7 485.0 409.0 477.0 C348.0 468.6 314.4 457.4 277.9 432.9 L269.2 427.1 L271.6 433.8 Z"/>
+            <path fill="none" stroke="#8A4A02" stroke-width="5" stroke-linejoin="round" d="M271.6 433.8 C280.1 457.7 297.6 484.5 317.6 504.4 C352.2 538.7 396.4 556.9 466.0 565.5 C511.2 571.1 538.7 582.5 563.3 605.9 C568.3 610.6 571.7 613.4 571.0 612.1 C567.8 605.9 561.7 585.1 558.4 568.6 L554.8 550.5 L548.9 541.4 C542.2 531.2 526.1 514.8 516.5 508.3 C492.6 492.3 467.7 485.0 409.0 477.0 C348.0 468.6 314.4 457.4 277.9 432.9 L269.2 427.1 L271.6 433.8 Z"/>
+          </g>
+          <g class="wing w4">
+            <path fill="url(#sv-bird-grad)" fill-rule="evenodd" d="M366.2 565.7 C395.5 616.7 457.5 656.1 521.5 664.5 C543.7 667.3 568.8 667.3 586.0 664.4 C595.8 662.7 582.7 667.7 564.0 672.9 C549.9 676.7 516.9 678.7 507.5 676.3 C505.3 675.7 501.9 674.9 500.0 674.6 L496.5 674.0 L500.0 677.0 C526.0 699.9 569.5 709.9 606.5 701.5 C633.4 695.4 653.0 685.8 680.3 665.2 C692.7 655.8 697.7 651.6 691.8 655.4 C688.3 657.6 673.8 661.6 661.7 663.5 C652.4 665.1 649.4 665.2 640.7 664.2 C616.2 661.5 603.6 655.1 573.8 630.5 C537.5 600.3 517.8 591.7 476.1 587.4 C441.2 583.9 432.8 582.8 421.2 580.4 C407.1 577.5 387.7 571.5 374.1 565.9 C369.0 563.8 364.6 562.0 364.4 562.0 C364.2 562.0 365.0 563.7 366.2 565.7 Z"/>
+            <path fill="none" stroke="#8A4A02" stroke-width="5" stroke-linejoin="round" d="M366.2 565.7 C395.5 616.7 457.5 656.1 521.5 664.5 C543.7 667.3 568.8 667.3 586.0 664.4 C595.8 662.7 582.7 667.7 564.0 672.9 C549.9 676.7 516.9 678.7 507.5 676.3 C505.3 675.7 501.9 674.9 500.0 674.6 L496.5 674.0 L500.0 677.0 C526.0 699.9 569.5 709.9 606.5 701.5 C633.4 695.4 653.0 685.8 680.3 665.2 C692.7 655.8 697.7 651.6 691.8 655.4 C688.3 657.6 673.8 661.6 661.7 663.5 C652.4 665.1 649.4 665.2 640.7 664.2 C616.2 661.5 603.6 655.1 573.8 630.5 C537.5 600.3 517.8 591.7 476.1 587.4 C441.2 583.9 432.8 582.8 421.2 580.4 C407.1 577.5 387.7 571.5 374.1 565.9 C369.0 563.8 364.6 562.0 364.4 562.0 C364.2 562.0 365.0 563.7 366.2 565.7 Z"/>
+          </g>
+          <g class="wing w5">
+            <path fill="url(#sv-bird-grad)" fill-rule="evenodd" d="M461.7 370.8 C504.1 394.8 532.3 436.2 548.2 498.0 C550.4 506.5 555.0 527.9 558.5 545.6 C567.0 588.1 569.6 598.2 576.4 613.3 C590.2 644.0 618.0 661.5 650.0 659.7 C679.2 658.0 701.5 647.4 745.0 614.3 C767.6 597.2 775.7 591.9 788.0 586.3 L797.5 582.0 L790.5 582.0 C771.2 581.9 756.6 574.6 733.2 553.3 C723.3 544.3 708.0 527.1 696.0 511.5 C646.1 446.5 596.9 405.4 546.5 386.5 C528.8 379.9 499.5 373.3 473.0 370.0 C468.3 369.4 462.7 368.7 460.5 368.4 L456.5 367.9 L461.7 370.8 Z M864.5 453.5 C855.1 455.2 848.9 457.4 840.0 462.2 C818.2 473.8 805.2 489.8 785.2 529.5 C774.8 550.3 766.4 564.7 761.7 569.7 C760.6 571.0 759.8 572.1 760.1 572.3 C770.1 579.1 789.6 581.8 809.0 579.0 C823.6 576.9 839.1 578.4 847.8 582.9 C860.8 589.6 870.6 605.5 873.9 625.4 C874.4 628.3 874.8 629.3 874.9 627.8 C875.4 616.7 885.8 580.4 892.0 568.0 C909.0 534.3 934.7 515.1 970.3 509.4 C976.2 508.5 983.1 508.0 986.5 508.3 L992.5 508.8 L990.1 506.9 C981.8 500.1 963.3 492.5 952.4 491.4 L945.8 490.7 L941.7 485.1 C922.9 459.6 894.4 447.9 864.5 453.5 Z"/>
+            <path fill="none" stroke="#8A4A02" stroke-width="5" stroke-linejoin="round" d="M461.7 370.8 C504.1 394.8 532.3 436.2 548.2 498.0 C550.4 506.5 555.0 527.9 558.5 545.6 C567.0 588.1 569.6 598.2 576.4 613.3 C590.2 644.0 618.0 661.5 650.0 659.7 C679.2 658.0 701.5 647.4 745.0 614.3 C767.6 597.2 775.7 591.9 788.0 586.3 L797.5 582.0 L790.5 582.0 C771.2 581.9 756.6 574.6 733.2 553.3 C723.3 544.3 708.0 527.1 696.0 511.5 C646.1 446.5 596.9 405.4 546.5 386.5 C528.8 379.9 499.5 373.3 473.0 370.0 C468.3 369.4 462.7 368.7 460.5 368.4 L456.5 367.9 L461.7 370.8 Z M864.5 453.5 C855.1 455.2 848.9 457.4 840.0 462.2 C818.2 473.8 805.2 489.8 785.2 529.5 C774.8 550.3 766.4 564.7 761.7 569.7 C760.6 571.0 759.8 572.1 760.1 572.3 C770.1 579.1 789.6 581.8 809.0 579.0 C823.6 576.9 839.1 578.4 847.8 582.9 C860.8 589.6 870.6 605.5 873.9 625.4 C874.4 628.3 874.8 629.3 874.9 627.8 C875.4 616.7 885.8 580.4 892.0 568.0 C909.0 534.3 934.7 515.1 970.3 509.4 C976.2 508.5 983.1 508.0 986.5 508.3 L992.5 508.8 L990.1 506.9 C981.8 500.1 963.3 492.5 952.4 491.4 L945.8 490.7 L941.7 485.1 C922.9 459.6 894.4 447.9 864.5 453.5 Z M900.0 478.9 C911.0 484.7 910.8 500.5 899.6 505.9 C888.9 511.1 878.0 504.2 878.0 492.3 C878.0 480.7 889.8 473.4 900.0 478.9 Z"/>
+          </g>
+          <g class="tail t1">
+            <path fill="url(#sv-bird-grad)" fill-rule="evenodd" d="M813.5 582.0 C779.6 587.0 747.6 612.0 671.9 692.5 C572.2 798.5 523.2 832.7 411.5 874.2 C336.5 902.0 310.1 913.4 276.1 932.7 C218.0 965.7 173.4 1004.0 149.7 1041.2 L146.0 1046.9 L162.3 1034.7 C194.2 1010.7 224.3 992.4 265.7 971.7 C293.9 957.5 306.9 951.9 368.5 927.0 C390.0 918.4 419.4 906.4 434.0 900.5 C513.3 868.4 549.0 857.8 596.7 852.0 C605.9 850.9 619.4 849.3 626.5 848.5 C666.8 843.6 715.6 831.3 743.0 819.0 C797.3 794.6 837.0 754.3 857.4 703.0 C872.8 664.1 875.1 625.8 863.3 602.7 C854.9 585.9 837.0 578.5 813.5 582.0 Z"/>
+            <path fill="none" stroke="#8A4A02" stroke-width="5" stroke-linejoin="round" d="M813.5 582.0 C779.6 587.0 747.6 612.0 671.9 692.5 C572.2 798.5 523.2 832.7 411.5 874.2 C336.5 902.0 310.1 913.4 276.1 932.7 C218.0 965.7 173.4 1004.0 149.7 1041.2 L146.0 1046.9 L162.3 1034.7 C194.2 1010.7 224.3 992.4 265.7 971.7 C293.9 957.5 306.9 951.9 368.5 927.0 C390.0 918.4 419.4 906.4 434.0 900.5 C513.3 868.4 549.0 857.8 596.7 852.0 C605.9 850.9 619.4 849.3 626.5 848.5 C666.8 843.6 715.6 831.3 743.0 819.0 C797.3 794.6 837.0 754.3 857.4 703.0 C872.8 664.1 875.1 625.8 863.3 602.7 C854.9 585.9 837.0 578.5 813.5 582.0 Z"/>
+          </g>
+          <g class="tail t2">
+            <path fill="url(#sv-bird-grad)" fill-rule="evenodd" d="M632.0 850.5 C603.5 854.7 588.9 857.4 573.9 861.1 C518.4 874.6 477.2 896.6 442.5 931.5 C421.5 952.5 414.3 962.3 370.1 1029.8 C335.9 1082.1 305.7 1116.1 263.0 1150.3 C256.1 1155.8 250.3 1160.4 250.1 1160.6 C248.5 1161.9 271.1 1152.7 280.8 1148.0 C330.8 1123.9 380.1 1083.1 437.6 1018.5 C486.3 963.6 511.2 939.0 543.0 913.9 C575.1 888.6 610.0 867.7 645.6 852.5 C651.6 849.9 656.7 847.6 656.9 847.4 C657.6 846.7 654.4 847.1 632.0 850.5 Z"/>
+            <path fill="none" stroke="#8A4A02" stroke-width="5" stroke-linejoin="round" d="M632.0 850.5 C603.5 854.7 588.9 857.4 573.9 861.1 C518.4 874.6 477.2 896.6 442.5 931.5 C421.5 952.5 414.3 962.3 370.1 1029.8 C335.9 1082.1 305.7 1116.1 263.0 1150.3 C256.1 1155.8 250.3 1160.4 250.1 1160.6 C248.5 1161.9 271.1 1152.7 280.8 1148.0 C330.8 1123.9 380.1 1083.1 437.6 1018.5 C486.3 963.6 511.2 939.0 543.0 913.9 C575.1 888.6 610.0 867.7 645.6 852.5 C651.6 849.9 656.7 847.6 656.9 847.4 C657.6 846.7 654.4 847.1 632.0 850.5 Z"/>
+          </g>
+        </g>
+        <g class="bubble">
+          <path fill="url(#sv-bird-grad)" fill-rule="evenodd" d="M1006.5 245.5 C927.4 256.7 880.2 317.7 906.5 374.7 C915.2 393.6 936.3 415.0 954.3 423.1 L957.0 424.3 L957.0 443.7 C957.0 465.8 957.0 465.8 964.9 462.1 C967.4 460.9 977.3 455.3 986.8 449.8 L1004.1 439.8 L1026.8 439.6 C1051.8 439.4 1057.4 438.6 1075.7 432.5 C1145.0 409.5 1173.1 342.8 1134.9 292.1 C1109.6 258.4 1055.0 238.7 1006.5 245.5 Z"/>
+          <path fill="none" stroke="#8A4A02" stroke-width="5" stroke-linejoin="round" d="M1006.5 245.5 C927.4 256.7 880.2 317.7 906.5 374.7 C915.2 393.6 936.3 415.0 954.3 423.1 L957.0 424.3 L957.0 443.7 C957.0 465.8 957.0 465.8 964.9 462.1 C967.4 460.9 977.3 455.3 986.8 449.8 L1004.1 439.8 L1026.8 439.6 C1051.8 439.4 1057.4 438.6 1075.7 432.5 C1145.0 409.5 1173.1 342.8 1134.9 292.1 C1109.6 258.4 1055.0 238.7 1006.5 245.5 Z"/>
+          <circle class="dot d1" cx="969" cy="342" r="15.5"/>
+          <circle class="dot d2" cx="1026" cy="342" r="15.5"/>
+          <circle class="dot d3" cx="1081" cy="343" r="15.5"/>
+        </g>
+      </svg>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     <script

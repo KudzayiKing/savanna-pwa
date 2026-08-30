@@ -1,7 +1,12 @@
 // Bump on every change to this file: the cache name is the only thing that
 // tells a returning client its shell is stale.
-const CACHE_NAME = "savanna-shell-v9";
-const SHELL_URLS = ["/", "/manifest.webmanifest", "/icons/icon.svg", "/icons/icon-maskable.svg"];
+const CACHE_NAME = "savanna-shell-v10";
+const SHELL_URLS = [
+  "/",
+  "/manifest.webmanifest",
+  "/icons/icon.svg",
+  "/icons/icon-maskable.svg",
+];
 
 // Runtime cache ceiling. Images are cached opportunistically as the user
 // browses, so without a bound this grows without limit on a long-lived

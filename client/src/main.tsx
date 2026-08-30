@@ -10,6 +10,44 @@ import { startLogin } from "./const";
 import "./index.css";
 
 /**
+ * Fades out the pre-React splash overlay declared in index.html.
+ *
+ * The mark should be on screen long enough to register (min 1.2s from
+ * navigation start) but never trap the user behind it (hard cap at 3s, and
+ * ErrorBoundary removes it outright on a render failure). The fade transition
+ * lives in index.css-adjacent inline styles in index.html; we only add the
+ * class and then detach the node once the transition has finished.
+ */
+function retireSplash() {
+  const el = document.getElementById("splash");
+  if (!el) return;
+
+  const MIN_DISPLAY_MS = 1200;
+  const MAX_DISPLAY_MS = 3000;
+  const started = performance.now();
+
+  let hidden = false;
+  const hide = () => {
+    if (hidden) return;
+    hidden = true;
+    el.classList.add("hide");
+    window.setTimeout(() => el.remove(), 600);
+  };
+
+  const hideAfterMin = () => {
+    window.setTimeout(hide, Math.max(0, MIN_DISPLAY_MS - (performance.now() - started)));
+  };
+  if (document.readyState === "complete") {
+    hideAfterMin();
+  } else {
+    window.addEventListener("load", hideAfterMin, { once: true });
+  }
+  window.setTimeout(hide, MAX_DISPLAY_MS);
+}
+
+retireSplash();
+
+/**
  * Registers the offline shell, and surfaces updates as a prompt rather than
  * silently swapping the app out from under the running tab.
  *
@@ -23,7 +61,7 @@ function registerServiceWorker() {
   // Keep in step with CACHE_NAME in client/public/service-worker.js. The query
   // string is what forces the browser to refetch the worker script rather than
   // serving a cached copy of it.
-  const WORKER_URL = "/service-worker.js?v=9";
+  const WORKER_URL = "/service-worker.js?v=10";
 
   // True when this page is already controlled, i.e. this is an update rather
   // than a first install. `controllerchange` fires in both cases, but only the

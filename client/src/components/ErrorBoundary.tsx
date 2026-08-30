@@ -50,6 +50,9 @@ class ErrorBoundary extends Component<Props, State> {
     // expose internal module paths, dependency versions and source structure,
     // so it is never rendered into the DOM.
     console.error("[ErrorBoundary]", error, info.componentStack);
+    // The pre-React splash overlay in index.html sits above everything; drop it
+    // so the error screen is visible instead of hiding behind it.
+    document.getElementById("splash")?.remove();
   }
 
   render() {

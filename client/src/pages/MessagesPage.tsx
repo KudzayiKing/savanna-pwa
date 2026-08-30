@@ -8,17 +8,20 @@ import { SavannaShell } from "@/components/SavannaShell";
 import { StoryComposer } from "@/components/StoriesPanel";
 import { Button } from "@/components/ui/button";
 import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
-import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { useIsMobile } from "@/hooks/useMobile";
 import { startLogin } from "@/const";
 import {
+  FIREBASE_MESSAGE_REACTIONS,
   getConversationPeerId,
   useFirebaseChatMutations,
   useFirebaseConversations,
   useFirebaseMessages,
   type FirebaseConversationKind,
   type FirebaseConversationListItem,
+  type FirebaseMessage,
+  type FirebaseMessageReactionKey,
   type FirebaseMessageStatus,
 } from "@/lib/firebaseChat";
 import { useFirebaseCommunityMutations, type FirebaseCommunityVisibility } from "@/lib/firebaseCommunities";
@@ -27,12 +30,18 @@ import { answerConversationRecall, parseSavannaInvocation, type SavannaRecallAns
 import { isSameUser, normalizeUsername, searchUserProfilesByUsername, type AppUser } from "@/lib/userProfile";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
-import { FileText, Loader2, MessageCircle, Paperclip, Users, X } from "lucide-react";
-import { type ChangeEvent, type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Bookmark, FileText, Heart, Loader2, MessageCircle, Paperclip, Reply, Users, X } from "lucide-react";
+import { type ChangeEvent, type FormEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 
 const allowedMimeTypes = ["image/jpeg", "image/png", "image/webp", "application/pdf", "audio/mpeg", "video/mp4"];
+const reactionGlyphs: Record<FirebaseMessageReactionKey, string> = {
+  heart: "Love",
+  thumbs_up: "+1",
+  laugh: "Ha",
+  pray: "Thx",
+};
 
 type ConversationListItem = FirebaseConversationListItem;
 type CreationMode = FirebaseConversationKind | "community";
@@ -145,6 +154,8 @@ export default function MessagesPage() {
   const chatMutations = useFirebaseChatMutations(user);
   const [draft, setDraft] = useState("");
   const [attachment, setAttachment] = useState<File | null>(null);
+  const [replyTo, setReplyTo] = useState<FirebaseMessage | null>(null);
+  const [activeMessageActions, setActiveMessageActions] = useState<string | null>(null);
   const [memberIds, setMemberIds] = useState("");
   const [groupTitle, setGroupTitle] = useState("");
   const [conversationSearch, setConversationSearch] = useState("");
@@ -169,6 +180,8 @@ export default function MessagesPage() {
   const attachmentInput = useRef<HTMLInputElement>(null);
   const micIcon = useRef<ChatIconHandle>(null);
   const messageRefs = useRef<Record<string, HTMLElement | null>>({});
+  const actionHideTimer = useRef<number | null>(null);
+  const longPressTimer = useRef<number | null>(null);
   const normalizedUsernameSearch = normalizeUsername(conversationSearch);
   const isUsernameSearch = conversationSearch.trim().startsWith("@") && normalizedUsernameSearch.length >= 2;
   const usernameResults = useQuery({
@@ -182,6 +195,11 @@ export default function MessagesPage() {
     if (!selectedConversationId || !conversations.data?.length) return;
     if (!conversations.data.some(conversation => conversation.id === selectedConversationId)) setSelectedConversationId(null);
   }, [conversations.data, selectedConversationId]);
+  useEffect(() => { setReplyTo(null); }, [selectedConversationId]);
+  useEffect(() => () => {
+    if (actionHideTimer.current) window.clearTimeout(actionHideTimer.current);
+    if (longPressTimer.current) window.clearTimeout(longPressTimer.current);
+  }, []);
   useEffect(() => {
     if (import.meta.env.DEV && !isMobile && chatPreviewMode === "desktop" && previewConversations[0]) setSelectedConversationId(previewConversations[0].id);
   }, [chatPreviewMode, isMobile]);
@@ -375,6 +393,12 @@ export default function MessagesPage() {
     setAttachment(file);
   };
 
+  const messageSnippet = (message: FirebaseMessage) => {
+    const text = message.contentType === "attachment" ? "Private attachment" : message.payload;
+    const trimmed = text.trim().replace(/\s+/g, " ");
+    return trimmed.length > 120 ? `${trimmed.slice(0, 117)}...` : trimmed;
+  };
+
   const handleSend = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!selectedConversationId) return;
@@ -399,10 +423,16 @@ export default function MessagesPage() {
     }
     if (attachment) {
       chatMutations.sendAttachment.mutate(
-        { conversationId: selectedConversationId, memberIds: selected?.memberIds ?? [], file: attachment },
+        {
+          conversationId: selectedConversationId,
+          memberIds: selected?.memberIds ?? [],
+          file: attachment,
+          replyTo: replyTo ? { messageId: replyTo.id, senderUserId: replyTo.senderUserId, snippet: messageSnippet(replyTo) } : null,
+        },
         {
           onSuccess: () => {
             setAttachment(null);
+            setReplyTo(null);
             toast.success("Private attachment sent");
           },
           onError: error => toast.error(error.message),
@@ -412,9 +442,17 @@ export default function MessagesPage() {
     }
     if (draft.trim()) {
       chatMutations.send.mutate(
-        { conversationId: selectedConversationId, memberIds: selected?.memberIds ?? [], body: draft.trim() },
         {
-          onSuccess: () => setDraft(""),
+          conversationId: selectedConversationId,
+          memberIds: selected?.memberIds ?? [],
+          body: draft.trim(),
+          replyTo: replyTo ? { messageId: replyTo.id, senderUserId: replyTo.senderUserId, snippet: messageSnippet(replyTo) } : null,
+        },
+        {
+          onSuccess: () => {
+            setDraft("");
+            setReplyTo(null);
+          },
           onError: error => toast.error(error.message),
         },
       );
@@ -514,6 +552,44 @@ export default function MessagesPage() {
     messageRefs.current[messageId]?.scrollIntoView({ behavior: "smooth", block: "center" });
   };
 
+  const clearActionHideTimer = () => {
+    if (!actionHideTimer.current) return;
+    window.clearTimeout(actionHideTimer.current);
+    actionHideTimer.current = null;
+  };
+
+  const scheduleMessageActionsHide = () => {
+    clearActionHideTimer();
+    actionHideTimer.current = window.setTimeout(() => setActiveMessageActions(null), 3600);
+  };
+
+  const revealMessageActions = (messageId: string, autoHide = false) => {
+    clearActionHideTimer();
+    setActiveMessageActions(messageId);
+    if (autoHide) scheduleMessageActionsHide();
+  };
+
+  const clearLongPressTimer = () => {
+    if (!longPressTimer.current) return;
+    window.clearTimeout(longPressTimer.current);
+    longPressTimer.current = null;
+  };
+
+  const messageActionTriggerProps = (messageId: string) => ({
+    onClick: (event: ReactMouseEvent<HTMLElement>) => {
+      if ((event.target as HTMLElement).closest("button")) return;
+      if (!isMobile) revealMessageActions(messageId, true);
+    },
+    onPointerDown: (event: ReactPointerEvent<HTMLElement>) => {
+      if (!isMobile || (event.target as HTMLElement).closest("button")) return;
+      clearLongPressTimer();
+      longPressTimer.current = window.setTimeout(() => revealMessageActions(messageId, true), 420);
+    },
+    onPointerUp: clearLongPressTimer,
+    onPointerCancel: clearLongPressTimer,
+    onPointerLeave: clearLongPressTimer,
+  });
+
   const renderSavannaAnswer = (answer: SavannaRecallAnswer) => (
     <div key={answer.id} className="flex justify-center">
       <article className="savanna-recall-card w-full max-w-[88%] rounded-2xl border border-[#D9A441]/20 bg-[#D9A441]/10 px-4 py-3 text-sm text-[#3d2d1a] dark:border-[#D9A441]/25 dark:bg-[#D9A441]/15 dark:text-[#F0F2F5]">
@@ -529,6 +605,108 @@ export default function MessagesPage() {
         ) : null}
       </article>
     </div>
+  );
+
+  const reactToMessage = (message: FirebaseMessage, reaction: FirebaseMessageReactionKey) => {
+    if (!selectedConversationId || !user) return;
+    scheduleMessageActionsHide();
+    chatMutations.react.mutate(
+      {
+        conversationId: selectedConversationId,
+        messageId: message.id,
+        reaction,
+        active: Boolean(message.reactions[reaction]?.includes(user.id)),
+      },
+      { onError: error => toast.error(error.message) },
+    );
+  };
+
+  const saveMessageMemory = (message: FirebaseMessage) => {
+    if (!selectedConversationId || !user) return;
+    scheduleMessageActionsHide();
+    if (message.savedBy.includes(user.id)) return toast.info("Already saved to memory");
+    chatMutations.saveMemory.mutate(
+      {
+        conversationId: selectedConversationId,
+        conversationTitle: selected ? conversationTitle(selected) : "Conversation",
+        message,
+      },
+      {
+        onSuccess: () => toast.success("Saved to memory"),
+        onError: error => toast.error(error.message),
+      },
+    );
+  };
+
+  const renderReplyContext = (message: FirebaseMessage) => message.replyTo ? (
+    <button
+      type="button"
+      onClick={() => scrollToMessage(message.replyTo!.messageId)}
+      className="mb-2 block w-full rounded-xl border-l-2 border-[#D9A441] bg-black/[0.04] px-3 py-2 text-left text-xs leading-5 text-inherit opacity-85 transition-opacity hover:opacity-100 dark:bg-white/[0.06]"
+    >
+      <span className="block font-semibold text-[#D9A441]">Reply</span>
+      <span className="line-clamp-2">{message.replyTo.snippet}</span>
+    </button>
+  ) : null;
+
+  const renderReactionSummary = (message: FirebaseMessage) => {
+    const entries = FIREBASE_MESSAGE_REACTIONS
+      .map(reaction => ({ ...reaction, userIds: message.reactions[reaction.key] ?? [] }))
+      .filter(reaction => reaction.userIds.length);
+    if (!entries.length) return null;
+    return (
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {entries.map(reaction => {
+          const active = Boolean(user && reaction.userIds.includes(user.id));
+          return (
+            <button
+              key={reaction.key}
+              type="button"
+              onClick={() => reactToMessage(message, reaction.key)}
+              className={cn(
+                "inline-flex h-7 items-center gap-1 rounded-full px-2 text-[11px] font-semibold transition-colors",
+                active
+                  ? "bg-[#D9A441]/20 text-[#D9A441]"
+                  : "bg-black/[0.05] text-[#5f6861] dark:bg-white/[0.08] dark:text-[#AEBAC1]",
+              )}
+              aria-label={`${reaction.label} reaction`}
+            >
+              <span>{reactionGlyphs[reaction.key]}</span>
+              <span>{reaction.userIds.length}</span>
+            </button>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const renderMessageActions = (message: FirebaseMessage) => (
+    activeMessageActions === message.id ? <div className="savanna-message-actions mt-2 flex flex-wrap items-center justify-end gap-1">
+      <button type="button" onClick={() => { setReplyTo(message); scheduleMessageActionsHide(); }} className="inline-flex h-7 items-center gap-1 rounded-full bg-[#D9A441]/10 px-2 text-[11px] font-semibold text-[#A87820] dark:bg-[#D9A441]/15 dark:text-[#D9A441]">
+        <Reply className="size-3" />
+        Reply
+      </button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button type="button" className="inline-flex h-7 items-center gap-1 rounded-full bg-[#D9A441]/10 px-2 text-[11px] font-semibold text-[#A87820] dark:bg-[#D9A441]/15 dark:text-[#D9A441]">
+            <Heart className="size-3" />
+            React
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-36">
+          {FIREBASE_MESSAGE_REACTIONS.map(reaction => (
+            <DropdownMenuItem key={reaction.key} onSelect={() => reactToMessage(message, reaction.key)} className="gap-2">
+              <span className="text-xs font-semibold text-[#D9A441]">{reactionGlyphs[reaction.key]}</span>
+              {reaction.label}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <button type="button" onClick={() => saveMessageMemory(message)} className="inline-flex h-7 items-center gap-1 rounded-full bg-[#D9A441]/10 px-2 text-[11px] font-semibold text-[#A87820] disabled:opacity-60 dark:bg-[#D9A441]/15 dark:text-[#D9A441]" disabled={Boolean(user && message.savedBy.includes(user.id))}>
+        <Bookmark className="size-3" />
+        {user && message.savedBy.includes(user.id) ? "Saved" : "Save"}
+      </button>
+    </div> : null
   );
 
   /**
@@ -553,6 +731,15 @@ export default function MessagesPage() {
         onSubmit={handleSend}
       >
         <input ref={attachmentInput} type="file" className="hidden" accept="image/jpeg,image/png,image/webp,application/pdf,audio/mpeg,video/mp4" onChange={handleAttachmentChange} />
+        {replyTo ? (
+          <div className="mb-2 flex items-center gap-2 rounded-2xl border border-[#D9A441]/20 bg-[#D9A441]/10 px-3 py-2 text-xs text-[#5f6861] dark:border-[#D9A441]/25 dark:bg-[#D9A441]/15 dark:text-[#AEBAC1]">
+            <Reply className="size-3.5 shrink-0 text-[#D9A441]" />
+            <span className="min-w-0 flex-1 truncate">{messageSnippet(replyTo)}</span>
+            <button type="button" onClick={() => setReplyTo(null)} className="grid size-6 shrink-0 place-items-center rounded-full text-[#A87820] dark:text-[#D9A441]" aria-label="Cancel reply">
+              <X className="size-3.5" />
+            </button>
+          </div>
+        ) : null}
         {/* `savanna-composer-field` owns the glass surface and the pill radius in
             both themes and at both breakpoints, so web and mobile cannot drift. */}
         <div
@@ -744,9 +931,12 @@ export default function MessagesPage() {
               <>
                 {messages.data?.map(message => (
                   <div key={message.id} ref={element => { messageRefs.current[message.id] = element; }} className={`flex ${isSameUser(message.senderUserId, user?.id) ? "justify-end" : "justify-start"}`}>
-                    <article className={`max-w-[82%] rounded-2xl px-3 py-2.5 text-sm shadow-sm ${isSameUser(message.senderUserId, user?.id) ? "rounded-tr-none bg-[#D9A441]/20 text-[#3d2d1a] dark:text-[#F0F2F5]" : "savanna-incoming-message rounded-tl-none bg-white text-[#3d2d1a] dark:text-[#fff8ed]"}`}>
+                    <article {...messageActionTriggerProps(message.id)} className={`savanna-message-bubble max-w-[82%] rounded-2xl px-3 py-2.5 text-sm shadow-sm ${isSameUser(message.senderUserId, user?.id) ? "rounded-tr-none bg-[#D9A441]/20 text-[#3d2d1a] dark:text-[#F0F2F5]" : "savanna-incoming-message rounded-tl-none bg-white text-[#3d2d1a] dark:text-[#fff8ed]"}`}>
+                      {renderReplyContext(message)}
                       <p className="whitespace-pre-wrap">{message.contentType === "attachment" ? "Private attachment" : message.payload}</p>
                       <p className={`mt-1 flex items-center justify-end gap-1 text-[10px] ${isSameUser(message.senderUserId, user?.id) ? "text-[#8a765d] dark:text-[#f8edcf]" : "text-[#5f6861]"}`}>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}{isSameUser(message.senderUserId, user?.id) ? <DeliveryIcon status={message.status} /> : null}</p>
+                      {renderReactionSummary(message)}
+                      {renderMessageActions(message)}
                     </article>
                   </div>
                 ))}
@@ -826,11 +1016,13 @@ export default function MessagesPage() {
                   <>
                     {messages.data?.map(message => (
                       <article key={message.id} ref={element => { messageRefs.current[message.id] = element; }} className={`group flex ${isSameUser(message.senderUserId, user?.id) ? "justify-end" : "justify-start"}`}>
-                        <div className={`max-w-[78%] rounded-2xl px-4 py-3 shadow-sm ${isSameUser(message.senderUserId, user?.id) ? "rounded-tr-none bg-[#D9A441]/20 text-[#3d2d1a] dark:text-[#F0F2F5]" : "savanna-incoming-message rounded-tl-none"}`}>
-                          <p className="whitespace-pre-wrap text-sm leading-6">{message.contentType === "attachment" ? "Private attachment" : message.payload}</p>
+                        <div {...messageActionTriggerProps(message.id)} className={`savanna-message-bubble savanna-desktop-message-bubble max-w-[58%] cursor-pointer rounded-2xl px-3 py-2 text-sm shadow-sm ${isSameUser(message.senderUserId, user?.id) ? "rounded-tr-none bg-[#D9A441]/20 text-[#3d2d1a] dark:text-[#F0F2F5]" : "savanna-incoming-message rounded-tl-none"}`}>
+                          {renderReplyContext(message)}
+                          <p className="whitespace-pre-wrap text-sm leading-5">{message.contentType === "attachment" ? "Private attachment" : message.payload}</p>
                           {message.attachments.map(item => <PrivateAttachment key={item.id} url={item.url} fileName={item.fileName} mimeType={item.mimeType} />)}
-                          <div className="mt-1.5 flex items-center justify-end gap-1 text-[10px] opacity-80"><span>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>{isSameUser(message.senderUserId, user?.id) ? <DeliveryIcon status={message.status} /> : null}</div>
-                          <div className="mt-1 opacity-0 transition-opacity group-hover:opacity-100"><SafetyActions targetDomain="message" targetId={String(message.id)} targetLabel="this message" blockUserId={message.senderUserId} /></div>
+                          <div className="mt-1 flex items-center justify-end gap-1 text-[10px] opacity-80"><span>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>{isSameUser(message.senderUserId, user?.id) ? <DeliveryIcon status={message.status} /> : null}</div>
+                          {renderReactionSummary(message)}
+                          {renderMessageActions(message)}
                         </div>
                       </article>
                     ))}

@@ -1162,7 +1162,7 @@ button:not(:disabled), a {
 
 @media (min-width: 1024px) {
   .savanna-app .savanna-desktop-chat-rows .savanna-chat-row {
-    padding-left: 0 !important;
+    padding-left: 0.75rem !important;
     padding-right: 0.75rem !important;
   }
 }
@@ -1509,7 +1509,9 @@ button:not(:disabled), a {
     color: var(--chat-text-secondary) !important;
   }
 
-  .dark .savanna-app .savanna-desktop-messages input {
+  /* The composer input is excluded: `.savanna-composer-field` supplies the
+     glass surface and its input must stay transparent, like on mobile. */
+  .dark .savanna-app .savanna-desktop-messages input:not([aria-label="Message draft"]) {
     background-color: var(--chat-search) !important;
     color: var(--chat-text-primary) !important;
   }

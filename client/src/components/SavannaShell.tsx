@@ -54,14 +54,26 @@ export function SavannaShell({ children, context, hideChrome = false, hideMobile
       <div className={cn("mx-auto flex min-h-screen", usesIconRail ? "max-w-none" : "max-w-[1720px]")}>
         <aside className={cn("sticky top-0 hidden h-screen shrink-0 flex-col lg:flex", usesIconRail ? "savanna-message-rail w-[84px] items-center border-r px-3 py-5" : "w-[248px] border-r border-[#eadfca] bg-[#f6f0e2] px-4 py-7")}>
           {usesIconRail ? <>
-            <Link href="/messages" aria-label="Savanna" className="sr-only">Savanna</Link>
+            <Link href="/messages" aria-label="Savanna" className="mb-5 block size-11 shrink-0">
+              <img src="/savanna-logo.svg" alt="" className="size-11" />
+            </Link>
             <nav aria-label="Primary navigation" className="flex flex-1 flex-col items-center gap-3">
               {navigation.map((item) => {
                 const active = location === item.href;
                 return <Link href={item.href} key={item.href} title={item.label} aria-label={item.label} className={cn("grid size-11 place-items-center rounded-2xl transition-all duration-200", active ? "bg-[#D9A441]/20 text-[#A87820] dark:text-[#D9A441]" : "text-[#8a765d]")}>{item.label === "Profile" && profileAvatarUrl ? <img src={profileAvatarUrl} alt="" className="size-7 rounded-full object-cover" /> : <MobileNavIcon name={item.label as MobileNavIconName} active={active} size={22} />}<span className="sr-only">{item.label}</span></Link>;
               })}
             </nav>
-            <div className="mt-auto"><Button size="icon" className="savanna-brand-token size-11 rounded-2xl shadow-none" aria-label="Open creator menu"><AnimatedPlusIcon size={20} /></Button></div>
+            <div className="mt-auto">
+              <Link href="/profile" title="Your profile" aria-label="Open your profile" className="grid size-11 place-items-center rounded-2xl transition-colors hover:bg-[#D9A441]/10">
+                {profileAvatarUrl ? (
+                  <img src={profileAvatarUrl} alt="" className="size-9 rounded-full object-cover" />
+                ) : (
+                  <span className="grid size-9 place-items-center rounded-full bg-[#f3ddb2] text-sm font-semibold text-[#7b4a0d] dark:bg-[#D9A441]/20 dark:text-[#D9A441]">
+                    {user?.displayName?.trim()?.[0]?.toUpperCase() || "S"}
+                  </span>
+                )}
+              </Link>
+            </div>
           </> : <>
           <Link href="/" aria-label="Savanna home" className="mb-11 px-3 text-[32px]">
             <span className="savanna-wordmark">Savanna</span>

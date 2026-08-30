@@ -140,6 +140,21 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      match /memories/{memoryId} {
+        allow read, delete: if isSelf(uid);
+
+        allow create, update: if isSelf(uid)
+          && request.resource.data.ownerUserId == uid
+          && request.resource.data.sourceType in ['message']
+          && request.resource.data.conversationId is string
+          && request.resource.data.messageId is string
+          && request.resource.data.keys().hasOnly([
+            'ownerUserId', 'sourceType', 'conversationId', 'conversationTitle',
+            'messageId', 'senderUserId', 'snippet', 'sourceCreatedAt',
+            'createdAt', 'updatedAt'
+          ]);
+      }
+
       match /following/{followingUid} {
         allow read, delete: if isSelf(uid);
 
@@ -252,7 +267,10 @@ service cloud.firestore {
                [
                  'senderId', 'memberIds', 'body', 'createdAt', 'status', 'attachmentPath',
                  'attachmentUrl', 'attachmentName', 'attachmentMimeType',
-                 'attachmentSize', 'storyId', 'deliveredTo', 'readBy', 'receiptUpdatedAt'
+                 'attachmentSize', 'storyId', 'deliveredTo', 'readBy',
+                 'receiptUpdatedAt', 'replyToMessageId', 'replyToSenderId',
+                 'replyToSnippet', 'reactions', 'reactionUpdatedAt', 'savedBy',
+                 'memoryPrompt', 'memoryUpdatedAt'
                ]);
 
         // Allowed so a recipient can mark a message delivered/read. Tighten
