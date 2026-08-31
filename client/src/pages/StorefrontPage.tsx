@@ -4,7 +4,7 @@ import { SafetyActions } from "@/components/SafetyActions";
 import { SavannaShell } from "@/components/SavannaShell";
 import { startLogin } from "@/const";
 import { useFirebaseShopMutations, useFirebaseStorefrontDetail } from "@/lib/firebaseShops";
-import { ArrowLeft, BadgeCheck, Image as ImageIcon, Loader2, MessageCircle, Package, Play, ShoppingBag, Store, Video } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Image as ImageIcon, Loader2, MessageCircle, Package, Play, ShoppingBag, Sparkles, Store, Video } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Link, useLocation, useRoute } from "wouter";
@@ -25,6 +25,8 @@ export default function StorefrontPage() {
   if (!shop.data) return <SavannaShell><section className="grid min-h-[60vh] place-items-center text-center"><div><Store className="mx-auto size-8 text-[#D9A441]" /><h1 className="mt-4 font-display text-3xl font-semibold">This storefront is unavailable.</h1><Link href="/shops"><Button variant="outline" className="mt-5 rounded-xl">Back to shops</Button></Link></div></section></SavannaShell>;
 
   const { storefront, products, memories = [] } = shop.data;
+  const isOwner = user?.id === storefront.ownerUserId;
+  const storyComposerHref = `/stories?compose=1&storefrontId=${encodeURIComponent(storefront.id)}&storefrontSlug=${encodeURIComponent(storefront.slug)}&storefrontName=${encodeURIComponent(storefront.name)}`;
 
   return <SavannaShell>
     <div className="space-y-6">
@@ -46,6 +48,11 @@ export default function StorefrontPage() {
           </div>
           <p className="mt-6 max-w-2xl text-sm leading-7 text-[#5F6861]">{storefront.bio || "This seller has chosen a simple Savanna storefront with direct support and transparent pricing."}</p>
           <div className="mt-6 flex flex-wrap gap-2">
+            {isOwner ? (
+              <Link href={storyComposerHref}>
+                <Button type="button" className="savanna-brand-token rounded-xl shadow-none"><Sparkles className="mr-2 size-4" />Share story</Button>
+              </Link>
+            ) : null}
             <Button onClick={() => isAuthenticated && user ? shopMutations.support.mutate({ user, storefront }, { onSuccess: () => navigate("/messages"), onError: error => toast.error(error.message) }) : startLogin()} disabled={shopMutations.support.isPending} variant="outline" className="rounded-xl border-[#DDE3DC] text-[#D9A441] hover:bg-[#D9A441]/20"><MessageCircle className="mr-2 size-4" />Ask a question</Button>
             {storefront.contactPhone ? <a href={`tel:${storefront.contactPhone}`}><Button variant="outline" className="rounded-xl border-[#DDE3DC] text-[#D9A441]">Call seller</Button></a> : null}
           </div>
@@ -89,9 +96,9 @@ export default function StorefrontPage() {
           memories.length ? <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">{memories.map(memory => {
             const media = memory.media?.[0];
             return (
-              <article key={memory.id} className="overflow-hidden rounded-[24px] border border-[#DDE3DC] bg-white shadow-[0_10px_25px_rgba(21,26,23,0.05)]">
+              <Link key={memory.id} href={`/stories?story=${memory.id}`} className="group overflow-hidden rounded-[24px] border border-[#DDE3DC] bg-white shadow-[0_10px_25px_rgba(21,26,23,0.05)]">
                 <div className="relative grid aspect-[3/4] place-items-center overflow-hidden bg-[#151A17]">
-                  {media?.url && media.type === "image" ? <img src={media.url} alt="" className="h-full w-full object-cover" /> : null}
+                  {media?.url && media.type === "image" ? <img src={media.url} alt="" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" /> : null}
                   {media?.url && media.type === "video" ? <video src={media.url} className="h-full w-full object-cover" controls playsInline /> : null}
                   {!media?.url ? <span className="absolute inset-0 bg-[#D9A441]/20" /> : null}
                   <span className="absolute inset-0 bg-black/20" />
@@ -105,7 +112,7 @@ export default function StorefrontPage() {
                   <p className="mt-2 line-clamp-2 min-h-10 text-sm leading-5 text-[#5F6861]">{memory.productDescription || "A short story from this seller."}</p>
                   {memory.productPriceMinor && memory.productCurrencyCode ? <p className="mt-5 text-lg font-semibold text-[#D9A441]">{formatPrice(memory.productPriceMinor, memory.productCurrencyCode)}</p> : null}
                 </div>
-              </article>
+              </Link>
             );
           })}</div> : <div className="rounded-[24px] border border-dashed border-[#DDE3DC] bg-white p-8 text-sm text-[#5F6861]">This storefront does not have product Memories yet.</div>
         )}

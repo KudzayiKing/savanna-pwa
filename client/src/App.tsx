@@ -3,6 +3,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Suspense, lazy } from "react";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { WallpaperProvider } from "./contexts/WallpaperContext";
 import MessagesPage from "./pages/MessagesPage";
 import NotFound from "./pages/NotFound";
 import { Redirect, Route, Switch } from "wouter";
@@ -22,6 +23,7 @@ import { Redirect, Route, Switch } from "wouter";
  *  - `NotFound`, because it is tiny and can be needed by any bad URL.
  */
 const CheckoutPage = lazy(() => import("./pages/CheckoutPage"));
+const CommunityDetailPage = lazy(() => import("./pages/CommunityDetailPage"));
 const CommunitiesPage = lazy(() => import("./pages/CommunitiesPage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const MerchantStudioPage = lazy(() => import("./pages/MerchantStudioPage"));
@@ -31,6 +33,7 @@ const PaymentsPage = lazy(() => import("./pages/PaymentsPage"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const PublicProfilePage = lazy(() => import("./pages/PublicProfilePage"));
 const ProductDetailPage = lazy(() => import("./pages/ProductDetailPage"));
+const RecallPage = lazy(() => import("./pages/RecallPage"));
 const ShopsPage = lazy(() => import("./pages/ShopsPage"));
 const StorefrontPage = lazy(() => import("./pages/StorefrontPage"));
 const StoriesPage = lazy(() => import("./pages/StoriesPage"));
@@ -68,6 +71,7 @@ function Router() {
         <Route path="/shops/:slug" component={StorefrontPage} />
         <Route path="/shops" component={ShopsPage} />
         <Route path="/stories" component={StoriesPage} />
+        <Route path="/communities/:communityId" component={CommunityDetailPage} />
         <Route path="/communities" component={CommunitiesPage} />
         <Route path="/learn/manage"><Redirect to="/shops/manage" /></Route>
         <Route path="/learn/:slug"><Redirect to="/shops" /></Route>
@@ -76,6 +80,7 @@ function Router() {
         <Route path="/orders" component={OrdersPage} />
         <Route path="/payments/:paymentIntentId" component={PaymentDetailPage} />
         <Route path="/payments" component={PaymentsPage} />
+        <Route path="/recall" component={RecallPage} />
         <Route path="/profile" component={ProfilePage} />
         <Route path="/people/:userId" component={PublicProfilePage} />
         <Route path="/404" component={NotFound} />
@@ -89,10 +94,12 @@ function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="light" switchable>
-        <TooltipProvider>
-          <Toaster />
-          <Router />
-        </TooltipProvider>
+        <WallpaperProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Router />
+          </TooltipProvider>
+        </WallpaperProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );

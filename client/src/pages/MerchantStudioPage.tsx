@@ -12,18 +12,25 @@ import {
   useFirebaseShopMutations,
   useMyFirebaseStorefront,
 } from "@/lib/firebaseShops";
+import { useFirebaseStories, useFirebaseStoryAnalytics, type FirebaseStory } from "@/lib/firebaseStories";
 import {
   BadgeCheck,
+  BarChart3,
   Check,
   CheckCircle2,
   ChevronDown,
   CircleDollarSign,
+  Eye,
+  Heart,
   ImagePlus,
   Loader2,
+  MessageCircle,
   PackagePlus,
+  Send,
   Store,
   UserRound,
   Video,
+  Bookmark,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -65,10 +72,35 @@ function formatPrice(minor: number, currency: string) {
   return new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: 2 }).format(minor / 100);
 }
 
+function ProductMemoryPerformance({ story }: { story: FirebaseStory }) {
+  const { user } = useAuth();
+  const analytics = useFirebaseStoryAnalytics(story, user);
+  const data = analytics.data;
+  return (
+    <Link href={`/stories?story=${story.id}`} className="flex items-center gap-3 rounded-2xl bg-white p-3 transition-colors hover:bg-[#fffaf0]">
+      <span className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-2xl bg-[#D9A441]/20 text-[#D9A441]">
+        {story.primaryMediaUrl && story.primaryMediaType === "image" ? <img src={story.primaryMediaUrl} alt="" className="size-full object-cover" /> : <Video className="size-5" />}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold text-[#151A17]">{story.productName ?? story.textBody ?? "Product Memory"}</span>
+        <span className="mt-1 block truncate text-xs text-[#5F6861]">{story.productDescription ?? story.storefrontName ?? "Shop story"}</span>
+      </span>
+      <span className="grid shrink-0 grid-cols-3 gap-1 text-[11px] font-semibold text-[#5F6861] sm:grid-cols-5">
+        <span className="inline-flex items-center gap-1"><Eye className="size-3" />{data?.viewCount ?? 0}</span>
+        <span className="inline-flex items-center gap-1"><Heart className="size-3" />{data?.likeCount ?? 0}</span>
+        <span className="inline-flex items-center gap-1"><MessageCircle className="size-3" />{data?.commentCount ?? 0}</span>
+        <span className="hidden items-center gap-1 sm:inline-flex"><Send className="size-3" />{data?.replyCount ?? 0}</span>
+        <span className="hidden items-center gap-1 sm:inline-flex"><Bookmark className="size-3" />{data?.saveCount ?? 0}</span>
+      </span>
+    </Link>
+  );
+}
+
 export default function MerchantStudioPage() {
   const { isAuthenticated, loading, user } = useAuth();
   const mine = useMyFirebaseStorefront(user);
   const shopMutations = useFirebaseShopMutations();
+  const creatorStories = useFirebaseStories(user, Boolean(user));
   const [storefront, setStorefront] = useState<StorefrontForm>(blankStorefront);
   const [bannerFile, setBannerFile] = useState<File | null>(null);
   const [product, setProduct] = useState(blankProduct);
@@ -122,6 +154,7 @@ export default function MerchantStudioPage() {
     ["Review", verificationState === "verified"],
   ] as const;
   const selectedVisibility = visibilityOptions.find(option => option.value === storefront.visibility) ?? visibilityOptions[0];
+  const shopStories = (creatorStories.data ?? []).filter(story => story.authorUserId === user?.id && story.storefrontId === storefrontId);
 
   async function saveProfile(event: React.FormEvent) {
     event.preventDefault();
@@ -238,6 +271,15 @@ export default function MerchantStudioPage() {
                 storefrontName={mine.data?.storefront?.name ?? null}
                 onDone={() => setMemoryComposerKey(current => current + 1)}
               />
+            </div>
+            <div className="mt-6 rounded-[24px] border border-[#DDE3DC] bg-[#D9A441]/10 p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-sm font-semibold text-[#151A17]"><BarChart3 className="size-4 text-[#D9A441]" />Product Memory performance</div>
+                <span className="rounded-full bg-[#D9A441]/20 px-2 py-1 text-[11px] font-semibold text-[#D9A441]">{shopStories.length}</span>
+              </div>
+              <div className="grid gap-2">
+                {creatorStories.isLoading ? <div className="grid min-h-20 place-items-center"><Loader2 className="size-5 animate-spin text-[#D9A441]" /></div> : shopStories.length ? shopStories.slice(0, 5).map(story => <ProductMemoryPerformance key={story.id} story={story} />) : <p className="rounded-2xl bg-white p-4 text-sm leading-6 text-[#5F6861]">Publish a product Memory to see story views, saves, replies, likes, and comments here.</p>}
+              </div>
             </div>
           </section>
 

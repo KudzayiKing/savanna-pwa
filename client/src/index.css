@@ -142,8 +142,18 @@ button:not(:disabled), a {
 
 .skip-link:focus { top: 1rem; }
 
-.story-rail { scrollbar-width: none; }
-.story-rail::-webkit-scrollbar { display: none; }
+.story-rail,
+.savanna-app [class~="overflow-x-auto"] {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.story-rail::-webkit-scrollbar,
+.savanna-app [class~="overflow-x-auto"]::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
 
 .savanna-wordmark {
   display: inline-block;
@@ -1193,8 +1203,9 @@ button:not(:disabled), a {
  *
  * One rule for web and mobile in both themes, so the two breakpoints cannot
  * drift. The field is a frosted pill that picks up whatever sits behind it —
- * the same language as the glass conversation header — and its radius is a
- * full pill so the circular mic/send actions nest flush inside it.
+ * the chat wallpaper when one is active — and its radius is a full pill so
+ * the circular mic/send actions nest flush inside it. The composer *strip*
+ * around it stays surfaceless; only the pill itself carries the glass.
  *
  * Nothing else may set a background on this element: an opaque fill defeats
  * the blur, which is why the composer was pulled out of the cream search
@@ -1202,7 +1213,9 @@ button:not(:disabled), a {
  */
 .savanna-app .savanna-composer-field {
   border-radius: 9999px !important;
-  border: 1px solid color-mix(in srgb, #FFFFFF 55%, #DDE3DC) !important;
+  /* Same hairline the floating bottom nav uses in light mode, so the pill
+     and the nav read as one family of glass surfaces. */
+  border: 1px solid color-mix(in srgb, #DDE3DC 88%, #FFFFFF 12%) !important;
   background: color-mix(in srgb, #F6F5F5 70%, transparent) !important;
   background-color: color-mix(in srgb, #F6F5F5 66%, transparent) !important;
   -webkit-backdrop-filter: saturate(180%) blur(22px);
@@ -1233,6 +1246,11 @@ button:not(:disabled), a {
 
 .dark .savanna-app .savanna-composer-action:hover {
   background: color-mix(in srgb, var(--chat-gold) 30%, transparent) !important;
+}
+
+.savanna-app .savanna-message-bubble.savanna-outgoing-message [aria-label="Sent"],
+.savanna-app .savanna-message-bubble.savanna-outgoing-message [aria-label="Delivered"] {
+  color: rgba(255, 255, 255, 0.92) !important;
 }
 
 /* Focused search and message fields keep their own surface treatment.
@@ -1310,6 +1328,14 @@ button:not(:disabled), a {
   border-color: #DDE3DC !important;
   background-color: #FFFFFF !important;
   color: #151A17 !important;
+}
+
+/* The memories search sits directly on a gold pill; the light-mode fill above
+   would paint a white box inside it. Keep that one field transparent so only
+   the gold shows. */
+:root:not(.dark) .savanna-app .savanna-profile-page input.savanna-memory-search-input {
+  background-color: transparent !important;
+  border-color: transparent !important;
 }
 
 :root:not(.dark) .savanna-app :is(.savanna-route-shops, .savanna-route-learn, .savanna-route-orders, .savanna-profile-page)
@@ -1991,6 +2017,19 @@ button:not(:disabled), a {
     border-color: var(--chat-border) !important;
   }
 
+  .savanna-app .savanna-mobile-conversation {
+    height: var(--savanna-visual-viewport-height, 100dvh) !important;
+    min-height: var(--savanna-visual-viewport-height, 100dvh) !important;
+  }
+
+  .savanna-app .savanna-mobile-message-thread {
+    scroll-padding-bottom: calc(var(--savanna-mobile-composer-height, 76px) + env(safe-area-inset-bottom)) !important;
+  }
+
+  .savanna-app .savanna-mobile-composer {
+    padding: 0.625rem 0.75rem max(0.625rem, env(safe-area-inset-bottom)) !important;
+  }
+
   .dark .savanna-app .savanna-mobile-conversation .savanna-incoming-message {
     background: var(--chat-search) !important;
     color: var(--chat-text-primary) !important;
@@ -2120,6 +2159,21 @@ button:not(:disabled), a {
 .savanna-app .savanna-glass-header,
 .savanna-app .savanna-chat-glass-header {
   box-shadow: none !important;
+}
+
+/* The Button base class forces inner svgs to size-4 (16px) unless they carry
+   a `size-*` class, which silently clamps the animated call icons no matter
+   what `size` prop they are given. Both call icons are pinned to a 26px
+   container so the phone handset and the camera body land at the same
+   visual size as Telegram-style headers. */
+.savanna-app .savanna-header-video-button svg {
+  width: 26px !important;
+  height: 26px !important;
+}
+
+.savanna-app .savanna-header-phone-button svg {
+  width: 26px !important;
+  height: 26px !important;
 }
 
 .savanna-app .savanna-mobile-header.savanna-glass-header {
@@ -2468,6 +2522,45 @@ button:not(:disabled), a {
   border: 1px solid var(--chat-border) !important;
 }
 
+/* Memory filter pills (All / Follow-up / Link / Price / Person …) keep a visible
+   outline in both themes. The app-wide cleanup —
+   `.savanna-app main [class*="border"] { border-width: 0 !important }` — matches
+   these pills because their class list contains "border", flattening any Tailwind
+   border utility. These rules out-specify that cleanup to win the outline back. */
+.savanna-app .savanna-profile-page .savanna-memory-filter-tab {
+  border-width: 1px !important;
+  border-style: solid !important;
+  border-color: #DDE3DC !important;
+}
+
+.savanna-app .savanna-profile-page .savanna-memory-filter-tab[data-active="true"] {
+  border-color: color-mix(in srgb, #D9A441 45%, transparent) !important;
+}
+
+.dark .savanna-app .savanna-profile-page .savanna-memory-filter-tab {
+  border-color: var(--chat-border) !important;
+}
+
+.dark .savanna-app .savanna-profile-page .savanna-memory-filter-tab[data-active="true"] {
+  border-color: color-mix(in srgb, var(--chat-gold) 45%, transparent) !important;
+}
+
+.dark .savanna-app .savanna-profile-page .savanna-memory-search-field {
+  background: color-mix(in srgb, var(--chat-gold) 18%, transparent) !important;
+  border-color: color-mix(in srgb, var(--chat-gold) 34%, transparent) !important;
+  color: var(--chat-gold) !important;
+}
+
+.dark .savanna-app .savanna-profile-page .savanna-memory-search-field input {
+  background: transparent !important;
+  border-color: transparent !important;
+  color: var(--chat-text-primary) !important;
+}
+
+.dark .savanna-app .savanna-profile-page .savanna-memory-search-field input::placeholder {
+  color: var(--chat-text-secondary) !important;
+}
+
 .dark .savanna-app .savanna-profile-page .savanna-username-field {
   border-color: var(--chat-border) !important;
   background: var(--chat-search) !important;
@@ -2586,4 +2679,77 @@ button:not(:disabled), a {
   background-color: #F6F5F5 !important;
   border: 1px solid #DDE3DC !important;
   box-shadow: 0 12px 30px rgba(21, 26, 23, 0.06) !important;
+}
+
+/*
+ * Chat wallpaper.
+ *
+ * Scoped to the open conversation's message thread — the wallpaper never
+ * appears behind other routes or the chat list. WallpaperProvider only sets
+ * the custom properties when a wallpaper is chosen, and simultaneously flips
+ * `data-wallpaper` on <html>, so these rules go fully dormant for "Default"
+ * and the thread keeps its regular theme background.
+ *
+ * The rules sit at the end of the file and carry the `body` qualifier so they
+ * out-rank the opaque thread fills above (`:root:not(.dark) ... #FFFFFF`,
+ * the dark `var(--chat-bg)` rules inside the breakpoint media queries, and
+ * `.savanna-mobile-conversation`), which would otherwise hide the image.
+ *
+ * No `background-attachment` is set on purpose: on a scrolling element the
+ * default `scroll` value keeps the backdrop anchored to the thread's box while
+ * messages scroll over it, and iOS Safari (which ignores `fixed`) behaves.
+ */
+:root[data-wallpaper] body .savanna-app .savanna-mobile-conversation,
+:root[data-wallpaper] body .savanna-app .savanna-desktop-conversation-panel {
+  background-color: var(--savanna-wallpaper-color, transparent) !important;
+  background-image: var(--savanna-wallpaper-image, none) !important;
+  /* Every longhand needs !important: the opaque conversation fills above use
+     the `background` shorthand with !important, and a shorthand also resets
+     size/position/repeat — without these, the art renders at natural size,
+     top-left, tiled (i.e. hugely zoomed). */
+  /* `cover` fills the conversation completely — no background strips — while
+     the device-matched cuts (portrait on phones, landscape on desktops) keep
+     the crop to a sliver and the composition recognizable. */
+  background-size: cover !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+}
+
+.dark[data-wallpaper] body .savanna-app .savanna-mobile-conversation,
+.dark[data-wallpaper] body .savanna-app .savanna-desktop-conversation-panel {
+  background-color: var(--savanna-wallpaper-color, transparent) !important;
+  background-image: var(--savanna-wallpaper-image, none) !important;
+  background-size: cover !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+}
+
+/* With a wallpaper active the thread and the composer strip step aside so the
+   art shows through them too — that is what lets the composer input float
+   directly on the wallpaper instead of sitting in a boxed bar. */
+:root[data-wallpaper] body .savanna-app .savanna-mobile-message-thread,
+:root[data-wallpaper] body .savanna-app .savanna-desktop-message-thread,
+:root[data-wallpaper] body .savanna-app .savanna-mobile-composer,
+:root[data-wallpaper] body .savanna-app .savanna-desktop-composer {
+  background-color: transparent !important;
+  background-image: none !important;
+}
+
+.dark[data-wallpaper] body .savanna-app .savanna-mobile-message-thread,
+.dark[data-wallpaper] body .savanna-app .savanna-desktop-message-thread,
+.dark[data-wallpaper] body .savanna-app .savanna-mobile-composer,
+.dark[data-wallpaper] body .savanna-app .savanna-desktop-composer {
+  background-color: transparent !important;
+  background-image: none !important;
+}
+
+/* The bundled Savanna art ships as a portrait cut for phones and a landscape
+   cut for desktops; the provider publishes both and the breakpoint chooses. */
+@media (min-width: 1024px) {
+  :root[data-wallpaper] body .savanna-app .savanna-mobile-conversation,
+  :root[data-wallpaper] body .savanna-app .savanna-desktop-conversation-panel,
+  .dark[data-wallpaper] body .savanna-app .savanna-mobile-conversation,
+  .dark[data-wallpaper] body .savanna-app .savanna-desktop-conversation-panel {
+    background-image: var(--savanna-wallpaper-image-landscape, var(--savanna-wallpaper-image, none)) !important;
+  }
 }

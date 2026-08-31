@@ -3,6 +3,8 @@ import { AnimatedPlusIcon, UserIcon } from "@/components/AnimatedNavIcons";
 import { SafetyActions } from "@/components/SafetyActions";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { useFirebaseCommunities } from "@/lib/firebaseCommunities";
+import { useMyFirebaseStorefront, type FirebaseProduct } from "@/lib/firebaseShops";
 import {
   type FirebaseStory,
   filterStoriesForFollowingHeader,
@@ -13,7 +15,8 @@ import {
   useViewFirebaseStory,
 } from "@/lib/firebaseStories";
 import { useFollowedUserIds } from "@/lib/userProfile";
-import { Bookmark, ChevronRight, Heart, Image as ImageIcon, Loader2, MessageCircle, Send, ShoppingBag, Sparkles, Type, Video, X } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Bookmark, ChevronRight, Heart, Image as ImageIcon, Loader2, MessageCircle, Send, ShoppingBag, Sparkles, Store, Type, Video, X } from "lucide-react";
 import { type ChangeEvent, type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Link } from "wouter";
@@ -23,6 +26,7 @@ const storyMediaTypes = ["image/jpeg", "image/png", "image/webp", "video/mp4"];
 
 type StoryAudience = "public" | "custom" | "private";
 type StoryMode = "text" | "image" | "video";
+type StoryTarget = "story" | "memory" | "shop" | "community";
 type StoryItem = FirebaseStory;
 
 type StoryComposerProps = {
@@ -32,6 +36,14 @@ type StoryComposerProps = {
   storefrontSlug?: string | null;
   storefrontName?: string | null;
   businessMode?: boolean;
+  communityId?: string;
+  communityName?: string | null;
+  communityMode?: boolean;
+  initialProductId?: string | null;
+  initialProductName?: string | null;
+  initialProductDescription?: string | null;
+  initialProductPriceMinor?: number | null;
+  initialProductCurrencyCode?: string | null;
 };
 
 function parseAudienceIds(value: string) {
@@ -103,22 +115,74 @@ function StoryCard({ story, onOpen, compact }: { story: StoryItem; onOpen: () =>
   );
 }
 
-export function StoryComposer({ onDone, compact = false, storefrontId, storefrontSlug, storefrontName, businessMode = false }: StoryComposerProps) {
+export function StoryComposer({
+  onDone,
+  compact = false,
+  storefrontId,
+  storefrontSlug,
+  storefrontName,
+  businessMode = false,
+  communityId,
+  communityName,
+  communityMode = false,
+  initialProductId,
+  initialProductName,
+  initialProductDescription,
+  initialProductPriceMinor,
+  initialProductCurrencyCode,
+}: StoryComposerProps) {
   const { user } = useAuth();
-  const isBusinessMemory = businessMode || Boolean(storefrontId);
+  const myStorefront = useMyFirebaseStorefront(user);
+  const communities = useFirebaseCommunities("");
+  const hasBusinessContext = businessMode || Boolean(storefrontId);
+  const hasCommunityContext = communityMode || Boolean(communityId);
+  const [target, setTarget] = useState<StoryTarget>(hasBusinessContext ? "shop" : hasCommunityContext ? "community" : "story");
   const [mode, setMode] = useState<StoryMode>("text");
   const [draft, setDraft] = useState("");
-  const [audience, setAudience] = useState<StoryAudience>(isBusinessMemory ? "public" : "private");
+  const [audience, setAudience] = useState<StoryAudience>(hasBusinessContext ? "public" : "private");
   const [customAudience, setCustomAudience] = useState("");
   const [file, setFile] = useState<File | null>(null);
-  const [saveToMemories, setSaveToMemories] = useState(isBusinessMemory);
-  const [productName, setProductName] = useState("");
-  const [productDescription, setProductDescription] = useState("");
-  const [productPrice, setProductPrice] = useState("");
-  const [productCurrencyCode, setProductCurrencyCode] = useState("KES");
+  const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
+  const [saveToMemories, setSaveToMemories] = useState(hasBusinessContext);
+  const [selectedProductId, setSelectedProductId] = useState(initialProductId ?? "");
+  const [selectedCommunityId, setSelectedCommunityId] = useState(communityId ?? "");
+  const [productName, setProductName] = useState(initialProductName ?? "");
+  const [productDescription, setProductDescription] = useState(initialProductDescription ?? "");
+  const [productPrice, setProductPrice] = useState(initialProductPriceMinor != null ? String(initialProductPriceMinor / 100) : "");
+  const [productCurrencyCode, setProductCurrencyCode] = useState(initialProductCurrencyCode ?? "KES");
   const publishStory = usePublishFirebaseStory();
   const isMediaMode = mode === "image" || mode === "video";
   const isPending = publishStory.isPending;
+  const activeStorefront = myStorefront.data?.storefront;
+  const targetStorefrontId = storefrontId ?? activeStorefront?.id;
+  const targetStorefrontSlug = storefrontSlug ?? activeStorefront?.slug ?? null;
+  const targetStorefrontName = storefrontName ?? activeStorefront?.name ?? null;
+  const shopProducts = myStorefront.data?.products.filter(product => product.status === "active") ?? [];
+  const selectedProduct = shopProducts.find(product => product.id === selectedProductId) ?? null;
+  const selectedCommunity = communities.data?.find(community => community.id === selectedCommunityId) ?? (communityId ? { id: communityId, name: communityName || "Community" } : null);
+  const isShopStory = target === "shop";
+  const isCommunityStory = target === "community";
+  const shouldPersist = target === "memory" || isShopStory || saveToMemories;
+  const publishLabel = shouldPersist ? "Publish + save" : "Publish";
+
+  useEffect(() => {
+    if (!file) {
+      setFilePreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setFilePreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  const applyProduct = (product: FirebaseProduct | null) => {
+    setSelectedProductId(product?.id ?? "");
+    if (!product) return;
+    setProductName(product.title);
+    setProductDescription(product.description ?? "");
+    setProductPrice(String(product.priceMinor / 100));
+    setProductCurrencyCode(product.currencyCode);
+  };
 
   const handleFile = (event: ChangeEvent<HTMLInputElement>) => {
     const selected = event.target.files?.[0] ?? null;
@@ -133,24 +197,28 @@ export function StoryComposer({ onDone, compact = false, storefrontId, storefron
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!user) return toast.error("Sign in to share a Story");
-    const shouldSaveToMemories = isBusinessMemory || saveToMemories;
+    const shouldSaveToMemories = shouldPersist;
     const productPriceMinor = Math.round(Number(productPrice) * 100);
-    const storyText = draft.trim() || (isBusinessMemory ? productDescription.trim() || productName.trim() : "");
-    if (isBusinessMemory && !productName.trim()) return toast.error("Add a product name for this Memory");
-    if (isBusinessMemory && !productDescription.trim()) return toast.error("Add a short product description");
-    if (isBusinessMemory && (!Number.isFinite(productPriceMinor) || productPriceMinor <= 0)) return toast.error("Add a valid product price");
+    const storyText = draft.trim() || (isShopStory ? productDescription.trim() || productName.trim() : "");
+    if (isShopStory && !targetStorefrontId) return toast.error("Create a storefront before sharing a shop Story");
+    if (isShopStory && !productName.trim()) return toast.error("Add a product name for this Story");
+    if (isShopStory && !productDescription.trim()) return toast.error("Add a short product description");
+    if (isShopStory && (!Number.isFinite(productPriceMinor) || productPriceMinor <= 0)) return toast.error("Add a valid product price");
+    if (isCommunityStory && !selectedCommunity) return toast.error("Choose a community for this Story");
     const memoryFields = {
       saveToMemories: shouldSaveToMemories,
-      storefrontId: storefrontId ?? undefined,
-      storefrontSlug: storefrontSlug ?? undefined,
-      storefrontName: storefrontName ?? undefined,
-      productName: isBusinessMemory ? productName.trim() : undefined,
-      productDescription: isBusinessMemory ? productDescription.trim() : undefined,
-      productPriceMinor: isBusinessMemory ? productPriceMinor : undefined,
-      productCurrencyCode: isBusinessMemory ? productCurrencyCode.trim().toUpperCase() : undefined,
+      storefrontId: isShopStory ? targetStorefrontId : undefined,
+      storefrontSlug: isShopStory ? targetStorefrontSlug : undefined,
+      storefrontName: isShopStory ? targetStorefrontName : undefined,
+      communityId: isCommunityStory ? selectedCommunity?.id : undefined,
+      communityName: isCommunityStory ? selectedCommunity?.name : undefined,
+      productName: isShopStory ? productName.trim() : undefined,
+      productDescription: isShopStory ? productDescription.trim() : undefined,
+      productPriceMinor: isShopStory ? productPriceMinor : undefined,
+      productCurrencyCode: isShopStory ? productCurrencyCode.trim().toUpperCase() : undefined,
     };
     const customAudienceUserIds = parseAudienceIds(customAudience);
-    if (audience === "custom" && !customAudienceUserIds.length) return toast.error("Add at least one Savanna account ID");
+    if (!isShopStory && !isCommunityStory && audience === "custom" && !customAudienceUserIds.length) return toast.error("Add at least one Savanna account ID");
     if (isMediaMode) {
       if (!file) return toast.error(mode === "video" ? "Choose a video for your Story" : "Choose an image for your Story");
       if (!storyMediaTypes.includes(file.type)) return toast.error("Choose supported Story media");
@@ -159,7 +227,7 @@ export function StoryComposer({ onDone, compact = false, storefrontId, storefron
           user,
           input: {
             textBody: draft.trim() || undefined,
-            audience: isBusinessMemory ? "public" : audience,
+            audience: isShopStory || isCommunityStory ? "public" : audience,
             customAudienceUserIds,
             ...memoryFields,
             file,
@@ -167,7 +235,7 @@ export function StoryComposer({ onDone, compact = false, storefrontId, storefron
         }, {
           onSuccess: () => {
             onDone();
-            toast.success(isBusinessMemory || saveToMemories ? "Story saved to Memories" : "Story shared for 24 hours");
+            toast.success(shouldSaveToMemories ? "Story saved to Memories" : "Story shared for 24 hours");
           },
           onError: error => toast.error(error.message),
         });
@@ -179,11 +247,11 @@ export function StoryComposer({ onDone, compact = false, storefrontId, storefron
     if (!storyText) return toast.error("Write something for your Story");
     publishStory.mutate({
       user,
-      input: { textBody: storyText, audience: isBusinessMemory ? "public" : audience, customAudienceUserIds, ...memoryFields },
+      input: { textBody: storyText, audience: isShopStory || isCommunityStory ? "public" : audience, customAudienceUserIds, ...memoryFields },
     }, {
       onSuccess: () => {
         onDone();
-        toast.success(isBusinessMemory || saveToMemories ? "Story saved to Memories" : "Story shared for 24 hours");
+        toast.success(shouldSaveToMemories ? "Story saved to Memories" : "Story shared for 24 hours");
       },
       onError: error => toast.error(error.message),
     });
@@ -192,6 +260,37 @@ export function StoryComposer({ onDone, compact = false, storefrontId, storefron
   return (
     <form className={`space-y-3 ${compact ? "" : "sm:flex sm:items-start sm:gap-3 sm:space-y-0"}`} onSubmit={handleSubmit}>
       <div className="min-w-0 flex-1 space-y-3">
+        {!hasBusinessContext && !hasCommunityContext ? (
+          <div className="flex gap-2 overflow-x-auto pb-1" aria-label="Story target">
+            {([
+              ["story", "Story", Sparkles],
+              ["memory", "Memory", Bookmark],
+              ["shop", "Shop", Store],
+              ["community", "Community", MessageCircle],
+            ] as const).map(([value, label, Icon]) => {
+              const disabled = value === "shop" ? !targetStorefrontId : value === "community" ? communities.isLoading || !(communities.data?.length) : false;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => {
+                    setTarget(value);
+                    if (value === "memory") setSaveToMemories(true);
+                    if (value === "story") setSaveToMemories(false);
+                  }}
+                  data-active={target === value}
+                  className={cn(
+                    "inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-semibold transition-colors disabled:opacity-40",
+                    target === value ? "bg-[#D9A441]/20 text-[#D9A441]" : "bg-white text-[#5F6861] dark:bg-[#202C33] dark:text-[#AEBAC1]",
+                  )}
+                >
+                  <Icon className="size-3.5" /> {label}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
         <div className="flex rounded-xl bg-[#D9A441]/10 p-1">
           {([
             ["text", "Text", Type],
@@ -209,14 +308,57 @@ export function StoryComposer({ onDone, compact = false, storefrontId, storefron
             </button>
           ))}
         </div>
-        <Textarea autoFocus value={draft} onChange={event => setDraft(event.target.value)} maxLength={700} placeholder={isMediaMode ? "Add a caption" : "Share a moment in words"} className="min-h-[100px] border-[#eadfca] bg-white/85" />
+        {(filePreviewUrl || draft.trim() || isShopStory || isCommunityStory || shouldPersist) ? (
+          <div className="overflow-hidden rounded-2xl border border-[#eadfca] bg-white/80 shadow-[0_10px_24px_rgba(94,58,11,0.04)] dark:border-[#26343A] dark:bg-[#202C33]">
+            {filePreviewUrl ? (
+              <div className="relative aspect-[9/14] max-h-[260px] w-full overflow-hidden bg-[#151A17]">
+                {mode === "video" ? <video src={filePreviewUrl} className="size-full object-cover" muted playsInline controls /> : <img src={filePreviewUrl} alt="" className="size-full object-cover" />}
+                <button type="button" onClick={() => setFile(null)} className="absolute right-3 top-3 grid size-8 place-items-center rounded-full bg-black/45 text-white backdrop-blur-md" aria-label="Remove media">
+                  <X className="size-4" />
+                </button>
+              </div>
+            ) : null}
+            <div className="flex flex-wrap items-center gap-2 p-3 text-xs font-semibold text-[#5F6861] dark:text-[#AEBAC1]">
+              <span className="rounded-full bg-[#D9A441]/20 px-2.5 py-1 text-[#D9A441]">{isShopStory ? "Shop story" : isCommunityStory ? "Community story" : target === "memory" ? "Memory" : "Story"}</span>
+              <span className="rounded-full bg-[#D9A441]/10 px-2.5 py-1 text-[#9a6410] dark:text-[#F8E8C4]">{shouldPersist ? "Saved beyond 24h" : "24 hours"}</span>
+              {isCommunityStory && selectedCommunity ? <span className="truncate rounded-full bg-[#D9A441]/10 px-2.5 py-1 text-[#9a6410] dark:text-[#F8E8C4]">{selectedCommunity.name}</span> : null}
+              {isShopStory && targetStorefrontName ? <span className="truncate rounded-full bg-[#D9A441]/10 px-2.5 py-1 text-[#9a6410] dark:text-[#F8E8C4]">{targetStorefrontName}</span> : null}
+            </div>
+          </div>
+        ) : null}
+        <Textarea autoFocus value={draft} onChange={event => setDraft(event.target.value)} maxLength={700} placeholder={isMediaMode ? "Add a caption" : isCommunityStory ? "Share something with the community" : "Share a moment in words"} className="min-h-[100px] border-[#eadfca] bg-white/85" />
         {isMediaMode ? <input type="file" accept={mode === "video" ? "video/mp4" : "image/jpeg,image/png,image/webp"} onChange={handleFile} className="block h-10 w-full rounded-xl border border-[#eadfca] bg-white px-3 py-2 text-xs text-[#151A17]" /> : null}
-        {isBusinessMemory ? (
+        {isCommunityStory && !hasCommunityContext ? (
+          <label className="block space-y-2">
+            <span className="text-xs font-semibold text-[#5F6861] dark:text-[#AEBAC1]">Community</span>
+            <select value={selectedCommunityId} onChange={event => setSelectedCommunityId(event.target.value)} className="h-10 w-full rounded-xl border border-[#eadfca] bg-white px-3 text-xs text-[#151A17]">
+              <option value="">Choose a community</option>
+              {(communities.data ?? []).map(community => <option key={community.id} value={community.id}>{community.name}</option>)}
+            </select>
+          </label>
+        ) : null}
+        {isCommunityStory && hasCommunityContext ? (
+          <div className="flex items-center gap-2 rounded-xl border border-[#eadfca] bg-white/70 px-3 py-2 text-xs font-semibold text-[#7b6647]">
+            <MessageCircle className="size-3.5 text-[#D9A441]" /> Sharing to {communityName || "this community"}
+          </div>
+        ) : null}
+        {isShopStory ? (
           <div className="grid gap-3 rounded-2xl border border-[#eadfca] bg-white/70 p-3 sm:grid-cols-2">
+            {shopProducts.length ? (
+              <select value={selectedProductId} onChange={event => applyProduct(shopProducts.find(product => product.id === event.target.value) ?? null)} className="h-10 rounded-xl border border-[#eadfca] bg-white px-3 text-xs text-[#151A17] outline-none focus:border-[#D9A441] sm:col-span-2">
+                <option value="">Use product details manually</option>
+                {shopProducts.map(product => <option key={product.id} value={product.id}>{product.title}</option>)}
+              </select>
+            ) : null}
             <input value={productName} onChange={event => setProductName(event.target.value)} placeholder="Product name" maxLength={160} className="h-10 rounded-xl border border-[#eadfca] bg-white px-3 text-xs text-[#151A17] outline-none focus:border-[#D9A441]" />
             <input value={productPrice} onChange={event => setProductPrice(event.target.value)} placeholder="Price" type="number" min="0" step="0.01" className="h-10 rounded-xl border border-[#eadfca] bg-white px-3 text-xs text-[#151A17] outline-none focus:border-[#D9A441]" />
             <input value={productDescription} onChange={event => setProductDescription(event.target.value)} placeholder="Short product description" maxLength={280} className="h-10 rounded-xl border border-[#eadfca] bg-white px-3 text-xs text-[#151A17] outline-none focus:border-[#D9A441] sm:col-span-2" />
             <input value={productCurrencyCode} onChange={event => setProductCurrencyCode(event.target.value.toUpperCase().slice(0, 3))} placeholder="KES" maxLength={3} className="h-10 rounded-xl border border-[#eadfca] bg-white px-3 text-xs text-[#151A17] outline-none focus:border-[#D9A441]" />
+            {selectedProduct ? <p className="text-xs font-semibold text-[#D9A441] sm:col-span-2">Using product from {selectedProduct.storefrontName}</p> : null}
+          </div>
+        ) : target === "memory" ? (
+          <div className="flex items-center gap-2 rounded-xl border border-[#eadfca] bg-white/70 px-3 py-2 text-xs font-semibold text-[#7b6647]">
+            <Bookmark className="size-3.5 text-[#D9A441]" /> This will stay in Memories
           </div>
         ) : (
           <label className="flex items-center gap-2 rounded-xl border border-[#eadfca] bg-white/70 px-3 py-2 text-xs font-semibold text-[#7b6647]">
@@ -227,12 +369,12 @@ export function StoryComposer({ onDone, compact = false, storefrontId, storefron
         {audience === "custom" ? <input aria-label="Savanna account IDs for custom Story audience" value={customAudience} onChange={event => setCustomAudience(event.target.value)} placeholder="Account IDs, separated by commas" className="h-10 w-full rounded-xl border border-[#eadfca] bg-white px-3 text-xs text-[#151A17]" /> : null}
       </div>
       <div className="flex w-full gap-2 sm:w-36 sm:flex-col">
-        <select value={isBusinessMemory ? "public" : audience} disabled={isBusinessMemory} onChange={event => setAudience(event.target.value as StoryAudience)} className="h-10 flex-1 rounded-xl border border-[#eadfca] bg-white px-2 text-xs text-[#151A17] disabled:opacity-80">
+        <select value={isShopStory || isCommunityStory ? "public" : audience} disabled={isShopStory || isCommunityStory} onChange={event => setAudience(event.target.value as StoryAudience)} className="h-10 flex-1 rounded-xl border border-[#eadfca] bg-white px-2 text-xs text-[#151A17] disabled:opacity-80">
           <option value="public">Public</option>
           <option value="private">Only me</option>
           <option value="custom">Selected people</option>
         </select>
-        <Button type="submit" disabled={isPending} className="savanna-brand-token rounded-xl">{isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}</Button>
+        <Button type="submit" disabled={isPending} className="savanna-brand-token rounded-xl">{isPending ? <Loader2 className="size-4 animate-spin" /> : <><Send className="size-4 sm:mr-1" /><span className="hidden sm:inline">{publishLabel}</span></>}</Button>
         <Button type="button" variant="ghost" onClick={onDone} className="rounded-xl">Cancel</Button>
       </div>
     </form>
@@ -285,6 +427,12 @@ function StoryViewer({ story, onClose, onMove, index, total }: { story: StoryIte
           <span className="absolute inset-0 bg-black/25" />
           <div className="relative">
             <StoryProductSummary story={story} />
+            {story.communityId ? (
+              <Link href={`/communities/${story.communityId}`} className="mb-4 flex items-center gap-2 rounded-2xl border border-white/20 bg-black/30 p-3 text-white shadow-[0_12px_30px_rgba(0,0,0,0.18)] backdrop-blur-md">
+                <MessageCircle className="size-4 shrink-0 text-[#F8E8C4]" />
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold">{story.communityName || "Community story"}</span>
+              </Link>
+            ) : null}
             <p className="font-display text-3xl font-semibold leading-tight">{story.textBody || "A moment shared"}</p>
             <p className="mt-4 text-xs text-white/70">{story.isMemory ? "Saved to Memories" : `Expires ${new Date(story.expiresAt).toLocaleString()}`}</p>
           </div>
@@ -395,10 +543,10 @@ export function MobileStoriesHeader() {
 
   const expandedHeight = Math.min(116, 78 + pull);
   const previewStories: StoryItem[] = previewStoriesEnabled ? [
-    { id: "preview-101", authorUserId: "preview-101", authorName: "Ayo", authorCity: null, authorCountryCode: null, textBody: "Fresh produce is in today.", audience: "public", customAudienceUserIds: [], createdAt: new Date(), publishedAt: new Date(), expiresAt: new Date(Date.now() + 86_400_000), deletedAt: null, isMemory: false, storefrontId: null, storefrontSlug: null, storefrontName: null, productName: null, productDescription: null, productPriceMinor: null, productCurrencyCode: null, discovery: { slot: "for_you", label: "For you", reason: "A nearby public update", score: 55 }, media: [], primaryMediaUrl: null, primaryMediaType: null },
-    { id: "preview-102", authorUserId: "preview-102", authorName: "Esi", authorCity: null, authorCountryCode: null, textBody: "A small thought for the day.", audience: "public", customAudienceUserIds: [], createdAt: new Date(), publishedAt: new Date(), expiresAt: new Date(Date.now() + 86_400_000), deletedAt: null, isMemory: false, storefrontId: null, storefrontSlug: null, storefrontName: null, productName: null, productDescription: null, productPriceMinor: null, productCurrencyCode: null, discovery: { slot: "for_you", label: "For you", reason: "A nearby public update", score: 55 }, media: [], primaryMediaUrl: null, primaryMediaType: null },
-    { id: "preview-103", authorUserId: "preview-103", authorName: "Zawadi", authorCity: null, authorCountryCode: null, textBody: "New lesson is now available.", audience: "public", customAudienceUserIds: [], createdAt: new Date(), publishedAt: new Date(), expiresAt: new Date(Date.now() + 86_400_000), deletedAt: null, isMemory: false, storefrontId: null, storefrontSlug: null, storefrontName: null, productName: null, productDescription: null, productPriceMinor: null, productCurrencyCode: null, discovery: { slot: "for_you", label: "For you", reason: "A nearby public update", score: 55 }, media: [], primaryMediaUrl: null, primaryMediaType: null },
-    { id: "preview-104", authorUserId: "preview-104", authorName: "Amina", authorCity: null, authorCountryCode: null, textBody: "Weekend plans, simply shared.", audience: "public", customAudienceUserIds: [], createdAt: new Date(), publishedAt: new Date(), expiresAt: new Date(Date.now() + 86_400_000), deletedAt: null, isMemory: false, storefrontId: null, storefrontSlug: null, storefrontName: null, productName: null, productDescription: null, productPriceMinor: null, productCurrencyCode: null, discovery: { slot: "for_you", label: "For you", reason: "A nearby public update", score: 55 }, media: [], primaryMediaUrl: null, primaryMediaType: null },
+    { id: "preview-101", authorUserId: "preview-101", authorName: "Ayo", authorCity: null, authorCountryCode: null, textBody: "Fresh produce is in today.", audience: "public", customAudienceUserIds: [], createdAt: new Date(), publishedAt: new Date(), expiresAt: new Date(Date.now() + 86_400_000), deletedAt: null, isMemory: false, storefrontId: null, storefrontSlug: null, storefrontName: null, communityId: null, communityName: null, productName: null, productDescription: null, productPriceMinor: null, productCurrencyCode: null, discovery: { slot: "for_you", label: "For you", reason: "A nearby public update", score: 55 }, media: [], primaryMediaUrl: null, primaryMediaType: null },
+    { id: "preview-102", authorUserId: "preview-102", authorName: "Esi", authorCity: null, authorCountryCode: null, textBody: "A small thought for the day.", audience: "public", customAudienceUserIds: [], createdAt: new Date(), publishedAt: new Date(), expiresAt: new Date(Date.now() + 86_400_000), deletedAt: null, isMemory: false, storefrontId: null, storefrontSlug: null, storefrontName: null, communityId: null, communityName: null, productName: null, productDescription: null, productPriceMinor: null, productCurrencyCode: null, discovery: { slot: "for_you", label: "For you", reason: "A nearby public update", score: 55 }, media: [], primaryMediaUrl: null, primaryMediaType: null },
+    { id: "preview-103", authorUserId: "preview-103", authorName: "Zawadi", authorCity: null, authorCountryCode: null, textBody: "New lesson is now available.", audience: "public", customAudienceUserIds: [], createdAt: new Date(), publishedAt: new Date(), expiresAt: new Date(Date.now() + 86_400_000), deletedAt: null, isMemory: false, storefrontId: null, storefrontSlug: null, storefrontName: null, communityId: null, communityName: null, productName: null, productDescription: null, productPriceMinor: null, productCurrencyCode: null, discovery: { slot: "for_you", label: "For you", reason: "A nearby public update", score: 55 }, media: [], primaryMediaUrl: null, primaryMediaType: null },
+    { id: "preview-104", authorUserId: "preview-104", authorName: "Amina", authorCity: null, authorCountryCode: null, textBody: "Weekend plans, simply shared.", audience: "public", customAudienceUserIds: [], createdAt: new Date(), publishedAt: new Date(), expiresAt: new Date(Date.now() + 86_400_000), deletedAt: null, isMemory: false, storefrontId: null, storefrontSlug: null, storefrontName: null, communityId: null, communityName: null, productName: null, productDescription: null, productPriceMinor: null, productCurrencyCode: null, discovery: { slot: "for_you", label: "For you", reason: "A nearby public update", score: 55 }, media: [], primaryMediaUrl: null, primaryMediaType: null },
   ] : [];
   const ownStoryInitial = (user?.name?.trim().slice(0, 1) || "S").toUpperCase();
   const ownStoryAvatarUrl = user?.photoURL ?? null;

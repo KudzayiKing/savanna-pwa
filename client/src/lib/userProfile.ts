@@ -18,6 +18,7 @@ import {
 import type { User } from "firebase/auth";
 import { useQuery } from "@tanstack/react-query";
 import { getFirestoreDb } from "./firebase";
+import { listFirebaseBlockedUserIds } from "./firebaseSafety";
 
 /**
  * The application's view of a signed-in user.
@@ -339,10 +340,12 @@ export async function searchUserProfilesByUsername(queryValue: string, viewer?: 
     ),
   );
 
+  const blockedUserIds = new Set(await listFirebaseBlockedUserIds(viewer));
   return snapshot.docs
     .map(item => mapPublicProfile(item.id, item.data() as PublicProfileDoc))
     .filter(profile =>
       profile.id !== viewer.id
+      && !blockedUserIds.has(profile.id)
       && Boolean(profile.username)
       && profile.handleDiscoverability === "exact_match"
       && profile.profileVisibility !== "private"

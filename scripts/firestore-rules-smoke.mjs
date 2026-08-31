@@ -23,6 +23,7 @@ import {
 import {
   collection,
   connectFirestoreEmulator,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -32,6 +33,7 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  updateDoc,
   writeBatch,
   where,
 } from "firebase/firestore";
@@ -84,10 +86,16 @@ userB = await register("b@savanna.test");
 results.push(`userA=${userA}\nuserB=${userB}`);
 
 const conversationRef = id => doc(db, "conversations", id);
+const conversationInviteRef = code => doc(db, "conversationInvites", code);
 const inboxRef = (uid, id) => doc(db, "users", uid, "conversationRefs", id);
 const communityRef = id => doc(db, "communities", id);
+const communityInviteRef = code => doc(db, "communityInvites", code);
 const communityMemberRef = (communityId, uid) => doc(db, "communities", communityId, "members", uid);
 const memoryRef = (uid, id) => doc(db, "users", uid, "memories", id);
+const storefrontRef = id => doc(db, "storefronts", id);
+const productRef = id => doc(db, "products", id);
+const storyRef = () => doc(collection(db, "stories"));
+const storyPlacementEventRef = () => doc(collection(db, "storyPlacementEvents"));
 
 // Mirrors messagesQuery() in client/src/lib/firebaseChat.ts
 const messagesQuery = (conversationId, uid) =>
@@ -95,7 +103,17 @@ const messagesQuery = (conversationId, uid) =>
 
 const memberIds = uniqueMembers([userA, userB]);
 const conversationId = `direct_${memberIds.join("__")}`;
+const groupConversationId = "harare-market-group";
+const groupInviteCode = "groupinvite1";
+const communityInviteCode = "communityinvite1";
+const privateCommunityId = "private-makers";
+const privateCommunityInviteCode = "privateinvite1";
+const userBStorefrontId = "user-b-market";
+const userBProductId = "user-b-maize-meal";
 let firstMessageId = null;
+let publicCommunityChatMessageId = null;
+let publicCommunityPostId = null;
+let publicCommunityStoryId = null;
 
 // --- 1. conversation create (mirrors createFirebaseConversation) -----------
 await step("create conversation doc + both inbox rows", async () => {
@@ -152,6 +170,7 @@ await step("send message batch (message + conversation update + 2 inbox rows)", 
     status: "sent",
     deliveredTo: [userA],
     readBy: [userA],
+    pinnedBy: [],
     createdAt: timestamp,
   });
   batch.update(conversationRef(conversationId), {
@@ -279,6 +298,7 @@ await step("recipient replies to a source message", async () => {
     replyToSnippet: "hello",
     reactions: {},
     savedBy: [],
+    pinnedBy: [],
     memoryPrompt: null,
     createdAt: timestamp,
   });
@@ -327,7 +347,12 @@ await step("recipient reacts to and saves a message memory", async () => {
     conversationTitle: "Private chat",
     messageId: firstMessageId,
     senderUserId: userA,
-    snippet: "hello",
+    snippet: "send the quote tomorrow",
+    tags: ["follow_up", "task"],
+    followUpAt: timestamp,
+    followUpLabel: "Tomorrow",
+    followUpAction: "send the quote tomorrow",
+    followUpCompletedAt: null,
     sourceCreatedAt: timestamp,
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -335,10 +360,83 @@ await step("recipient reacts to and saves a message memory", async () => {
   await batch.commit();
 });
 
-// --- 4. communities can be created, listed, and joined ---------------------
+await step("recipient pins a source message", async () => {
+  await updateDoc(doc(db, "conversations", conversationId, "messages", firstMessageId), {
+    pinnedBy: [userB],
+    pinnedAt: serverTimestamp(),
+  });
+});
+
+await step("recipient updates saved follow-up state", async () => {
+  const timestamp = serverTimestamp();
+  await updateDoc(memoryRef(userB, `message_${firstMessageId}`), {
+    followUpCompletedAt: timestamp,
+    updatedAt: timestamp,
+  });
+});
+
+await step("recipient reads and deletes saved message memory", async () => {
+  const snap = await getDocs(query(collection(db, "users", userB, "memories"), orderBy("updatedAt", "desc"), limit(5)));
+  if (!snap.docs.some(item => item.id === `message_${firstMessageId}`)) {
+    throw new Error("saved message memory was not returned");
+  }
+  await deleteDoc(memoryRef(userB, `message_${firstMessageId}`));
+});
+
+// --- 4. groups can grow through invite links -------------------------------
 await signOut(auth);
 await signInWithEmailAndPassword(auth, "a@savanna.test", PASSWORD);
 
+await step("create group conversation + invite link", async () => {
+  const timestamp = serverTimestamp();
+  const batch = writeBatch(db);
+  batch.set(conversationRef(groupConversationId), {
+    kind: "group",
+    title: "Harare Market",
+    memberIds,
+    directKey: null,
+    inviteCode: groupInviteCode,
+    storefrontId: null,
+    storefrontSlug: null,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    lastMessageAt: timestamp,
+    lastMessageId: null,
+    lastMessageSenderId: null,
+    lastMessagePreview: "",
+  });
+  for (const uid of memberIds) {
+    batch.set(inboxRef(uid, groupConversationId), {
+      conversationId: groupConversationId,
+      kind: "group",
+      title: "Harare Market",
+      memberIds,
+      inviteCode: groupInviteCode,
+      mutedUntil: null,
+      storefrontId: null,
+      storefrontSlug: null,
+      updatedAt: timestamp,
+      lastMessageAt: timestamp,
+      lastMessageId: null,
+      lastMessageSenderId: null,
+      lastMessagePreview: "",
+      lastMessageStatus: null,
+    }, { merge: true });
+  }
+  batch.set(conversationInviteRef(groupInviteCode), {
+    conversationId: groupConversationId,
+    kind: "group",
+    title: "Harare Market",
+    inviteCode: groupInviteCode,
+    createdByUserId: userA,
+    active: true,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  });
+  await batch.commit();
+});
+
+// --- 5. communities can be created, listed, and joined ---------------------
 const communityId = "harare-builders";
 
 await step("create public community doc + owner member row", async () => {
@@ -353,6 +451,7 @@ await step("create public community doc + owner member row", async () => {
     countryCode: "ZW",
     visibility: "public",
     memberCount: 1,
+    inviteCode: communityInviteCode,
     linkedStorefrontIds: [],
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -363,6 +462,51 @@ await step("create public community doc + owner member row", async () => {
     displayName: "User A",
     photoURL: null,
     joinedAt: timestamp,
+  });
+  batch.set(communityInviteRef(communityInviteCode), {
+    communityId,
+    name: "Harare Builders",
+    inviteCode: communityInviteCode,
+    createdByUserId: userA,
+    active: true,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  });
+  await batch.commit();
+});
+
+await step("create private community doc + invite link", async () => {
+  const timestamp = serverTimestamp();
+  const batch = writeBatch(db);
+  batch.set(communityRef(privateCommunityId), {
+    ownerUserId: userA,
+    name: "Private Makers",
+    slug: "private-makers",
+    description: "Invite-only makers testing Savanna.",
+    city: "Harare",
+    countryCode: "ZW",
+    visibility: "private",
+    memberCount: 1,
+    inviteCode: privateCommunityInviteCode,
+    linkedStorefrontIds: [],
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  });
+  batch.set(communityMemberRef(privateCommunityId, userA), {
+    userId: userA,
+    role: "owner",
+    displayName: "User A",
+    photoURL: null,
+    joinedAt: timestamp,
+  });
+  batch.set(communityInviteRef(privateCommunityInviteCode), {
+    communityId: privateCommunityId,
+    name: "Private Makers",
+    inviteCode: privateCommunityInviteCode,
+    createdByUserId: userA,
+    active: true,
+    createdAt: timestamp,
+    updatedAt: timestamp,
   });
   await batch.commit();
 });
@@ -384,6 +528,7 @@ await step("join public community (member row + count increment)", async () => {
     displayName: "User B",
     photoURL: null,
     joinedAt: timestamp,
+    joinedByInviteCode: null,
   });
   batch.update(communityRef(communityId), {
     memberCount: 2,
@@ -392,13 +537,474 @@ await step("join public community (member row + count increment)", async () => {
   await batch.commit();
 });
 
-// --- 5. a user who is NOT a member must be denied --------------------------
+await step("member sends a community chat message", async () => {
+  const timestamp = serverTimestamp();
+  const messageRef = doc(collection(db, "communities", communityId, "chatMessages"));
+  publicCommunityChatMessageId = messageRef.id;
+  const batch = writeBatch(db);
+  batch.set(messageRef, {
+    authorUserId: userB,
+    authorName: "User B",
+    authorPhotoURL: null,
+    body: "who knows a reliable plumber?",
+    createdAt: timestamp,
+  });
+  batch.update(communityRef(communityId), { updatedAt: timestamp });
+  await batch.commit();
+});
+
+await step("member creates a public community post", async () => {
+  const timestamp = serverTimestamp();
+  const postRef = doc(collection(db, "communities", communityId, "posts"));
+  publicCommunityPostId = postRef.id;
+  const batch = writeBatch(db);
+  batch.set(postRef, {
+    authorUserId: userB,
+    authorName: "User B",
+    authorPhotoURL: null,
+    title: "Plumber needed",
+    body: "Looking for a reliable plumber near Avondale.",
+    kind: "question",
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  });
+  batch.update(communityRef(communityId), { updatedAt: timestamp });
+  await batch.commit();
+});
+
+await step("member creates storefront and product for community discovery", async () => {
+  const timestamp = serverTimestamp();
+  await setDoc(storefrontRef(userBStorefrontId), {
+    ownerUserId: userB,
+    name: "User B Market",
+    slug: "user-b-market",
+    bio: "Fresh basics for nearby builders.",
+    category: "Groceries",
+    contactPhone: null,
+    contactEmail: null,
+    visibility: "public",
+    verificationState: "unverified",
+    coverUrl: null,
+    coverPath: null,
+    ownerCity: "Harare",
+    ownerCountryCode: "ZW",
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  });
+  await setDoc(productRef(userBProductId), {
+    storefrontId: userBStorefrontId,
+    storefrontSlug: "user-b-market",
+    storefrontName: "User B Market",
+    storefrontOwnerUserId: userB,
+    storefrontCategory: "Groceries",
+    ownerCity: "Harare",
+    ownerCountryCode: "ZW",
+    title: "Maize meal",
+    description: "Fresh stock for this week.",
+    category: "Food",
+    priceMinor: 650,
+    currencyCode: "USD",
+    inventoryQuantity: null,
+    status: "active",
+    primaryImageUrl: null,
+    media: [],
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  });
+});
+
+await step("member creates a product-backed community post", async () => {
+  const timestamp = serverTimestamp();
+  const postRef = doc(collection(db, "communities", communityId, "posts"));
+  const batch = writeBatch(db);
+  batch.set(postRef, {
+    authorUserId: userB,
+    authorName: "User B",
+    authorPhotoURL: null,
+    title: "Maize meal available",
+    body: "Fresh stock just arrived for the builders buying in bulk.",
+    kind: "listing",
+    storefrontId: userBStorefrontId,
+    storefrontSlug: "user-b-market",
+    storefrontName: "User B Market",
+    productId: userBProductId,
+    productName: "Maize meal",
+    productDescription: "Fresh stock for this week.",
+    productPriceMinor: 650,
+    productCurrencyCode: "USD",
+    productPrimaryImageUrl: null,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  });
+  batch.update(communityRef(communityId), { updatedAt: timestamp });
+  await batch.commit();
+});
+
+await step("member publishes a community story", async () => {
+  const timestamp = serverTimestamp();
+  const ref = storyRef();
+  publicCommunityStoryId = ref.id;
+  await setDoc(ref, {
+    authorUserId: userB,
+    authorName: "User B",
+    authorCity: "Harare",
+    authorCountryCode: "ZW",
+    textBody: "Builders community update.",
+    audience: "public",
+    customAudienceUserIds: [],
+    media: [],
+    primaryMediaUrl: null,
+    primaryMediaType: null,
+    isMemory: false,
+    storefrontId: null,
+    storefrontSlug: null,
+    storefrontName: null,
+    communityId,
+    communityName: "Harare Builders",
+    productName: null,
+    productDescription: null,
+    productPriceMinor: null,
+    productCurrencyCode: null,
+    createdAt: timestamp,
+    publishedAt: timestamp,
+    expiresAt: new Date(Date.now() + 86_400_000),
+    deletedAt: null,
+  });
+});
+
+await step("seller publishes a shop story from their storefront", async () => {
+  const timestamp = serverTimestamp();
+  await setDoc(storyRef(), {
+    authorUserId: userB,
+    authorName: "User B",
+    authorCity: "Harare",
+    authorCountryCode: "ZW",
+    textBody: "Fresh stock just arrived.",
+    audience: "public",
+    customAudienceUserIds: [],
+    media: [],
+    primaryMediaUrl: null,
+    primaryMediaType: null,
+    isMemory: true,
+    storefrontId: userBStorefrontId,
+    storefrontSlug: "user-b-market",
+    storefrontName: "User B Market",
+    communityId: null,
+    communityName: null,
+    productName: "Maize meal",
+    productDescription: "Fresh stock for this week.",
+    productPriceMinor: 650,
+    productCurrencyCode: "USD",
+    createdAt: timestamp,
+    publishedAt: timestamp,
+    expiresAt: new Date("9999-12-31T23:59:59.999Z"),
+    deletedAt: null,
+  });
+});
+
+await signOut(auth);
+await signInWithEmailAndPassword(auth, "a@savanna.test", PASSWORD);
+
+await step("member reacts to a community post story surface", async () => {
+  await setDoc(doc(db, "communities", communityId, "posts", publicCommunityPostId, "reactions", `${userA}_heart`), {
+    userId: userA,
+    emoji: "heart",
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+});
+
+await step("member reacts, comments, deletes own comment, and signals story reply", async () => {
+  await setDoc(doc(db, "stories", publicCommunityStoryId, "reactions", `${userA}_heart`), {
+    userId: userA,
+    emoji: "heart",
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  const commentRef = doc(collection(db, "stories", publicCommunityStoryId, "comments"));
+  await setDoc(commentRef, {
+    userId: userA,
+    userName: "User A",
+    userPhotoURL: null,
+    body: "Useful community story.",
+    createdAt: serverTimestamp(),
+  });
+  await deleteDoc(commentRef);
+  await setDoc(doc(db, "stories", publicCommunityStoryId, "replies", userA), {
+    userId: userA,
+    userName: "User A",
+    userPhotoURL: null,
+    count: 1,
+    updatedAt: serverTimestamp(),
+  });
+});
+
+await step("member saves and removes a story memory", async () => {
+  const timestamp = serverTimestamp();
+  await setDoc(doc(db, "stories", publicCommunityStoryId, "reactions", `${userA}_save`), {
+    userId: userA,
+    emoji: "save",
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  });
+  await setDoc(memoryRef(userA, `story_${publicCommunityStoryId}`), {
+    ownerUserId: userA,
+    sourceType: "story",
+    conversationId: "",
+    conversationTitle: "Harare Builders Story",
+    messageId: publicCommunityStoryId,
+    senderUserId: userB,
+    storyId: publicCommunityStoryId,
+    storyAuthorUserId: userB,
+    storyAuthorName: "User B",
+    storyHref: `/stories?story=${publicCommunityStoryId}`,
+    storefrontId: null,
+    storefrontSlug: null,
+    storefrontName: null,
+    communityId,
+    communityName: "Harare Builders",
+    productName: null,
+    productDescription: null,
+    productPriceMinor: null,
+    productCurrencyCode: null,
+    snippet: "Builders community update.",
+    tags: ["recommendation"],
+    followUpAt: null,
+    followUpLabel: null,
+    followUpAction: null,
+    followUpCompletedAt: null,
+    sourceCreatedAt: timestamp,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  });
+  await deleteDoc(memoryRef(userA, `story_${publicCommunityStoryId}`));
+  await deleteDoc(doc(db, "stories", publicCommunityStoryId, "reactions", `${userA}_save`));
+});
+
+await step("member logs a story placement interaction", async () => {
+  await setDoc(storyPlacementEventRef(), {
+    viewerUserId: userA,
+    placementId: `story-${publicCommunityStoryId}`,
+    action: "impression",
+    tab: "community",
+    surface: "stories",
+    sourceKind: "story",
+    storyId: publicCommunityStoryId,
+    communityId,
+    storefrontId: null,
+    productId: null,
+    broadCity: "Harare",
+    countryCode: "ZW",
+    createdAt: serverTimestamp(),
+  });
+});
+
+await step("member cannot forge another user's story placement event", async () => {
+  try {
+    await setDoc(storyPlacementEventRef(), {
+      viewerUserId: userB,
+      placementId: `story-${publicCommunityStoryId}`,
+      action: "impression",
+      tab: "community",
+      surface: "stories",
+      sourceKind: "story",
+      storyId: publicCommunityStoryId,
+      communityId,
+      storefrontId: null,
+      productId: null,
+      broadCity: "Harare",
+      countryCode: "ZW",
+      createdAt: serverTimestamp(),
+    });
+  } catch (error) {
+    if (error?.code === "permission-denied") return;
+    throw error;
+  }
+  throw new Error("SECURITY: member forged another user's story placement event");
+});
+
+await step("non-author cannot read story reply analytics", async () => {
+  try {
+    await getDocs(collection(db, "stories", publicCommunityStoryId, "replies"));
+  } catch (error) {
+    if (error?.code === "permission-denied") return;
+    throw error;
+  }
+  throw new Error("SECURITY: non-author read story reply analytics");
+});
+
+await step("member cannot attach another seller's product", async () => {
+  try {
+    await setDoc(doc(collection(db, "communities", communityId, "posts")), {
+      authorUserId: userA,
+      authorName: "User A",
+      authorPhotoURL: null,
+      title: "Forged listing",
+      body: "Trying to claim another storefront's product.",
+      kind: "listing",
+      storefrontId: userBStorefrontId,
+      storefrontSlug: "user-b-market",
+      storefrontName: "User B Market",
+      productId: userBProductId,
+      productName: "Maize meal",
+      productDescription: "Fresh stock for this week.",
+      productPriceMinor: 650,
+      productCurrencyCode: "USD",
+      productPrimaryImageUrl: null,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    if (error?.code === "permission-denied") return;
+    throw error;
+  }
+  throw new Error("SECURITY: member attached another seller's product");
+});
+
+await step("member reads community chat and posts", async () => {
+  const [chatSnap, postSnap] = await Promise.all([
+    getDocs(query(collection(db, "communities", communityId, "chatMessages"), orderBy("createdAt", "asc"), limit(20))),
+    getDocs(query(collection(db, "communities", communityId, "posts"), orderBy("createdAt", "desc"), limit(20))),
+  ]);
+  if (!chatSnap.docs.some(item => item.id === publicCommunityChatMessageId)) throw new Error("community chat was not returned");
+  if (!postSnap.docs.some(item => item.id === publicCommunityPostId)) throw new Error("community post was not returned");
+});
+
+// --- 6. a user who is NOT a member must be denied --------------------------
 // A non-member's array-contains query returns zero rows and is allowed — the
 // filter itself excludes them, so that result proves nothing about the rules.
 // Direct reads by document id bypass the filter entirely, which is what makes
 // them the meaningful check.
 await signOut(auth);
-await register("c@savanna.test");
+const userC = await register("c@savanna.test");
+
+await step("non-member can read public community posts", async () => {
+  const snap = await getDocs(query(collection(db, "communities", communityId, "posts"), orderBy("createdAt", "desc"), limit(20)));
+  if (!snap.docs.some(item => item.id === publicCommunityPostId)) throw new Error("public community post was not readable");
+});
+
+await step("non-member can react to public community post", async () => {
+  await setDoc(doc(db, "communities", communityId, "posts", publicCommunityPostId, "reactions", `${userC}_save`), {
+    userId: userC,
+    emoji: "save",
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+});
+
+await step("non-member publishing into a community story is DENIED", async () => {
+  try {
+    const timestamp = serverTimestamp();
+    await setDoc(storyRef(), {
+      authorUserId: userC,
+      authorName: "User C",
+      authorCity: "Harare",
+      authorCountryCode: "ZW",
+      textBody: "Trying to publish into a community without joining.",
+      audience: "public",
+      customAudienceUserIds: [],
+      media: [],
+      primaryMediaUrl: null,
+      primaryMediaType: null,
+      isMemory: false,
+      storefrontId: null,
+      storefrontSlug: null,
+      storefrontName: null,
+      communityId,
+      communityName: "Harare Builders",
+      productName: null,
+      productDescription: null,
+      productPriceMinor: null,
+      productCurrencyCode: null,
+      createdAt: timestamp,
+      publishedAt: timestamp,
+      expiresAt: new Date(Date.now() + 86_400_000),
+      deletedAt: null,
+    });
+  } catch (error) {
+    if (error?.code === "permission-denied") return;
+    throw error;
+  }
+  throw new Error("SECURITY: non-member published a community story");
+});
+
+await step("non-member reading public community chat is DENIED", async () => {
+  try {
+    await getDocs(query(collection(db, "communities", communityId, "chatMessages"), orderBy("createdAt", "asc"), limit(20)));
+  } catch (error) {
+    if (error?.code === "permission-denied") return;
+    throw error;
+  }
+  throw new Error("SECURITY: non-member read community chat");
+});
+
+await step("non-member posting to public community is DENIED", async () => {
+  try {
+    await setDoc(doc(collection(db, "communities", communityId, "posts")), {
+      authorUserId: userC,
+      authorName: "User C",
+      authorPhotoURL: null,
+      title: "Forged",
+      body: "not a member",
+      kind: "post",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    if (error?.code === "permission-denied") return;
+    throw error;
+  }
+  throw new Error("SECURITY: non-member posted to a community");
+});
+
+await step("non-member joins group through invite link", async () => {
+  const inviteSnap = await getDoc(conversationInviteRef(groupInviteCode));
+  if (!inviteSnap.exists()) throw new Error("group invite was not readable");
+  const timestamp = serverTimestamp();
+  const nextMemberIds = uniqueMembers([...memberIds, userC]);
+  const batch = writeBatch(db);
+  batch.update(conversationRef(groupConversationId), {
+    memberIds: nextMemberIds,
+    updatedAt: timestamp,
+  });
+  batch.set(inboxRef(userC, groupConversationId), {
+    conversationId: groupConversationId,
+    kind: "group",
+    title: "Harare Market",
+    memberIds: nextMemberIds,
+    inviteCode: groupInviteCode,
+    mutedUntil: null,
+    storefrontId: null,
+    storefrontSlug: null,
+    updatedAt: timestamp,
+    lastMessageAt: timestamp,
+    lastMessageId: null,
+    lastMessageSenderId: null,
+    lastMessagePreview: "",
+    lastMessageStatus: null,
+  }, { merge: true });
+  await batch.commit();
+});
+
+await step("non-member joins private community through invite link", async () => {
+  const inviteSnap = await getDoc(communityInviteRef(privateCommunityInviteCode));
+  if (!inviteSnap.exists()) throw new Error("private community invite was not readable");
+  const timestamp = serverTimestamp();
+  const batch = writeBatch(db);
+  batch.set(communityMemberRef(privateCommunityId, userC), {
+    userId: userC,
+    role: "member",
+    displayName: "User C",
+    photoURL: null,
+    joinedAt: timestamp,
+    joinedByInviteCode: privateCommunityInviteCode,
+  });
+  batch.update(communityRef(privateCommunityId), {
+    memberCount: 2,
+    updatedAt: timestamp,
+  });
+  await batch.commit();
+});
 
 await step("non-member reading a message by id is DENIED", async () => {
   let snap = null;

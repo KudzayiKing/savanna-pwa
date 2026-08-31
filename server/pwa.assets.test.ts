@@ -110,12 +110,21 @@ describe("Savanna PWA assets", () => {
     expect(firebaseChat).toContain('"users", memberId, "conversationRefs"');
     expect(firebaseChat).toContain("conversationInboxQuery(user.id)");
     expect(firebaseChat).toContain('where("memberIds", "array-contains", uid)');
+    expect(firebaseChat).toContain("conversationInvites");
+    expect(firebaseChat).toContain("joinFirebaseConversationInvite");
+    expect(firebaseChat).toContain("inviteCode");
     expect(firebaseChat).toContain("onSnapshot(");
     expect(firebaseChat).toContain("writeBatch(db)");
     expect(firebaseChat).toContain(".sort((left, right) => new Date(right.lastMessageAt ?? 0).getTime()");
     expect(messages).toContain("username-search");
+    expect(messages).toContain("invitee-search");
     expect(messages).toContain("searchUserProfilesByUsername");
     expect(messages).toContain("startChatWithProfile");
+    expect(messages).toContain("selectedInvitees");
+    expect(messages).toContain("Search @username to add people");
+    expect(messages).toContain("Share invite link");
+    expect(messages).not.toContain("User IDs, comma-separated");
+    expect(messages).not.toContain("Savanna user ID");
     expect(messages).toContain("locallyCreatedConversations");
     expect(messages).toContain("savanna-open-conversation");
     expect(messages).toContain("savanna-open-conversation-meta");
@@ -126,12 +135,26 @@ describe("Savanna PWA assets", () => {
     expect(messages).toContain('toast.success("Chat started")');
     expect(profile).toContain('id="profile-username"');
     expect(profile).toContain("Your phone number stays private.");
+    expect(profile).toContain("useFirebaseMessageMemories(user)");
+    expect(profile).toContain("useFirebaseMessageMemoryMutations(user)");
+    expect(profile).toContain("Chat memories");
+    expect(profile).toContain("Story performance");
+    expect(profile).toContain("StoryPerformanceRow");
+    expect(profile).toContain('memory.sourceType === "story"');
+    expect(profile).toContain('sessionStorage.setItem("savanna-open-conversation", memory.conversationId)');
     expect(publicProfile).toContain("@{item.username}");
     expect(publicProfile).toContain("<SavannaShell hideMobileHeader hideDesktopHeader>");
     expect(publicProfile).toContain("savanna-public-profile-page");
     expect(publicProfile).toContain("savanna-public-profile-identity");
     expect(publicProfile).toContain("savanna-public-profile-tabs");
     expect(publicProfile).toContain("savanna-public-profile-grid");
+    expect(publicProfile).toContain('type ProfileStoryTab = "stories" | "memories";');
+    expect(publicProfile).toContain("activeStoryTab");
+    expect(publicProfile).toContain("storyGridItems = profile.data.stories.filter(story => !story.storefrontId && !story.isMemory)");
+    expect(publicProfile).toContain("memoryGridItems = profile.data.stories.filter(story => !story.storefrontId && story.isMemory)");
+    expect(publicProfile).toContain("visibleStoryGridItems");
+    expect(publicProfile).toContain("story.communityName");
+    expect(publicProfile).toContain('href={`/stories?story=${story.id}`}');
     expect(publicProfile).toContain("followMutation");
     expect(publicProfile).toContain("startMessage");
     expect(publicProfile).toContain("{!isOwnProfile ? (");
@@ -147,6 +170,7 @@ describe("Savanna PWA assets", () => {
     expect(firestoreRules).toContain("match /following/{followingUid}");
     expect(firestoreRules).toContain("request.resource.data.followerUserId == request.auth.uid");
     expect(firestoreRules).toContain("match /conversationRefs/{conversationId}");
+    expect(firestoreRules).toContain("match /conversationInvites/{inviteCode}");
     expect(firestoreRules).toContain("request.resource.data.conversationId == conversationId");
     expect(firestoreRules).toContain("'senderId', 'memberIds', 'body'");
     expect(firestoreRules).toContain("request.resource.data.memberIds == conversationRef(conversationId).data.memberIds");
@@ -161,6 +185,42 @@ describe("Savanna PWA assets", () => {
     );
     expect(publicProfileRuleBlock).not.toContain("phoneNumber");
     expect(publicProfileRuleBlock).not.toContain("email");
+  });
+
+  it("provides a dedicated Recall screen for saved chat memories", async () => {
+    const [app, profile, recall, messages] = await Promise.all([
+      readFile(resolve(projectRoot, "client/src/App.tsx"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/pages/ProfilePage.tsx"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/pages/RecallPage.tsx"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/pages/MessagesPage.tsx"), "utf8"),
+    ]);
+
+    expect(app).toContain('const RecallPage = lazy(() => import("./pages/RecallPage"))');
+    expect(app).toContain('<Route path="/recall" component={RecallPage} />');
+    expect(profile).toContain('href="/recall"');
+    expect(profile).toContain("Open Recall");
+    expect(profile).toContain('sessionStorage.setItem("savanna-open-message", memory.messageId)');
+    expect(recall).toContain("Ask your Savanna memory.");
+    expect(recall).toContain('memory.sourceType === "story"');
+    expect(recall).toContain("Open story");
+    expect(recall).toContain("quickPrompts");
+    expect(recall).toContain("what do I need to follow up on?");
+    expect(recall).toContain("Follow-ups");
+    expect(recall).toContain("All memories");
+    expect(recall).toContain("completeFollowUp");
+    expect(recall).toContain("snoozeFollowUp");
+    expect(recall).toContain("clearFollowUp");
+    expect(recall).toContain("Done");
+    expect(recall).toContain("Snooze");
+    expect(recall).toContain("Clear");
+    expect(recall).toContain("answerConversationRecall");
+    expect(messages).toContain("renderDueFollowUpsPrompt");
+    expect(messages).toContain("isSavannaFollowUpDue");
+    expect(messages).toContain('navigate("/recall")');
+    expect(recall).toContain('sessionStorage.setItem("savanna-open-message", source.messageId)');
+    expect(recall).toContain("prepareMemoryConversation");
+    expect(messages).toContain('const pendingMessageId = sessionStorage.getItem("savanna-open-message")');
+    expect(messages).toContain("pendingOpenMessageId.current = pendingMessageId");
   });
 
   // Security rules are not filters: a `list` query is checked against the
@@ -261,6 +321,8 @@ describe("Savanna PWA assets", () => {
     expect(paymentCatalog).toContain("Savanna will");
     expect(paymentCatalog).not.toContain("Ember will");
     expect(merchantStudio).toContain("disabled until Savanna has verified merchant eligibility, credentials, and its callback configuration");
+    expect(merchantStudio).toContain("Product Memory performance");
+    expect(merchantStudio).toContain("ProductMemoryPerformance");
     expect(merchantStudio).not.toContain("Ember");
   });
 
@@ -277,6 +339,9 @@ describe("Savanna PWA assets", () => {
       orders,
       storiesPage,
       communitiesPage,
+      communityDetailPage,
+      storefrontPage,
+      productDetailPage,
       app,
       firebaseStories,
       firebaseShops,
@@ -297,6 +362,9 @@ describe("Savanna PWA assets", () => {
       readFile(resolve(projectRoot, "client/src/pages/OrdersPage.tsx"), "utf8"),
       readFile(resolve(projectRoot, "client/src/pages/StoriesPage.tsx"), "utf8"),
       readFile(resolve(projectRoot, "client/src/pages/CommunitiesPage.tsx"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/pages/CommunityDetailPage.tsx"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/pages/StorefrontPage.tsx"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/pages/ProductDetailPage.tsx"), "utf8"),
       readFile(resolve(projectRoot, "client/src/App.tsx"), "utf8"),
       readFile(resolve(projectRoot, "client/src/lib/firebaseStories.ts"), "utf8"),
       readFile(resolve(projectRoot, "client/src/lib/firebaseShops.ts"), "utf8"),
@@ -328,6 +396,16 @@ describe("Savanna PWA assets", () => {
     expect(stories).toContain("useFirebaseStories(user, true)");
     expect(stories).toContain("filterStoriesForFollowingHeader");
     expect(stories).toContain("useFollowedUserIds");
+    expect(stories).toContain("type StoryTarget");
+    expect(stories).toContain('useState<StoryTarget>(hasBusinessContext ? "shop" : hasCommunityContext ? "community" : "story")');
+    expect(stories).toContain("useMyFirebaseStorefront");
+    expect(stories).toContain("useFirebaseCommunities");
+    expect(stories).toContain("Choose a community");
+    expect(stories).toContain("Product name");
+    expect(stories).toContain("communityId: isCommunityStory ? selectedCommunity?.id : undefined");
+    expect(stories).toContain("storefrontId: isShopStory ? targetStorefrontId : undefined");
+    expect(stories).toContain("This will stay in Memories");
+    expect(stories).toContain("story.communityId");
     expect(stories).toContain("usePublishFirebaseStory");
     expect(stories).toContain("useReactToFirebaseStory");
     expect(stories).toContain("useReplyToFirebaseStory");
@@ -385,15 +463,31 @@ describe("Savanna PWA assets", () => {
     expect(animatedIcons).toContain('MobileNavIconName = "Home" | "Messages" | "Shops" | "Learn" | "Stories" | "Communities" | "Orders" | "Profile"');
     expect(animatedIcons).toContain('if (name === "Stories")');
     expect(animatedIcons).toContain('if (name === "Communities")');
-    expect(animatedIcons).toContain("frontBubbleVariants");
-    expect(animatedIcons).toContain("backBubbleVariants");
-    expect(animatedIcons).toContain('d="M14 9a2 2 0 0 1-2 2H6l-4 4V4');
+    // The Communities glyph is lucide's `users`, the same set as every other
+    // icon in this nav. Its right-hand partial silhouette is mirrored onto the
+    // left to give three figures, and the two side ones slide in. Assert the
+    // split, since collapsing it back into one path would silently kill the
+    // animation.
+    //
+    // We also pin the glyph as stroke-based (`fill="none" stroke=...`), which
+    // is what makes it match the sibling icons. The earlier Material
+    // MdOutlineGroups version was fill-based and rendered visibly shorter than
+    // its neighbours, because that glyph is only 12 user-units tall inside a
+    // 24-unit square viewBox where the others span 18.
+    expect(animatedIcons).toContain("leftSideVariants");
+    expect(animatedIcons).toContain("rightSideVariants");
+    expect(animatedIcons).toContain("bodyArcVariants");
+    expect(animatedIcons).toContain('x: [-3, 0]');
+    expect(animatedIcons).toContain('x: [3, 0]');
+    expect(animatedIcons).toContain('fill="none" stroke="currentColor"');
     expect(animatedIcons).toContain("const movingLineVariants: Variants");
     expect(animatedIcons).toContain('y: [0, -4.5, 0, -4.5, 0]');
     expect(animatedIcons).toContain("variants={movingLineVariants}");
     expect(app).toContain('const StoriesPage = lazy(() => import("./pages/StoriesPage"));');
     expect(app).toContain('const CommunitiesPage = lazy(() => import("./pages/CommunitiesPage"));');
+    expect(app).toContain('const CommunityDetailPage = lazy(() => import("./pages/CommunityDetailPage"));');
     expect(app).toContain('<Route path="/stories" component={StoriesPage} />');
+    expect(app).toContain('<Route path="/communities/:communityId" component={CommunityDetailPage} />');
     expect(app).toContain('<Route path="/communities" component={CommunitiesPage} />');
     expect(communitiesPage).toContain("savanna-route-communities");
     expect(communitiesPage).toContain('MobileNavIcon name="Communities" active size={16}');
@@ -406,8 +500,29 @@ describe("Savanna PWA assets", () => {
     expect(communitiesPage).toContain("Shops");
     expect(communitiesPage).toContain("Automation");
     expect(storiesPage).toContain('type StoryDiscoveryTab = "for_you" | "near_you" | "following" | "shops" | "community";');
+    expect(storiesPage).toContain('if (tab === "community") return Boolean(story.communityId);');
+    expect(storiesPage).toContain("CommunityOverlay");
+    expect(storiesPage).toContain('Link href={`/communities/${story.communityId}`}');
     expect(storiesPage).toContain("buildStoriesFeedItems");
     expect(storiesPage).toContain("StoryAdContext");
+    expect(storiesPage).toContain("useFirebaseCommunityDiscoveryPosts");
+    expect(storiesPage).toContain("useFirebaseStory");
+    expect(storiesPage).toContain("requestedStoryId");
+    expect(storiesPage).toContain("requestedStory.data");
+    expect(storiesPage).toContain("contentItemId(item) === requestedStoryId");
+    expect(storiesPage).toContain('kind: "community-post"');
+    expect(storiesPage).toContain("CommunityPostReel");
+    expect(storiesPage).toContain("contentMatchesTab");
+    expect(storiesPage).toContain("communityPostIsNearViewer");
+    expect(storiesPage).toContain("communityPostCount");
+    expect(storiesPage).toContain('Link href={`/communities/${post.communityId}`}');
+    expect(storiesPage).toContain("post.productId");
+    expect(storiesPage).toContain("post.productPrimaryImageUrl");
+    expect(storiesPage).toContain('`/shops/${post.storefrontSlug}/products/${post.productId}`');
+    expect(storiesPage).toContain('if (tab === "shops") return Boolean(item.post.productId || item.post.storefrontId);');
+    expect(storiesPage).toContain('if (tab === "community") return true;');
+    expect(storiesPage).toContain("return false;");
+    expect(storiesPage).not.toContain('return !story.storefrontId && (story.discovery.slot === "around_you" || story.audience === "public");');
     expect(storiesPage).toContain("adsEnabled = false");
     expect(storiesPage).toContain("savanna-story-filter-pill");
     expect(storiesPage).toContain('activeTab === tab.value ? "border-[#D9A441]/30 bg-[#D9A441]/20 text-[#D9A441]"');
@@ -417,12 +532,41 @@ describe("Savanna PWA assets", () => {
     expect(storiesPage).toContain("Shops");
     expect(storiesPage).toContain("Community");
     expect(storiesPage).toContain("useCommentFirebaseStory");
+    expect(storiesPage).toContain("useDeleteFirebaseStoryComment");
+    expect(storiesPage).toContain("useFirebaseStoryAnalytics");
     expect(storiesPage).toContain("useFirebaseStoryComments");
     expect(storiesPage).toContain("useReplyToFirebaseStory");
+    expect(storiesPage).toContain("useSaveFirebaseStoryMemory");
+    expect(storiesPage).toContain("useFirebaseMessageMemories");
+    expect(storiesPage).toContain("savedStoryIds");
+    expect(storiesPage).toContain("BookmarkCheck");
+    expect(storiesPage).toContain("Already saved to Memory");
+    expect(storiesPage).toContain("StoryProgressBars");
+    expect(storiesPage).toContain("Pause story");
+    expect(storiesPage).toContain("Mute story");
+    expect(storiesPage).toContain("Previous story");
+    expect(storiesPage).toContain("Next story");
+    expect(storiesPage).toContain("recordPlacement");
+    expect(storiesPage).toContain("useLogFirebaseStoryPlacementEvent");
+    expect(storiesPage).toContain("Saved to Memory");
+    expect(storiesPage).toContain("StoryAnalyticsPill");
+    expect(storiesPage).toContain("Creator stats");
+    expect(storiesPage).toContain('targetDomain="story_comment"');
+    expect(storiesPage).toContain('targetDomain="community_post"');
+    expect(storiesPage).toContain("Community post saved");
     expect(storiesPage).toContain("navigator.share");
     expect(storiesPage).toContain("Visit shop");
     expect(storiesPage).toContain("Contextual placement ready.");
+    expect(storiesPage).toContain('const shouldOpenComposer = storyParams.get("compose") === "1";');
+    expect(storiesPage).toContain("composerCommunityId");
+    expect(storiesPage).toContain("composerStorefrontId");
+    expect(storiesPage).toContain("composerProductId");
+    expect(storiesPage).toContain("initialProductPriceMinor");
     expect(messages).toContain("Search chats or people");
+    expect(shops).toContain("useFirebaseCommunityDiscoveryPosts");
+    expect(shops).toContain("communityProductPosts");
+    expect(shops).toContain("From communities");
+    expect(shops).toContain("Products people are talking about");
     expect(messages).toContain("Create a chat tab");
     expect(messages).toContain('const filterTabs = ([["all", "All"], ["direct", "Chats"], ["group", "Groups"], ["merchant_support", "Support"]] as const);');
     expect(messages).toContain("savanna-message-tab-membership");
@@ -435,8 +579,91 @@ describe("Savanna PWA assets", () => {
     expect(firebaseCommunities).toContain('collection(db, "communities")');
     expect(firebaseCommunities).toContain("createFirebaseCommunity");
     expect(firebaseCommunities).toContain("joinFirebaseCommunity");
+    expect(firebaseCommunities).toContain("getFirebaseCommunityDetail");
+    expect(firebaseCommunities).toContain("listFirebaseCommunityMessages");
+    expect(firebaseCommunities).toContain("listFirebaseCommunityPosts");
+    expect(firebaseCommunities).toContain("listFirebaseCommunityDiscoveryPosts");
+    expect(firebaseCommunities).toContain("listFirebaseBlockedUserIds");
+    expect(firebaseCommunities).toContain("useFirebaseCommunityDiscoveryPosts");
+    expect(firebaseCommunities).toContain("FirebaseCommunityDiscoveryPost");
+    expect(firebaseCommunities).toContain('surface: "stories"');
+    expect(firebaseCommunities).toContain("type FirebaseProduct");
+    expect(firebaseCommunities).toContain("product?: FirebaseProduct | null");
+    expect(firebaseCommunities).toContain("productPrimaryImageUrl");
+    expect(firebaseCommunities).toContain("isProductMemory: Boolean(post.productId)");
+    expect(firebaseCommunities).toContain("sendFirebaseCommunityMessage");
+    expect(firebaseCommunities).toContain("createFirebaseCommunityPost");
+    expect(firebaseCommunities).toContain("reactToFirebaseCommunityPost");
+    expect(firebaseCommunities).toContain("reactToPost");
+    expect(firebaseCommunities).toContain("linkFirebaseStorefrontToCommunity");
+    expect(firebaseCommunities).toContain("communityInvites");
+    expect(firebaseCommunities).toContain("joinFirebaseCommunityInvite");
+    expect(firebaseCommunities).toContain("inviteCode");
+    expect(firebaseStories).toContain("communityId: string | null;");
+    expect(firebaseStories).toContain("communityName: string | null;");
+    expect(firebaseStories).toContain("communityId?: string;");
+    expect(firebaseStories).toContain("communityName?: string | null;");
+    expect(firebaseStories).toContain("communityId: input.communityId ?? null");
+    expect(firebaseStories).toContain("getFirebaseStory");
+    expect(firebaseStories).toContain("useFirebaseStory");
+    expect(firebaseStories).toContain("FirebaseStoryAnalytics");
+    expect(firebaseStories).toContain("getFirebaseStoryAnalytics");
+    expect(firebaseStories).toContain("deleteFirebaseStoryComment");
+    expect(firebaseStories).toContain("saveFirebaseStoryMemory");
+    expect(firebaseStories).toContain("FirebaseStoryPlacementAction");
+    expect(firebaseStories).toContain("logFirebaseStoryPlacementEvent");
+    expect(firebaseStories).toContain('collection(getFirestoreDb(), "storyPlacementEvents")');
+    expect(firebaseStories).toContain("useLogFirebaseStoryPlacementEvent");
+    expect(firebaseStories).toContain('sourceType: "story"');
+    expect(firebaseStories).toContain("listFirebaseBlockedUserIds");
+    expect(firebaseStories).toContain('doc(getFirestoreDb(), "stories", story.id, "replies", user.id)');
+    expect(firebaseStories).toContain('doc(getFirestoreDb(), "stories", storyId)');
+    expect(communitiesPage).toContain("shareCommunityInvite");
+    expect(communitiesPage).toContain('params.get("invite")');
+    expect(communitiesPage).toContain("Share2");
+    expect(communitiesPage).toContain('href={`/communities/${community.id}`}');
+    expect(communityDetailPage).toContain('useRoute("/communities/:communityId")');
+    expect(communityDetailPage).toContain('type CommunityTab = "chat" | "posts" | "shops";');
+    expect(communityDetailPage).toContain("useFirebaseCommunityDetail");
+    expect(communityDetailPage).toContain("useFirebaseCommunityMessages");
+    expect(communityDetailPage).toContain("useFirebaseCommunityPosts");
+    expect(communityDetailPage).toContain("useMyFirebaseStorefront");
+    expect(communityDetailPage).toContain("selectedProductId");
+    expect(communityDetailPage).toContain("Attach a product");
+    expect(communityDetailPage).toContain('setPostKind("listing")');
+    expect(communityDetailPage).toContain("product: selectedProduct");
+    expect(communityDetailPage).toContain("post.productId");
+    expect(communityDetailPage).toContain("ShoppingBag");
+    expect(communityDetailPage).toContain("Message this community");
+    expect(communityDetailPage).toContain("Publish");
+    expect(communityDetailPage).toContain("Link");
+    expect(communityDetailPage).toContain("Join to chat.");
+    expect(communityDetailPage).toContain("shareInvite");
+    expect(communityDetailPage).toContain("Share a community Story");
+    expect(communityDetailPage).toContain("<StoryComposer compact communityMode communityId={community.id} communityName={community.name}");
+    expect(storefrontPage).toContain("storyComposerHref");
+    expect(storefrontPage).toContain("Share story");
+    expect(storefrontPage).toContain('href={storyComposerHref}');
+    expect(productDetailPage).toContain("productStoryHref");
+    expect(productDetailPage).toContain("Share product Story");
+    expect(productDetailPage).toContain("productPriceMinor");
     expect(firestoreRules).toContain("match /communities/{communityId}");
     expect(firestoreRules).toContain("match /members/{uid}");
+    expect(firestoreRules).toContain("match /chatMessages/{messageId}");
+    expect(firestoreRules).toContain("match /posts/{postId}");
+    expect(firestoreRules).toContain("function productPath(productId)");
+    expect(firestoreRules).toContain("function validCommunityPostCommerce()");
+    expect(firestoreRules).toContain("function validStoryStorefrontTarget()");
+    expect(firestoreRules).toContain("function validStoryCommunityTarget()");
+    expect(firestoreRules).toContain("'communityId', 'communityName'");
+    expect(firestoreRules).toContain("match /storyPlacementEvents/{eventId}");
+    expect(firestoreRules).toContain("request.resource.data.viewerUserId == request.auth.uid");
+    expect(firestoreRules).toContain("'ad_impression', 'ad_click'");
+    expect(firestoreRules).toContain("'sourceKind', 'storyId', 'communityId', 'storefrontId', 'productId'");
+    expect(firestoreRules).toContain("'productPrimaryImageUrl'");
+    expect(firestoreRules).toContain("get(productPath(request.resource.data.productId)).data.storefrontOwnerUserId == request.auth.uid");
+    expect(firestoreRules).toContain("match /communityInvites/{inviteCode}");
+    expect(firestoreRules).toContain("joinedByInviteCode");
     expect(firestoreIndexes).toContain('"collectionGroup": "communities"');
     expect(messages).not.toContain('id="savanna-new-chat"');
     expect(messages).toContain("bottom-[calc(5.5rem+env(safe-area-inset-bottom))]");
@@ -451,7 +678,7 @@ describe("Savanna PWA assets", () => {
     expect(messages).toContain('const chatPreviewMode = import.meta.env.DEV ? new URLSearchParams(window.location.search).get("chatPreview") : null;');
     expect(messages).toContain('useState(chatPreviewMode === "drawer")');
     expect(messages).toContain("useFirebaseConversations(user)");
-    expect(messages).toContain("useFirebaseMessages(selectedConversationId");
+    expect(messages).toContain("const messageQuery = useFirebaseMessages(");
     expect(messages).toContain("useFirebaseChatMutations(user)");
     expect(messages).toContain('id.startsWith("preview-")');
     expect(messages).toContain("if (isPreviewConversationId(conversation.id))");
@@ -459,12 +686,53 @@ describe("Savanna PWA assets", () => {
     expect(styles).toContain("border: 0 !important;");
     expect(messages).toContain("Development preview chat - no real conversation opened");
     expect(messages).toContain('if (status === "read") return <AnimatedCheckCheckIcon className="text-[#22C55E]" size={13} aria-label="Read" />;');
-    expect(messages).toContain('if (status === "delivered") return <AnimatedCheckCheckIcon className="text-[#AEBAC1]" size={13} aria-label="Delivered" />;');
-    expect(messages).toContain('<AnimatedCheckIcon className="text-[#AEBAC1]" size={13} aria-label="Sent" />');
+    expect(messages).toContain('if (status === "delivered") return <AnimatedCheckCheckIcon className={className ?? "text-current"} size={13} aria-label="Delivered" />;');
+    expect(messages).toContain('<AnimatedCheckIcon className={className ?? "text-current"} size={13} aria-label="Sent" />');
+    expect(messages).toContain("!isMobile || mobileDetail");
+    expect(messages).toContain('<DeliveryIcon status={message.status} className="text-white/90" />');
+    expect(messages).toContain("const showPreviewDelivery = Boolean(");
+    expect(messages).toContain("conversation.lastMessageSenderId === user.id");
+    expect(messages).toContain("savanna-outgoing-message");
+    expect(messages).toContain("const lastAutoScrolledMessageId = useRef<string | null>(null);");
+    expect(messages).toContain("const autoScrollRetryTimer = useRef<number | null>(null);");
+    expect(messages).toContain("const latestUnreadIncomingMessageId = useMemo(() => {");
+    expect(messages).toContain("message.senderUserId !== user.id && !message.readBy.includes(user.id)");
+    expect(messages).toContain("const targetAutoScrollMessageId = latestUnreadIncomingMessageId || latestMessageId;");
+    expect(messages).toContain('message.closest(".savanna-mobile-message-thread, .savanna-desktop-message-thread")');
+    expect(messages).toContain("thread.scrollTo({ top: Math.max(0, centeredTop), behavior });");
+    expect(messages).toContain("const autoScrollToCurrentTarget = useCallback");
+    expect(messages).toContain("const registerMessageElement = useCallback");
+    expect(messages).toContain('autoScrollToCurrentTarget("auto");');
+    expect(messages).toContain("autoScrollRetryTimer.current = window.setTimeout(scrollToThreadEntry, 80);");
+    expect(messages).toContain("if (lastAutoScrolledMessageId.current === scrollKey) return true;");
+    expect(messages).toContain("const mobileThreadRef = useRef<HTMLDivElement | null>(null);");
+    expect(messages).toContain("const mobileComposerRef = useRef<HTMLFormElement | null>(null);");
+    expect(messages).toContain('root.style.setProperty("--savanna-visual-viewport-height"');
+    expect(messages).toContain('root.style.setProperty("--savanna-mobile-composer-height"');
+    expect(messages).toContain('scrollMobileThreadToBottom("smooth")');
     expect(messages).toContain("parseSavannaInvocation");
     expect(messages).toContain("answerConversationRecall");
+    expect(messages).toContain("openRecallSource");
+    expect(messages).toContain("answer.sources.length");
+    expect(messages).toContain("source.label");
+    expect(messages).toContain("useFirebaseMessageMemories(user)");
+    expect(messages).toContain("memories: messageMemories.data ?? []");
     expect(messages).toContain("Message or @Savanna");
-    expect(messages).toContain("View source message");
+    expect(messages).toContain("View ${source.label}");
+    expect(messages).toContain("threadSearchOpen");
+    expect(messages).toContain("threadSearchMatches");
+    expect(messages).toContain("Search in chat");
+    expect(messages).toContain('aria-label="Search this chat"');
+    expect(messages).toContain("renderThreadSearchBar");
+    expect(messages).toContain("renderPinnedMessages");
+    expect(messages).toContain("toggleMessagePin");
+    expect(messages).toContain("openPinnedMessage");
+    expect(messages).toContain("pinnedMessages");
+    expect(messages).toContain("Voice note sent");
+    expect(messages).toContain("MediaRecorder");
+    expect(messages).toContain('mimeType.startsWith("image/")');
+    expect(messages).toContain('mimeType.startsWith("video/")');
+    expect(messages).toContain('mimeType.startsWith("audio/")');
     expect(messages).toContain("setReplyTo(message)");
     expect(messages).toContain("Cancel reply");
     expect(messages).toContain("renderReplyContext(message)");
@@ -481,16 +749,38 @@ describe("Savanna PWA assets", () => {
     expect(firebaseChat).toContain("export type FirebaseMessageReactionKey");
     expect(firebaseChat).toContain("FIREBASE_MESSAGE_REACTIONS");
     expect(firebaseChat).toContain("toggleFirebaseMessageReaction");
+    expect(firebaseChat).toContain("toggleFirebaseMessagePin");
+    expect(firebaseChat).toContain("pinnedBy: []");
     expect(firebaseChat).toContain("saveFirebaseMessageMemory");
+    expect(firebaseChat).toContain("listFirebaseMessageMemories");
+    expect(firebaseChat).toContain("listFirebaseBlockedUserIds");
+    expect(firebaseChat).toContain("blockedUserIdsRef");
+    expect(firebaseChat).toContain("deleteFirebaseMessageMemory");
+    expect(firebaseChat).toContain('collection(getFirestoreDb(), "users", uid, "memories")');
+    expect(firebaseChat).toContain("inferSavannaMemoryTags(snippet)");
+    expect(firebaseChat).toContain("inferSavannaFollowUp(snippet");
+    expect(firebaseChat).toContain("followUpAt: followUp.dueAt");
+    expect(firebaseChat).toContain("followUpLabel: followUp.label");
+    expect(firebaseChat).toContain("followUpAction: followUp.action");
+    expect(firebaseChat).toContain("followUpCompletedAt: null");
+    expect(firebaseChat).toContain("completeFirebaseMessageFollowUp");
+    expect(firebaseChat).toContain("snoozeFirebaseMessageFollowUp");
+    expect(firebaseChat).toContain("clearFirebaseMessageFollowUp");
+    expect(firebaseChat).toContain("tags,");
     expect(firebaseChat).toContain("replyToMessageId: input.replyTo?.messageId ?? null");
     expect(firebaseChat).toContain('doc(db, "users", input.user.id, "memories"');
     expect(firebaseChat).toContain("sourceType: \"message\"");
+    expect(firebaseChat).toContain('sourceType: "message" | "story";');
+    expect(firebaseChat).toContain('doc(db, "stories", input.memory.storyId, "reactions", `${input.user.id}_save`)');
     expect(firebaseChat).toContain("deliveredTo: [input.senderId]");
     expect(firebaseChat).toContain("readBy: [input.senderId]");
     expect(firebaseChat).toContain("lastMessageId: messageRef.id");
     expect(firebaseChat).toContain("lastMessageSenderId: input.senderId");
     expect(firebaseChat).toContain("markLatestMessageDelivered");
     expect(firebaseChat).toContain("markVisibleMessagesRead");
+    expect(firebaseChat).toContain('if (document.visibilityState !== "visible") return;');
+    expect(firebaseChat).toContain("receiptTimer = window.setTimeout(() => {");
+    expect(firebaseChat).toContain("}, 600);");
     expect(firebaseChat).toContain("deliveredKeys.current.add(deliveryKey)");
     expect(firebaseChat).toContain('lastMessageStatus: "delivered"');
     expect(firebaseChat).toContain('lastMessageStatus: "read"');
@@ -502,8 +792,13 @@ describe("Savanna PWA assets", () => {
     expect(firestoreRules).toContain("'receiptUpdatedAt'");
     expect(firestoreRules).toContain("'lastMessageId', 'lastMessageSenderId'");
     expect(firestoreRules).toContain("match /memories/{memoryId}");
+    expect(firestoreRules).toContain("request.resource.data.sourceType in ['message', 'story']");
+    expect(firestoreRules).toContain("'storyId', 'storyAuthorUserId'");
+    expect(firestoreRules).toContain("'followUpLabel', 'followUpAction'");
+    expect(firestoreRules).toContain("'followUpCompletedAt'");
     expect(firestoreRules).toContain("'replyToMessageId', 'replyToSenderId'");
     expect(firestoreRules).toContain("'reactions', 'reactionUpdatedAt', 'savedBy'");
+    expect(firestoreRules).toContain("'pinnedBy', 'pinnedAt'");
     expect(firestoreRules).toContain("match /receipts/{uid}");
     expect(firestoreRules).toContain("request.resource.data.status in ['delivered', 'read']");
     expect(messages).not.toContain('previewStatus: "failed"');
@@ -561,6 +856,14 @@ describe("Savanna PWA assets", () => {
     expect(profile).not.toContain(">View</Link>");
     expect(profile).toContain('className="savanna-profile-page mx-auto max-w-[960px] space-y-6 pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-8"');
     expect(profile).toContain("savanna-profile-switch");
+    expect(profile).toContain("Chat memories");
+    expect(profile).toContain("Upcoming follow-ups");
+    expect(profile).toContain("upcomingFollowUps.map");
+    expect(profile).toContain("Search your memories");
+    expect(profile).toContain("savanna-memory-search-field");
+    expect(profile).toContain("memoryTagOptions.map");
+    expect(profile).toContain("No saved memories match this search.");
+    expect(profile).toContain("Long-press a message on mobile or click a message bubble on web");
     expect(profile).not.toContain('label: "Groups", icon: MessageCircle');
     expect(profile).not.toContain('label: "Stories", icon: KeyRound');
     expect(profile).toContain("savanna-username-field");
@@ -577,6 +880,10 @@ describe("Savanna PWA assets", () => {
     expect(styles).toContain("@media (max-width: 1023px)");
     expect(styles).toContain("env(safe-area-inset-top)");
     expect(styles).toContain(".savanna-app .savanna-profile-page .savanna-username-field input:focus-visible");
+    expect(styles).toContain('.savanna-app [class~="overflow-x-auto"]');
+    expect(styles).toContain(".savanna-app [class~=\"overflow-x-auto\"]::-webkit-scrollbar");
+    expect(styles).toContain(".dark .savanna-app .savanna-profile-page .savanna-memory-search-field");
+    expect(styles).toContain(".dark .savanna-app .savanna-profile-page .savanna-memory-search-field input");
     expect(styles).toContain("outline: 0 !important;");
     expect(styles).toContain("#2A3942");
     expect(styles).toContain("--chat-bg: #0A1014");
@@ -677,6 +984,8 @@ describe("Savanna PWA assets", () => {
     expect(firebaseChat).toContain("createSupportConversation");
     expect(firestoreRules).toContain("match /stories/{storyId}");
     expect(firestoreRules).toContain("match /comments/{commentId}");
+    expect(firestoreRules).toContain("match /replies/{uid}");
+    expect(firestoreRules).toContain("match /reactions/{reactionId}");
     expect(firestoreRules).toContain("'userId', 'userName', 'userPhotoURL', 'body', 'createdAt'");
     expect(firestoreRules).toContain("match /storefronts/{storefrontId}");
     expect(firestoreRules).toContain("match /products/{productId}");
@@ -808,6 +1117,10 @@ describe("Savanna PWA assets", () => {
     expect(styles).toMatch(
       /:root:not\(\.dark\) \.savanna-app \.savanna-desktop-message-thread,[\s\S]*?savanna-mobile-message-thread\s*\{[\s\S]*?background:\s*#FFFFFF\s*!important/
     );
+    expect(styles).toContain('.savanna-app .savanna-message-bubble.savanna-outgoing-message [aria-label="Delivered"]');
+    expect(styles).toContain("color: rgba(255, 255, 255, 0.92) !important;");
+    expect(styles).toContain("height: var(--savanna-visual-viewport-height, 100dvh) !important;");
+    expect(styles).toContain("scroll-padding-bottom: calc(var(--savanna-mobile-composer-height, 76px) + env(safe-area-inset-bottom)) !important;");
 
     // No rule may lump the bottom nav together with the chat search.
     expect(styles).not.toMatch(

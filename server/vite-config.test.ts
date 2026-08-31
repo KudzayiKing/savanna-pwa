@@ -78,4 +78,21 @@ describe("Vite dev-server integration", () => {
     expect(parsed.storage.rules).toBe("storage.rules");
     expect(pkg).toContain('"firebase"');
   });
+
+  it("injects optional analytics and splits large vendor bundles", async () => {
+    const [config, html] = await Promise.all([
+      readFile(resolve(projectRoot, "vite.config.ts"), "utf8"),
+      readFile(resolve(projectRoot, "client/index.html"), "utf8"),
+    ]);
+
+    expect(html).not.toContain("%VITE_ANALYTICS_ENDPOINT%");
+    expect(html).not.toContain("%VITE_ANALYTICS_WEBSITE_ID%");
+    expect(html).not.toContain("/umami");
+    expect(config).toContain("function vitePluginAnalyticsTag()");
+    expect(config).toContain('src: `${endpoint.replace(/\\/+$/, "")}/umami`');
+    expect(config).toContain('"data-website-id": websiteId');
+    expect(config).toContain("function manualChunks(id: string)");
+    expect(config).toContain('return "vendor-firebase";');
+    expect(config).toContain("manualChunks,");
+  });
 });

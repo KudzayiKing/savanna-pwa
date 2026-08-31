@@ -22,8 +22,11 @@ import {
   UserRound,
   Video,
 } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { Link, useLocation, useRoute } from "wouter";
+
+type ProfileStoryTab = "stories" | "memories";
 
 function formatStoryTime(value: Date | string) {
   const date = new Date(value);
@@ -33,6 +36,7 @@ function formatStoryTime(value: Date | string) {
 
 function storyLabel(story: FirebaseStory, index: number) {
   if (story.productName) return story.productName;
+  if (story.communityName) return story.communityName;
   if (story.textBody) return story.textBody;
   return story.isMemory ? `Memory ${index + 1}` : `Story ${index + 1}`;
 }
@@ -42,7 +46,7 @@ function StoryTile({ story, index, initial }: { story: FirebaseStory; index: num
   const isVideo = media?.type === "video";
 
   return (
-    <article className="savanna-public-profile-tile group relative aspect-[3/4] overflow-hidden rounded-[8px] bg-[#D9A441]/20">
+    <Link href={`/stories?story=${story.id}`} aria-label={`Open ${storyLabel(story, index)}`} className="savanna-public-profile-tile group relative aspect-[3/4] overflow-hidden rounded-[8px] bg-[#D9A441]/20">
       {media?.url && media.type === "image" ? <img src={media.url} alt="" className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" /> : null}
       {media?.url && isVideo ? <video src={media.url} className="absolute inset-0 h-full w-full object-cover" muted playsInline preload="metadata" /> : null}
       {!media?.url ? (
@@ -55,11 +59,16 @@ function StoryTile({ story, index, initial }: { story: FirebaseStory; index: num
         {isVideo ? <Video className="size-3" /> : <ImageIcon className="size-3" />}
         {story.isMemory ? "Memory" : "Story"}
       </div>
+      {story.communityName || story.productName ? (
+        <div className="absolute right-2 top-2 max-w-[78px] truncate rounded-full bg-[#D9A441]/30 px-2 py-1 text-[10px] font-semibold text-[#F8E8C4] backdrop-blur">
+          {story.communityName ? "Community" : "Shop"}
+        </div>
+      ) : null}
       <div className="absolute bottom-2 left-2 right-2">
         <p className="line-clamp-2 text-xs font-semibold leading-4 text-white">{storyLabel(story, index)}</p>
         <p className="mt-1 text-[10px] font-medium text-white/75">{formatStoryTime(story.publishedAt)}</p>
       </div>
-    </article>
+    </Link>
   );
 }
 
@@ -70,6 +79,7 @@ export default function PublicProfilePage() {
   const { user } = useAuth();
   const chatMutations = useFirebaseChatMutations(user);
   const userId = params?.userId ?? "";
+  const [activeStoryTab, setActiveStoryTab] = useState<ProfileStoryTab>("stories");
   const profileQueryKey = ["firebase", "public-profile", userId, user?.id ?? "guest"];
   const followQueryKey = ["firebase", "profile-follow", user?.id ?? "guest", userId];
 
@@ -138,7 +148,9 @@ export default function PublicProfilePage() {
   }
 
   const item = profile.data.profile;
-  const storyGridItems = profile.data.stories.filter(story => !story.storefrontId);
+  const storyGridItems = profile.data.stories.filter(story => !story.storefrontId && !story.isMemory);
+  const memoryGridItems = profile.data.stories.filter(story => !story.storefrontId && story.isMemory);
+  const visibleStoryGridItems = activeStoryTab === "stories" ? storyGridItems : memoryGridItems;
   const displayName = item.name || "Savanna user";
   const firstName = displayName.split(/\s+/)[0] || displayName;
   const initial = displayName.slice(0, 1).toUpperCase();
@@ -235,17 +247,35 @@ export default function PublicProfilePage() {
 
         <section className="savanna-public-profile-stories mt-7">
           <div className="savanna-public-profile-tabs grid grid-cols-2 border-b border-[#DDE3DC] dark:border-[#26343A]">
-            <button type="button" className="inline-flex h-12 items-center justify-center gap-2 border-b-2 border-[#D9A441] text-sm font-semibold text-[#D9A441]">
+            <button
+              type="button"
+              onClick={() => setActiveStoryTab("stories")}
+              data-active={activeStoryTab === "stories"}
+              className={cn(
+                "inline-flex h-12 items-center justify-center gap-2 border-b-2 text-sm font-semibold",
+                activeStoryTab === "stories" ? "border-[#D9A441] text-[#D9A441]" : "border-transparent text-[#8A938D] dark:text-[#AEBAC1]",
+              )}
+            >
               <ImageIcon className="size-4" /> Stories
+              <span className="rounded-full bg-[#D9A441]/20 px-2 py-0.5 text-[10px] text-[#D9A441]">{storyGridItems.length}</span>
             </button>
-            <button type="button" className="inline-flex h-12 items-center justify-center gap-2 text-sm font-semibold text-[#8A938D] dark:text-[#AEBAC1]">
+            <button
+              type="button"
+              onClick={() => setActiveStoryTab("memories")}
+              data-active={activeStoryTab === "memories"}
+              className={cn(
+                "inline-flex h-12 items-center justify-center gap-2 border-b-2 text-sm font-semibold",
+                activeStoryTab === "memories" ? "border-[#D9A441] text-[#D9A441]" : "border-transparent text-[#8A938D] dark:text-[#AEBAC1]",
+              )}
+            >
               <Heart className="size-4" /> Memories
+              <span className="rounded-full bg-[#D9A441]/20 px-2 py-0.5 text-[10px] text-[#D9A441]">{memoryGridItems.length}</span>
             </button>
           </div>
 
-          {storyGridItems.length ? (
+          {visibleStoryGridItems.length ? (
             <div className="savanna-public-profile-grid grid grid-cols-3 gap-1 pt-1">
-              {storyGridItems.map((story, index) => <StoryTile key={story.id} story={story} index={index} initial={initial} />)}
+              {visibleStoryGridItems.map((story, index) => <StoryTile key={story.id} story={story} index={index} initial={initial} />)}
             </div>
           ) : (
             <div className="savanna-public-profile-empty grid min-h-72 place-items-center px-6 py-12 text-center">
@@ -253,8 +283,8 @@ export default function PublicProfilePage() {
                 <span className="mx-auto grid size-16 place-items-center rounded-2xl bg-[#D9A441]/20 text-[#D9A441]">
                   <Play className="size-7" />
                 </span>
-                <p className="mt-4 font-display text-2xl font-semibold tracking-[-0.045em] text-[#151A17] dark:text-[#E9EDEF]">No public stories yet.</p>
-                <p className="mt-2 max-w-sm text-sm leading-6 text-[#5F6861] dark:text-[#AEBAC1]">When {firstName} shares public stories or memories, they will live here.</p>
+                <p className="mt-4 font-display text-2xl font-semibold tracking-[-0.045em] text-[#151A17] dark:text-[#E9EDEF]">No public {activeStoryTab} yet.</p>
+                <p className="mt-2 max-w-sm text-sm leading-6 text-[#5F6861] dark:text-[#AEBAC1]">When {firstName} shares public {activeStoryTab}, they will live here.</p>
               </div>
             </div>
           )}

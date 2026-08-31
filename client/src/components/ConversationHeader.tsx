@@ -112,9 +112,9 @@ export function ConversationHeader({
           aria-label="Start a video call"
           onPointerDown={() => videoIcon.current?.startAnimation()}
           onClick={onVideoCall}
-          className="size-10 rounded-full text-[#3d2d1a] hover:text-[#a87820] dark:text-[#fff8ed] dark:hover:text-[#D9A441]"
+          className="savanna-header-video-button size-10 rounded-full text-[#3d2d1a] hover:text-[#a87820] dark:text-[#fff8ed] dark:hover:text-[#D9A441]"
         >
-          <VideoIcon ref={videoIcon} size={20} />
+          <VideoIcon ref={videoIcon} size={26} />
         </Button>
         <Button
           type="button"
@@ -123,9 +123,9 @@ export function ConversationHeader({
           aria-label="Start a voice call"
           onPointerDown={() => phoneIcon.current?.startAnimation()}
           onClick={onVoiceCall}
-          className="size-10 rounded-full text-[#3d2d1a] hover:text-[#a87820] dark:text-[#fff8ed] dark:hover:text-[#D9A441]"
+          className="savanna-header-phone-button size-10 rounded-full text-[#3d2d1a] hover:text-[#a87820] dark:text-[#fff8ed] dark:hover:text-[#D9A441]"
         >
-          <PhoneIcon ref={phoneIcon} size={20} />
+          <PhoneIcon ref={phoneIcon} size={26} />
         </Button>
 
         {menuItems ? (

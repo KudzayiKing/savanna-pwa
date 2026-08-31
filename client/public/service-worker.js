@@ -1,6 +1,6 @@
 // Bump on every change to this file: the cache name is the only thing that
 // tells a returning client its shell is stale.
-const CACHE_NAME = "savanna-shell-v10";
+const CACHE_NAME = "savanna-shell-v11";
 const SHELL_URLS = [
   "/",
   "/manifest.webmanifest",
@@ -186,14 +186,25 @@ self.addEventListener("fetch", event => {
   if (request.destination === "image") {
     // Stale-while-revalidate: paint the cached image immediately, refresh it in
     // the background so the next visit is current.
+    //
+    // The response must be threaded through to the end of the chain. It used to
+    // end with `.then(() => trimCache(cache))`, which resolved to `undefined`
+    // and threw the fetched response away — so on a cache miss the handler fell
+    // through to the 504 below even though the network fetch had succeeded.
+    // That surfaced as `GET /savanna-logo.svg 504 (Offline)` in the console on
+    // every first visit, while the image still landed in cache and worked on
+    // reload. `trimCache` is now awaited for its side effect only.
     event.respondWith(
       (async () => {
         const cache = await openCache();
         const cached = await cache.match(request);
         const network = fetch(request)
-          .then(response => putSafely(cache, request, response))
-          .then(() => trimCache(cache))
-          .catch(() => {});
+          .then(async response => {
+            await putSafely(cache, request, response);
+            await trimCache(cache);
+            return response;
+          })
+          .catch(() => undefined);
 
         if (cached) {
           event.waitUntil(network);
@@ -201,6 +212,7 @@ self.addEventListener("fetch", event => {
         }
         const response = await network;
         if (response) return response;
+        // Genuinely unreachable: no cached copy and the network failed.
         return new Response("", { status: 504, statusText: "Offline" });
       })()
     );

@@ -153,18 +153,13 @@ function vitePluginManusDebugCollector(): Plugin {
 }
 
 /**
- * Resolves the `%VITE_ANALYTICS_*%` placeholders in client/index.html.
+ * Injects Umami analytics only when the deploy provides both values.
  *
- * Without this, an unset analytics endpoint ships the literal string
- * `%VITE_ANALYTICS_ENDPOINT%/umami` into the built HTML, so every production
- * page load fires a bogus request to `https://<own-origin>/umami` and pollutes
- * the network log with a 404. When the variables are absent we drop the tag
- * entirely instead of degrading into a broken request.
+ * Keeping the tag out of client/index.html prevents Vite from warning about
+ * unresolved `%VITE_*%` placeholders and avoids a broken same-origin /umami
+ * request in environments where analytics is intentionally unset.
  */
 function vitePluginAnalyticsTag(): Plugin {
-  const ANALYTICS_BLOCK =
-    /[ \t]*<script\s+defer\s+src="%VITE_ANALYTICS_ENDPOINT%\/umami"\s+data-website-id="%VITE_ANALYTICS_WEBSITE_ID%"><\/script>\s*/;
-
   return {
     name: "savanna-analytics-tag",
     transformIndexHtml: {
@@ -174,12 +169,23 @@ function vitePluginAnalyticsTag(): Plugin {
         const websiteId = process.env.VITE_ANALYTICS_WEBSITE_ID;
 
         if (!endpoint || !websiteId) {
-          return html.replace(ANALYTICS_BLOCK, "\n");
+          return html;
         }
 
-        return html
-          .replace("%VITE_ANALYTICS_ENDPOINT%", endpoint.replace(/\/+$/, ""))
-          .replace("%VITE_ANALYTICS_WEBSITE_ID%", websiteId);
+        return {
+          html,
+          tags: [
+            {
+              tag: "script",
+              attrs: {
+                defer: true,
+                src: `${endpoint.replace(/\/+$/, "")}/umami`,
+                "data-website-id": websiteId,
+              },
+              injectTo: "body",
+            },
+          ],
+        };
       },
     },
   };
@@ -197,8 +203,8 @@ function vitePluginAnalyticsTag(): Plugin {
  * `mode` comes from `defineConfig` rather than `process.env.NODE_ENV`, which is
  * not reliably set at config-evaluation time.
  *
- * `vitePluginAnalyticsTag` runs in both modes: it is what strips the
- * `%VITE_ANALYTICS_*%` placeholders from the built HTML.
+ * `vitePluginAnalyticsTag` runs in both modes: it injects analytics only when
+ * the relevant environment variables exist.
  */
 /**
  * Deletes `__manus__/` from the built output.
@@ -216,6 +222,56 @@ function vitePluginStripDevAssets(): Plugin {
     closeBundle() {
       const target = path.join(buildOutDir, "__manus__");
       fs.rmSync(target, { recursive: true, force: true });
+    },
+  };
+}
+
+/**
+ * Renames the DOM ids and global marker that `vitePluginManusRuntime` hard-
+ * codes into the runtime script it inlines into index.html.
+ *
+ * The plugin exposes a `scriptId` option for the `<script>` tag itself (used
+ * below), but the rest are baked into its bundled runtime as string literals
+ * with no way to override them. This post-transform rewrites the emitted HTML
+ * so nothing carrying Manus branding reaches the browser.
+ *
+ * Scope: every Manus-branded token that is purely visual — the DOM ids, the
+ * host-dev global, and the three `data-*` attributes the runtime stamps onto
+ * elements. Renaming any of these is inert: nothing outside the injected script
+ * reads them, so a mismatch cannot break behaviour.
+ *
+ * Storage-backed names are deliberately NOT renamed, because a rename there
+ * discards live user state rather than just changing a label:
+ *   - `manus-runtime-user-info` — `client/src/_core/hooks/useAuth.ts:115` reads
+ *     this localStorage key; renaming one side strands the other.
+ *   - `manus-cookie` — renaming would orphan any cookie the runtime already set.
+ * `_manusImportantProperties` is skipped too: internal element bookkeeping,
+ * invisible to users and not worth the churn.
+ *
+ * Note that `__MANUS_HOST_DEV__` is *both* written (`window.__MANUS_HOST_DEV__
+ * = isHostDev`) and read (`const r = window.__MANUS_HOST_DEV__ ?? false`) by
+ * the runtime. Replacing it in the inlined HTML catches both sides at once —
+ * if either had been renamed separately, the runtime's host-dev branch would
+ * have read `undefined` and silently taken the wrong path.
+ */
+function vitePluginSavannaRuntimeIds(): Plugin {
+  return {
+    name: "savanna-runtime-ids",
+    transformIndexHtml: {
+      order: "post",
+      handler(html) {
+        // Global regex rather than `replaceAll`: this file is compiled with a
+        // target older than ES2021, whose lib does not declare `replaceAll`.
+        // Order does not matter — every token below is disjoint, so no
+        // replacement can be clobbered by an earlier one.
+        return html
+          .replace(/__MANUS_HOST_DEV__/g, "__SAVANNA_HOST_DEV__")
+          .replace(/data-manus-element-id/g, "data-savanna-element-id")
+          .replace(/data-manus-selector-canvas/g, "data-savanna-selector-canvas")
+          .replace(/data-manus-selector-input/g, "data-savanna-selector-input")
+          .replace(/manus-previewer-content-root/g, "savanna-previewer-content-root")
+          .replace(/manus-previewer-root/g, "savanna-previewer-root");
+      },
     },
   };
 }
@@ -250,10 +306,53 @@ function buildPlugins(mode: string): PluginOption[] {
   return [
     react(),
     tailwindcss(),
-    ...(isDev ? [jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector()] : []),
+    ...(isDev
+      ? [
+          jsxLocPlugin(),
+          vitePluginManusRuntime({ scriptId: "savanna-runtime" }),
+          vitePluginManusDebugCollector(),
+          vitePluginSavannaRuntimeIds(),
+        ]
+      : []),
     vitePluginAnalyticsTag(),
     vitePluginStripDevAssets(),
   ];
+}
+
+/**
+ * Splits node_modules into cache-friendly vendor chunks.
+ *
+ * IMPORTANT — no catch-all bucket. Everything that falls through these rules
+ * returns `undefined` so Rollup places it automatically.
+ *
+ * There used to be a final `return "vendor"`, and it caused a production
+ * outage. `manualChunks` assigns modules blindly: Rollup does NOT check for
+ * cycles in hand-assigned chunks. The catch-all scooped up the transpiler
+ * helper runtime (@oxc-project/runtime/src/helpers/*) plus assorted libraries,
+ * producing this loop:
+ *
+ *   vendor-react -> vendor (helpers) -> vendor-query -> vendor-react
+ *
+ * @tanstack/react-query calls React.createContext at module scope, so when the
+ * cycle made vendor-query evaluate first, React was still undefined and the app
+ * died on the splash screen with:
+ *   TypeError: Cannot read properties of undefined (reading 'createContext')
+ *
+ * Leaving unmatched modules to Rollup avoids this — its automatic chunking is
+ * derived from the module graph and cannot produce a cycle.
+ */
+function manualChunks(id: string) {
+  if (!id.includes("node_modules")) return undefined;
+  if (id.includes("/@firebase/firestore") || id.includes("/firebase/firestore")) return "vendor-firestore";
+  if (id.includes("/@firebase/auth") || id.includes("/firebase/auth")) return "vendor-firebase-auth";
+  if (id.includes("/@firebase/storage") || id.includes("/firebase/storage")) return "vendor-firebase-storage";
+  if (id.includes("/@firebase/app") || id.includes("/firebase/app") || id.includes("/@firebase/util") || id.includes("/@firebase/component") || id.includes("/@firebase/logger")) return "vendor-firebase-core";
+  if (id.includes("/@firebase/") || id.includes("/firebase/")) return "vendor-firebase";
+  if (id.includes("/@tanstack/")) return "vendor-query";
+  if (id.includes("/motion/") || id.includes("/framer-motion/")) return "vendor-motion";
+  if (id.includes("/react-dom/") || id.includes("/react/") || id.includes("/scheduler/")) return "vendor-react";
+  if (id.includes("/lucide-react/") || id.includes("/react-icons/")) return "vendor-icons";
+  return undefined;
 }
 
 export default defineConfig(({ mode }) => ({
@@ -267,6 +366,11 @@ export default defineConfig(({ mode }) => ({
   build: {
     outDir: buildOutDir,
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks,
+      },
+    },
   },
   server: {
     host: true,

@@ -7,9 +7,10 @@ import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, D
 import { Input } from "@/components/ui/input";
 import { useFirebaseCommunities, useFirebaseCommunityMutations, type FirebaseCommunityVisibility } from "@/lib/firebaseCommunities";
 import { cn } from "@/lib/utils";
-import { Bot, Loader2, Megaphone, MessageSquare, Search, ShieldCheck, Store } from "lucide-react";
-import { type FormEvent, useMemo, useState } from "react";
+import { Bot, Loader2, Megaphone, MessageSquare, Search, Share2, ShieldCheck, Store } from "lucide-react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { Link } from "wouter";
 
 const communitySections = [
   {
@@ -53,9 +54,46 @@ export default function CommunitiesPage() {
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState(initialCommunityForm);
+  const handledInviteCode = useRef<string | null>(null);
   const communities = useFirebaseCommunities(search);
   const communityMutations = useFirebaseCommunityMutations(user);
   const visibleCommunities = useMemo(() => communities.data ?? [], [communities.data]);
+
+  useEffect(() => {
+    if (!user) return;
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("invite");
+    if (!code || handledInviteCode.current === code) return;
+    handledInviteCode.current = code;
+    communityMutations.joinInvite.mutate(code, {
+      onSuccess: () => {
+        params.delete("invite");
+        const queryString = params.toString();
+        window.history.replaceState(null, "", `${window.location.pathname}${queryString ? `?${queryString}` : ""}`);
+        toast.success("Joined community");
+      },
+      onError: error => toast.error(error.message),
+    });
+  }, [user]);
+
+  const buildInviteLink = (code: string) => `${window.location.origin}/communities?invite=${encodeURIComponent(code)}`;
+
+  const shareCommunityInvite = async (code: string, name: string) => {
+    const url = buildInviteLink(code);
+    const shareApi = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
+    const canShare = typeof shareApi.share === "function";
+    try {
+      if (canShare) {
+        await shareApi.share!({ title: name, text: "Join this Savanna community.", url });
+      } else {
+        await navigator.clipboard.writeText(url);
+      }
+      toast.success(canShare ? "Invite ready to share" : "Invite link copied");
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      toast.error("Could not share this invite link.");
+    }
+  };
 
   const handleCreate = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -167,19 +205,33 @@ export default function CommunitiesPage() {
                     <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[#D9A441]/20 text-[#D9A441]">
                       <MobileNavIcon name="Communities" active size={20} />
                     </span>
-                    <div className="min-w-0 flex-1">
+                    <Link href={`/communities/${community.id}`} className="min-w-0 flex-1">
                       <h3 className="truncate text-sm font-semibold text-[#151A17] dark:text-[#E9EDEF]">{community.name}</h3>
                       <p className="mt-1 line-clamp-2 text-xs leading-5 text-[#5F6861] dark:text-[#AEBAC1]">{community.description || "A Savanna community for local conversation and discovery."}</p>
                       <p className="mt-2 text-[11px] font-semibold text-[#D9A441]">{community.memberCount} {community.memberCount === 1 ? "member" : "members"}{community.city ? ` · ${community.city}` : ""}</p>
+                    </Link>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {community.inviteCode ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => shareCommunityInvite(community.inviteCode!, community.name)}
+                          className="size-9 rounded-full bg-[#D9A441]/10 text-[#D9A441] shadow-none hover:bg-[#D9A441]/20"
+                          aria-label={`Share ${community.name} invite`}
+                        >
+                          <Share2 className="size-4" />
+                        </Button>
+                      ) : null}
+                      <Button
+                        type="button"
+                        onClick={() => communityMutations.join.mutate(community.id, { onSuccess: () => toast.success("Joined community"), onError: error => toast.error(error.message) })}
+                        disabled={!isAuthenticated || communityMutations.join.isPending}
+                        className={cn("savanna-brand-token h-9 rounded-full px-4 text-xs shadow-none", !isAuthenticated && "opacity-70")}
+                      >
+                        Join
+                      </Button>
                     </div>
-                    <Button
-                      type="button"
-                      onClick={() => communityMutations.join.mutate(community.id, { onSuccess: () => toast.success("Joined community"), onError: error => toast.error(error.message) })}
-                      disabled={!isAuthenticated || communityMutations.join.isPending}
-                      className={cn("savanna-brand-token h-9 rounded-full px-4 text-xs shadow-none", !isAuthenticated && "opacity-70")}
-                    >
-                      Join
-                    </Button>
                   </div>
                 </article>
               ))

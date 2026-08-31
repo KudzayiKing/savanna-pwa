@@ -689,36 +689,91 @@ export function MobileNavIcon({ name, active, size = 22 }: MobileNavIconProps) {
   }
 
   if (name === "Communities") {
-    const frontBubbleVariants: Variants = {
-      idle: { x: 0, opacity: 1 },
-      active: { x: [-5, 0], opacity: [0.45, 1] },
+    // Lucide `users` — the same set as every other glyph in this nav, so it
+    // inherits their optical height instead of fighting it.
+    //
+    // Stock `users` is two figures: one complete person plus a partial
+    // silhouette on the right. Communities reads better as a group, so that
+    // right-hand silhouette is mirrored onto the left to make three.
+    //
+    // How the mirror was derived — reflect every X about the centre line
+    // (x => 24 - x):
+    //   - the right-hand arcs (X 16…22) land at X 2…8 on the left
+    //   - each arc's sweep flag flips (1 -> 0). That flip is what turns a
+    //     right-bulging arc into a left-bulging one; skip it and the new
+    //     silhouette bulges back into the figure it is supposed to sit beside.
+    //   - the full figure shifts +3 on X (`H6` -> `H9`, circle cx 9 -> 12) so
+    //     it ends up centred and leaves room for the new left silhouette.
+    //
+    // Height is Y 3–21 = 18 user-units, the same as the Stories glyph, which is
+    // why this branch needs no scale correction. The Material `MdOutlineGroups`
+    // version it replaces did need one, because that glyph is 2:1 inside a
+    // square viewBox. Height is the dimension that has to match the neighbours —
+    // width does not, see the trade-off note on the path constants below.
+    //
+    // Note the +3 shift above consumes the gap lucide had between the centre
+    // figure and the right one, which is why the sides then had to be pushed
+    // back out. Adding a third silhouette to a two-figure design is not free.
+    //
+    // Side silhouettes are pushed 2.5 user-units clear of the centre figure.
+    // Each is a sliver of a circle with the same radius as the centre head
+    // (r=4, arcs centred at x=6.5/17.5 for the heads and x=3.5/20.5 for the
+    // bodies, i.e. mirror-symmetric about x=12), so all three read as equal-size
+    // people. At the previous 0 gap the strokes were merging into the centre
+    // head rather than sitting beside it.
+    //
+    // Trade-off: the glyph is now 25 units wide (27 including stroke) against
+    // 18-20 for its neighbours. That is inherent to showing three figures — if
+    // it reads too wide, the fix is to narrow the centre body (H9 -> H10,
+    // M19 -> M18) rather than to pull the sides back in.
+    const centreBody = "M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2";
+    const sideHeadArc = {
+      left: "M5.5 3.128a4 4 0 0 0 0 7.744",
+      right: "M18.5 3.128a4 4 0 0 1 0 7.744",
     };
-    const backBubbleVariants: Variants = {
-      idle: { x: 0, opacity: 1 },
-      active: { x: [5, 0], opacity: [0.45, 1] },
+    const sideBodyArc = {
+      left: "M-0.5 21v-2a4 4 0 0 1 3-3.87",
+      right: "M24.5 21v-2a4 4 0 0 0-3-3.87",
     };
 
+    // Measured path lengths, used as the dash arrays below. These have to match
+    // the real geometry: a dash array much longer than the path leaves the
+    // stroke fully drawn for most of the tween, so the figure snaps into place
+    // instead of drawing in. (Head arcs are 10.54, body arcs 7.27, centre body
+    // 22.57 — rounded up so the path is fully covered at offset 0.)
+    const HEAD_ARC_LEN = 11;
+    const BODY_ARC_LEN = 8;
+    const CENTRE_BODY_LEN = 23;
+
+    const bodyArcVariants: Variants = {
+      idle: { strokeDashoffset: 0, opacity: 1 },
+      active: { strokeDashoffset: [CENTRE_BODY_LEN, 0], opacity: [0.3, 1] },
+    };
+    const headVariants: Variants = {
+      idle: { scale: 1, opacity: 1 },
+      active: { scale: [0.6, 1.2, 1], opacity: [0, 1] },
+    };
+    // The side silhouettes draw themselves in and slide in from their own
+    // edge at the same time, so they read as arriving rather than just fading.
+    const leftSideVariants = (len: number): Variants => ({
+      idle: { strokeDashoffset: 0, opacity: 0.8, x: 0 },
+      active: { strokeDashoffset: [len, 0], opacity: [0.2, 1], x: [-3, 0] },
+    });
+    const rightSideVariants = (len: number): Variants => ({
+      idle: { strokeDashoffset: 0, opacity: 0.8, x: 0 },
+      active: { strokeDashoffset: [len, 0], opacity: [0.2, 1], x: [3, 0] },
+    });
+
     return (
-      <motion.svg
-        aria-hidden="true"
-        data-active={active}
-        width={size}
-        height={size}
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        style={{ overflow: "visible" }}
-        {...iconInteraction}
-      >
-        <motion.g initial="idle" animate={state} variants={backBubbleVariants} transition={{ duration: 0.44, ease: [0.23, 1, 0.32, 1] }}>
-          <path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1" />
-        </motion.g>
-        <motion.g initial="idle" animate={state} variants={frontBubbleVariants} transition={{ duration: 0.44, ease: [0.23, 1, 0.32, 1] }}>
-          <path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z" />
-        </motion.g>
+      // Timings are the source component's compressed to ~70%: this fires on
+      // nav press, where a full second of animation feels sluggish.
+      <motion.svg aria-hidden="true" data-active={active} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ overflow: "visible" }} {...iconInteraction}>
+        <motion.path d={sideBodyArc.left} strokeDasharray={BODY_ARC_LEN} initial="idle" animate={state} variants={leftSideVariants(BODY_ARC_LEN)} transition={{ duration: 0.5, ease: "easeInOut", delay: 0.2 }} />
+        <motion.path d={sideHeadArc.left} strokeDasharray={HEAD_ARC_LEN} initial="idle" animate={state} variants={leftSideVariants(HEAD_ARC_LEN)} transition={{ duration: 0.5, ease: "easeInOut", delay: 0.2 }} />
+        <motion.path d={centreBody} strokeDasharray={CENTRE_BODY_LEN} initial="idle" animate={state} variants={bodyArcVariants} transition={{ duration: 0.5, ease: "easeInOut" }} />
+        <motion.circle cx="12" cy="7" r="4" initial="idle" animate={state} variants={headVariants} transition={{ duration: 0.45, ease: "easeOut", delay: 0.14 }} style={{ transformBox: "view-box", transformOrigin: "12px 7px" }} />
+        <motion.path d={sideHeadArc.right} strokeDasharray={HEAD_ARC_LEN} initial="idle" animate={state} variants={rightSideVariants(HEAD_ARC_LEN)} transition={{ duration: 0.5, ease: "easeInOut", delay: 0.2 }} />
+        <motion.path d={sideBodyArc.right} strokeDasharray={BODY_ARC_LEN} initial="idle" animate={state} variants={rightSideVariants(BODY_ARC_LEN)} transition={{ duration: 0.5, ease: "easeInOut", delay: 0.2 }} />
       </motion.svg>
     );
   }

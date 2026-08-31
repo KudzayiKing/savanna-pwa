@@ -8,7 +8,7 @@ import { Flag, ShieldAlert, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-type TargetDomain = "profile" | "story" | "storefront" | "product" | "course" | "message" | "payment";
+type TargetDomain = "profile" | "story" | "story_comment" | "community_post" | "storefront" | "product" | "course" | "message" | "payment";
 
 type SafetyActionsProps = {
   targetDomain: TargetDomain;

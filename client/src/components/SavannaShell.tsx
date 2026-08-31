@@ -69,7 +69,7 @@ export function SavannaShell({ children, context, hideChrome = false, hideMobile
                   <img src={profileAvatarUrl} alt="" className="size-9 rounded-full object-cover" />
                 ) : (
                   <span className="grid size-9 place-items-center rounded-full bg-[#f3ddb2] text-sm font-semibold text-[#7b4a0d] dark:bg-[#D9A441]/20 dark:text-[#D9A441]">
-                    {user?.displayName?.trim()?.[0]?.toUpperCase() || "S"}
+                    {user?.name?.trim()?.[0]?.toUpperCase() || "S"}
                   </span>
                 )}
               </Link>

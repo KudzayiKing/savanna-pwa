@@ -1,9 +1,11 @@
 import type { AppUser } from "@/lib/userProfile";
+import { inferSavannaFollowUp, inferSavannaMemoryTags, type SavannaMemoryTag } from "@/lib/savannaRecall";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   arrayRemove,
   arrayUnion,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -13,12 +15,14 @@ import {
   query,
   serverTimestamp,
   type DocumentData,
+  updateDoc,
   where,
   writeBatch,
 } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { useEffect, useRef } from "react";
 import { getFirebaseStorage, getFirestoreDb } from "./firebase";
+import { listFirebaseBlockedUserIds } from "./firebaseSafety";
 
 export type FirebaseConversationKind = "direct" | "group" | "merchant_support";
 export type FirebaseMessageStatus = "sending" | "sent" | "delivered" | "read" | "failed" | "deleted";
@@ -41,6 +45,7 @@ export type FirebaseConversationListItem = {
   lastMessageSenderId?: string | null;
   previewMessage?: string;
   previewStatus?: FirebaseMessageStatus;
+  inviteCode?: string | null;
   /**
    * Every participant, viewer included, as written on the Firestore document.
    * Exposed so a 1:1 thread can resolve the other party and link the avatar
@@ -74,7 +79,40 @@ export type FirebaseMessage = {
   } | null;
   reactions: Partial<Record<FirebaseMessageReactionKey, string[]>>;
   savedBy: string[];
+  pinnedBy: string[];
   memoryPrompt: string | null;
+};
+
+export type FirebaseMessageMemory = {
+  id: string;
+  ownerUserId: string;
+  sourceType: "message" | "story";
+  conversationId: string;
+  conversationTitle: string;
+  messageId: string;
+  senderUserId: string;
+  storyId: string | null;
+  storyAuthorUserId: string | null;
+  storyAuthorName: string | null;
+  storyHref: string | null;
+  storefrontId: string | null;
+  storefrontSlug: string | null;
+  storefrontName: string | null;
+  communityId: string | null;
+  communityName: string | null;
+  productName: string | null;
+  productDescription: string | null;
+  productPriceMinor: number | null;
+  productCurrencyCode: string | null;
+  snippet: string;
+  tags: SavannaMemoryTag[];
+  followUpAt: Date | string | null;
+  followUpLabel: string | null;
+  followUpAction: string | null;
+  followUpCompletedAt: Date | string | null;
+  sourceCreatedAt: Date | string;
+  createdAt: Date | string;
+  updatedAt: Date | string;
 };
 
 type CreateConversationInput = {
@@ -83,11 +121,24 @@ type CreateConversationInput = {
   title?: string | null;
   storefrontId?: string | null;
   storefrontSlug?: string | null;
+  createdByUserId?: string | null;
+};
+
+type FirebaseConversationInviteDoc = {
+  conversationId?: string | null;
+  kind?: FirebaseConversationKind;
+  title?: string | null;
+  inviteCode?: string | null;
+  createdByUserId?: string | null;
+  active?: boolean;
+  createdAt?: unknown;
+  updatedAt?: unknown;
 };
 
 const chatKeys = {
   conversations: (uid?: string | null) => ["firebase", "conversations", uid ?? "guest"] as const,
   messages: (conversationId?: string | null) => ["firebase", "conversation-messages", conversationId ?? "none"] as const,
+  memories: (uid?: string | null) => ["firebase", "message-memories", uid ?? "guest"] as const,
 };
 
 function uniqueMembers(memberIds: string[]) {
@@ -105,6 +156,12 @@ function toDate(value: unknown) {
 function storageName(file: File) {
   const extension = file.name.split(".").pop()?.toLowerCase() || "bin";
   return `${crypto.randomUUID()}.${extension}`;
+}
+
+function inviteCode() {
+  const bytes = new Uint8Array(8);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, byte => byte.toString(36).padStart(2, "0")).join("").slice(0, 12);
 }
 
 function messageSnippet(value: string) {
@@ -133,6 +190,7 @@ function mapConversation(id: string, data: DocumentData): FirebaseConversationLi
     lastMessageSenderId: typeof data.lastMessageSenderId === "string" ? data.lastMessageSenderId : null,
     previewMessage: typeof data.lastMessagePreview === "string" ? data.lastMessagePreview : undefined,
     previewStatus: (data.lastMessageStatus as FirebaseMessageStatus | undefined) ?? undefined,
+    inviteCode: typeof data.inviteCode === "string" ? data.inviteCode : null,
     memberIds: Array.isArray(data.memberIds) ? data.memberIds.map(String) : [],
   };
 }
@@ -143,6 +201,10 @@ function conversationRef(conversationId: string) {
 
 function conversationInboxRef(memberId: string, conversationId: string) {
   return doc(getFirestoreDb(), "users", memberId, "conversationRefs", conversationId);
+}
+
+function conversationInviteRef(code: string) {
+  return doc(getFirestoreDb(), "conversationInvites", code);
 }
 
 function conversationInboxQuery(uid: string) {
@@ -173,6 +235,7 @@ function inboxPayload(input: {
   lastMessageStatus?: FirebaseMessageStatus | null;
   storefrontId?: string | null;
   storefrontSlug?: string | null;
+  inviteCode?: string | null;
 }) {
   return {
     conversationId: input.conversationId,
@@ -188,6 +251,7 @@ function inboxPayload(input: {
     lastMessageSenderId: input.lastMessageSenderId ?? null,
     lastMessagePreview: input.lastMessagePreview,
     lastMessageStatus: input.lastMessageStatus ?? null,
+    inviteCode: input.inviteCode ?? null,
   };
 }
 
@@ -255,8 +319,54 @@ function mapMessage(id: string, data: DocumentData, viewerId?: string | null): F
       : null,
     reactions: mapMessageReactions(data.reactions),
     savedBy: Array.isArray(data.savedBy) ? data.savedBy.map(String) : [],
+    pinnedBy: Array.isArray(data.pinnedBy) ? data.pinnedBy.map(String) : [],
     memoryPrompt: typeof data.memoryPrompt === "string" ? data.memoryPrompt : null,
   };
+}
+
+function mapMessageMemory(id: string, data: DocumentData): FirebaseMessageMemory {
+  const snippet = typeof data.snippet === "string" ? data.snippet : "";
+  const sourceType = data.sourceType === "story" ? "story" : "message";
+  const storyId = typeof data.storyId === "string" ? data.storyId : null;
+  return {
+    id,
+    ownerUserId: String(data.ownerUserId ?? ""),
+    sourceType,
+    conversationId: String(data.conversationId ?? ""),
+    conversationTitle: typeof data.conversationTitle === "string" && data.conversationTitle.trim() ? data.conversationTitle : sourceType === "story" ? "Saved Story" : "Private chat",
+    messageId: String(data.messageId ?? ""),
+    senderUserId: String(data.senderUserId ?? ""),
+    storyId,
+    storyAuthorUserId: typeof data.storyAuthorUserId === "string" ? data.storyAuthorUserId : null,
+    storyAuthorName: typeof data.storyAuthorName === "string" ? data.storyAuthorName : null,
+    storyHref: typeof data.storyHref === "string" ? data.storyHref : storyId ? `/stories?story=${storyId}` : null,
+    storefrontId: typeof data.storefrontId === "string" ? data.storefrontId : null,
+    storefrontSlug: typeof data.storefrontSlug === "string" ? data.storefrontSlug : null,
+    storefrontName: typeof data.storefrontName === "string" ? data.storefrontName : null,
+    communityId: typeof data.communityId === "string" ? data.communityId : null,
+    communityName: typeof data.communityName === "string" ? data.communityName : null,
+    productName: typeof data.productName === "string" ? data.productName : null,
+    productDescription: typeof data.productDescription === "string" ? data.productDescription : null,
+    productPriceMinor: typeof data.productPriceMinor === "number" ? data.productPriceMinor : null,
+    productCurrencyCode: typeof data.productCurrencyCode === "string" ? data.productCurrencyCode : null,
+    snippet,
+    tags: Array.isArray(data.tags) ? data.tags.map(String) as SavannaMemoryTag[] : inferSavannaMemoryTags(snippet),
+    followUpAt: data.followUpAt ? toDate(data.followUpAt) : null,
+    followUpLabel: typeof data.followUpLabel === "string" ? data.followUpLabel : null,
+    followUpAction: typeof data.followUpAction === "string" ? data.followUpAction : null,
+    followUpCompletedAt: data.followUpCompletedAt ? toDate(data.followUpCompletedAt) : null,
+    sourceCreatedAt: data.sourceCreatedAt ? toDate(data.sourceCreatedAt) : new Date(),
+    createdAt: data.createdAt ? toDate(data.createdAt) : new Date(),
+    updatedAt: data.updatedAt ? toDate(data.updatedAt) : new Date(),
+  };
+}
+
+function messageMemoriesQuery(uid: string) {
+  return query(
+    collection(getFirestoreDb(), "users", uid, "memories"),
+    orderBy("updatedAt", "desc"),
+    limit(60),
+  );
 }
 
 async function markVisibleMessagesRead(conversationId: string, uid: string, docs: Array<{ id: string; data: () => DocumentData }>) {
@@ -358,11 +468,13 @@ export async function createFirebaseConversation(input: CreateConversationInput)
   }
 
   const timestamp = serverTimestamp();
+  const code = kind === "group" ? inviteCode() : null;
   const payload = {
     kind,
     title: input.title ?? null,
     memberIds,
     directKey: kind === "direct" ? memberIds.join("__") : null,
+    inviteCode: code,
     storefrontId: input.storefrontId ?? null,
     storefrontSlug: input.storefrontSlug ?? null,
     createdAt: timestamp,
@@ -391,7 +503,20 @@ export async function createFirebaseConversation(input: CreateConversationInput)
       lastMessagePreview: "",
       storefrontId: input.storefrontId ?? null,
       storefrontSlug: input.storefrontSlug ?? null,
+      inviteCode: code,
     }), { merge: true });
+  }
+  if (code) {
+    batch.set(conversationInviteRef(code), {
+      conversationId,
+      kind,
+      title: input.title ?? null,
+      inviteCode: code,
+      createdByUserId: input.createdByUserId ?? memberIds[0],
+      active: true,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
   }
   await batch.commit();
 
@@ -435,6 +560,7 @@ export async function sendFirebaseMessage(input: {
     replyToSnippet: input.replyTo?.snippet ? messageSnippet(input.replyTo.snippet) : null,
     reactions: {},
     savedBy: [],
+    pinnedBy: [],
     memoryPrompt: input.memoryPrompt ?? null,
     createdAt: timestamp,
   });
@@ -460,6 +586,7 @@ export async function sendFirebaseMessage(input: {
       lastMessageStatus: input.status ?? "sent",
       storefrontId: typeof conversationData?.storefrontId === "string" ? conversationData.storefrontId : null,
       storefrontSlug: typeof conversationData?.storefrontSlug === "string" ? conversationData.storefrontSlug : null,
+      inviteCode: typeof conversationData?.inviteCode === "string" ? conversationData.inviteCode : null,
     }), { merge: true });
   }
   await batch.commit();
@@ -467,9 +594,14 @@ export async function sendFirebaseMessage(input: {
 
 export async function listFirebaseConversations(user?: AppUser | null) {
   if (!user) return [];
+  const blockedUserIds = new Set(await listFirebaseBlockedUserIds(user));
   const snapshot = await getDocs(conversationInboxQuery(user.id));
   return snapshot.docs
     .map(item => mapConversation(item.id, item.data()))
+    .filter(conversation => {
+      const peerId = getConversationPeerId(conversation, user.id);
+      return !peerId || !blockedUserIds.has(peerId);
+    })
     .sort((left, right) => new Date(right.lastMessageAt ?? 0).getTime() - new Date(left.lastMessageAt ?? 0).getTime());
 }
 
@@ -519,6 +651,7 @@ export async function sendFirebaseAttachment(input: {
     replyToSnippet: input.replyTo?.snippet ? messageSnippet(input.replyTo.snippet) : null,
     reactions: {},
     savedBy: [],
+    pinnedBy: [],
     memoryPrompt: null,
     createdAt: timestamp,
   });
@@ -544,9 +677,53 @@ export async function sendFirebaseAttachment(input: {
       lastMessageStatus: "sent",
       storefrontId: typeof conversationData?.storefrontId === "string" ? conversationData.storefrontId : null,
       storefrontSlug: typeof conversationData?.storefrontSlug === "string" ? conversationData.storefrontSlug : null,
+      inviteCode: typeof conversationData?.inviteCode === "string" ? conversationData.inviteCode : null,
     }), { merge: true });
   }
   await batch.commit();
+}
+
+export async function joinFirebaseConversationInvite(user: AppUser, code: string) {
+  const normalizedCode = code.trim();
+  if (!normalizedCode) throw new Error("Invite link is missing a code.");
+  const db = getFirestoreDb();
+  const inviteSnapshot = await getDoc(conversationInviteRef(normalizedCode));
+  if (!inviteSnapshot.exists()) throw new Error("This invite link is no longer available.");
+  const invite = inviteSnapshot.data() as FirebaseConversationInviteDoc;
+  if (!invite.active || invite.kind !== "group" || !invite.conversationId) {
+    throw new Error("This invite link is no longer available.");
+  }
+
+  const timestamp = serverTimestamp();
+  const batch = writeBatch(db);
+  batch.update(conversationRef(invite.conversationId), {
+    memberIds: arrayUnion(user.id),
+    updatedAt: timestamp,
+  });
+  batch.set(conversationInboxRef(user.id, invite.conversationId), inboxPayload({
+    conversationId: invite.conversationId,
+    kind: "group",
+    title: typeof invite.title === "string" ? invite.title : "Group chat",
+    memberIds: [user.id],
+    lastMessageAt: timestamp,
+    lastMessageId: null,
+    lastMessageSenderId: null,
+    lastMessagePreview: "",
+    lastMessageStatus: null,
+    inviteCode: normalizedCode,
+  }), { merge: true });
+  await batch.commit();
+
+  const conversationSnapshot = await getDoc(conversationRef(invite.conversationId));
+  const conversationData = conversationSnapshot.data() as DocumentData | undefined;
+  const memberIds = Array.isArray(conversationData?.memberIds) ? conversationData.memberIds.map(String) : [user.id];
+  await updateDoc(conversationInboxRef(user.id, invite.conversationId), {
+    memberIds,
+    title: typeof conversationData?.title === "string" ? conversationData.title : invite.title ?? "Group chat",
+    updatedAt: serverTimestamp(),
+  });
+
+  return invite.conversationId;
 }
 
 export async function toggleFirebaseMessageReaction(input: {
@@ -567,6 +744,18 @@ export async function toggleFirebaseMessageReaction(input: {
   await batch.commit();
 }
 
+export async function toggleFirebaseMessagePin(input: {
+  conversationId: string;
+  messageId: string;
+  userId: string;
+  active: boolean;
+}) {
+  await updateDoc(doc(getFirestoreDb(), "conversations", input.conversationId, "messages", input.messageId), {
+    pinnedBy: input.active ? arrayRemove(input.userId) : arrayUnion(input.userId),
+    pinnedAt: input.active ? null : serverTimestamp(),
+  });
+}
+
 export async function saveFirebaseMessageMemory(input: {
   user: AppUser;
   conversationId: string;
@@ -576,6 +765,11 @@ export async function saveFirebaseMessageMemory(input: {
   const db = getFirestoreDb();
   const timestamp = serverTimestamp();
   const snippet = messageSnippet(input.message.contentType === "attachment" ? "Private attachment" : input.message.payload);
+  const followUp = inferSavannaFollowUp(snippet, input.message.createdAt);
+  const tags = Array.from(new Set([
+    ...inferSavannaMemoryTags(snippet),
+    ...(followUp.action ? ["follow_up" as const] : []),
+  ]));
   const batch = writeBatch(db);
   batch.set(doc(db, "users", input.user.id, "memories", `message_${input.message.id}`), {
     ownerUserId: input.user.id,
@@ -584,7 +778,25 @@ export async function saveFirebaseMessageMemory(input: {
     conversationTitle: input.conversationTitle,
     messageId: input.message.id,
     senderUserId: input.message.senderUserId,
+    storyId: null,
+    storyAuthorUserId: null,
+    storyAuthorName: null,
+    storyHref: null,
+    storefrontId: null,
+    storefrontSlug: null,
+    storefrontName: null,
+    communityId: null,
+    communityName: null,
+    productName: null,
+    productDescription: null,
+    productPriceMinor: null,
+    productCurrencyCode: null,
     snippet,
+    tags,
+    followUpAt: followUp.dueAt,
+    followUpLabel: followUp.label,
+    followUpAction: followUp.action,
+    followUpCompletedAt: null,
     sourceCreatedAt: input.message.createdAt,
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -595,6 +807,80 @@ export async function saveFirebaseMessageMemory(input: {
     memoryUpdatedAt: timestamp,
   });
   await batch.commit();
+}
+
+export async function listFirebaseMessageMemories(user?: AppUser | null): Promise<FirebaseMessageMemory[]> {
+  if (!user) return [];
+  const snapshot = await getDocs(messageMemoriesQuery(user.id));
+  return snapshot.docs
+    .map(item => mapMessageMemory(item.id, item.data()))
+    .filter(memory => memory.ownerUserId === user.id && memory.snippet)
+    .filter(memory => memory.sourceType === "story" ? Boolean(memory.storyId) : Boolean(memory.conversationId && memory.messageId));
+}
+
+export async function deleteFirebaseMessageMemory(input: {
+  user: AppUser;
+  memory: FirebaseMessageMemory;
+}) {
+  const db = getFirestoreDb();
+  await deleteDoc(doc(db, "users", input.user.id, "memories", input.memory.id));
+  if (input.memory.sourceType === "story" && input.memory.storyId) {
+    await deleteDoc(doc(db, "stories", input.memory.storyId, "reactions", `${input.user.id}_save`)).catch(error => {
+      console.warn("[Firestore] Removed story memory but could not remove save signal", error);
+    });
+    return;
+  }
+  if (input.memory.conversationId && input.memory.messageId) {
+    await updateDoc(doc(db, "conversations", input.memory.conversationId, "messages", input.memory.messageId), {
+      savedBy: arrayRemove(input.user.id),
+      memoryUpdatedAt: serverTimestamp(),
+    }).catch(error => {
+      console.warn("[Firestore] Removed memory but could not update source message", error);
+    });
+  }
+}
+
+export async function completeFirebaseMessageFollowUp(input: {
+  user: AppUser;
+  memory: FirebaseMessageMemory;
+}) {
+  await updateDoc(doc(getFirestoreDb(), "users", input.user.id, "memories", input.memory.id), {
+    followUpCompletedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function snoozeFirebaseMessageFollowUp(input: {
+  user: AppUser;
+  memory: FirebaseMessageMemory;
+  days?: number;
+}) {
+  const days = Math.max(1, Math.min(input.days ?? 1, 14));
+  const dueAt = new Date();
+  dueAt.setDate(dueAt.getDate() + days);
+  dueAt.setHours(9, 0, 0, 0);
+  await updateDoc(doc(getFirestoreDb(), "users", input.user.id, "memories", input.memory.id), {
+    tags: Array.from(new Set([...input.memory.tags, "follow_up"])),
+    followUpAt: dueAt,
+    followUpLabel: days === 1 ? "Tomorrow" : `In ${days} days`,
+    followUpAction: input.memory.followUpAction || input.memory.snippet,
+    followUpCompletedAt: null,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function clearFirebaseMessageFollowUp(input: {
+  user: AppUser;
+  memory: FirebaseMessageMemory;
+}) {
+  await updateDoc(doc(getFirestoreDb(), "users", input.user.id, "memories", input.memory.id), {
+    tags: input.memory.tags.filter(tag => tag !== "follow_up"),
+    followUpAt: null,
+    followUpLabel: null,
+    followUpAction: null,
+    followUpCompletedAt: null,
+    updatedAt: serverTimestamp(),
+  });
 }
 
 export async function createSupportConversation(input: {
@@ -627,6 +913,16 @@ export function useFirebaseConversations(user?: AppUser | null) {
   const uid = user?.id ?? null;
   const queryKey = chatKeys.conversations(uid);
   const deliveredKeys = useRef(new Set<string>());
+  const blockedUserIdsRef = useRef(new Set<string>());
+  useEffect(() => {
+    let cancelled = false;
+    void listFirebaseBlockedUserIds(user).then(ids => {
+      if (!cancelled) blockedUserIdsRef.current = new Set(ids);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
   useEffect(() => {
     if (!uid) return;
     return onSnapshot(
@@ -634,6 +930,10 @@ export function useFirebaseConversations(user?: AppUser | null) {
       snapshot => {
         const nextConversations = snapshot.docs
           .map(item => mapConversation(item.id, item.data()))
+          .filter(conversation => {
+            const peerId = getConversationPeerId(conversation, uid);
+            return !peerId || !blockedUserIdsRef.current.has(peerId);
+          })
           .sort((left, right) => new Date(right.lastMessageAt ?? 0).getTime() - new Date(left.lastMessageAt ?? 0).getTime());
         queryClient.setQueryData(
           chatKeys.conversations(uid),
@@ -668,21 +968,31 @@ export function useFirebaseMessages(conversationId?: string | null, user?: AppUs
   const queryKey = chatKeys.messages(conversationId);
   useEffect(() => {
     if (!enabled || !conversationId || !uid) return;
-    return onSnapshot(
+    let receiptTimer: number | null = null;
+    const unsubscribe = onSnapshot(
       messagesQuery(conversationId, uid),
       snapshot => {
         const nextMessages = snapshot.docs
           .map(item => mapMessage(item.id, item.data(), uid))
           .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime());
         queryClient.setQueryData(chatKeys.messages(conversationId), nextMessages);
-        void markVisibleMessagesRead(conversationId, uid, snapshot.docs).catch(error => {
-          console.error("[Firestore] Failed to mark messages read", error);
-        });
+        if (document.visibilityState !== "visible") return;
+        if (receiptTimer) window.clearTimeout(receiptTimer);
+        receiptTimer = window.setTimeout(() => {
+          if (document.visibilityState !== "visible") return;
+          void markVisibleMessagesRead(conversationId, uid, snapshot.docs).catch(error => {
+            console.error("[Firestore] Failed to mark messages read", error);
+          });
+        }, 600);
       },
       error => {
         console.error("[Firestore] Message listener failed", error);
       },
     );
+    return () => {
+      if (receiptTimer) window.clearTimeout(receiptTimer);
+      unsubscribe();
+    };
   }, [conversationId, enabled, queryClient, uid]);
 
   return useQuery({
@@ -690,6 +1000,53 @@ export function useFirebaseMessages(conversationId?: string | null, user?: AppUs
     queryFn: () => listFirebaseMessages(conversationId, user),
     enabled: enabled && Boolean(conversationId && user),
   });
+}
+
+export function useFirebaseMessageMemories(user?: AppUser | null) {
+  return useQuery({
+    queryKey: chatKeys.memories(user?.id),
+    queryFn: () => listFirebaseMessageMemories(user),
+    enabled: Boolean(user),
+  });
+}
+
+export function useFirebaseMessageMemoryMutations(user?: AppUser | null) {
+  const queryClient = useQueryClient();
+  const invalidateMemories = (memory?: FirebaseMessageMemory) => {
+    queryClient.invalidateQueries({ queryKey: chatKeys.memories(user?.id) });
+    if (memory?.conversationId) queryClient.invalidateQueries({ queryKey: chatKeys.messages(memory.conversationId) });
+  };
+
+  return {
+    completeFollowUp: useMutation({
+      mutationFn: async (memory: FirebaseMessageMemory) => {
+        if (!user) throw new Error("Sign in to manage follow-ups");
+        await completeFirebaseMessageFollowUp({ user, memory });
+      },
+      onSuccess: (_result, memory) => invalidateMemories(memory),
+    }),
+    snoozeFollowUp: useMutation({
+      mutationFn: async (input: { memory: FirebaseMessageMemory; days?: number }) => {
+        if (!user) throw new Error("Sign in to manage follow-ups");
+        await snoozeFirebaseMessageFollowUp({ user, memory: input.memory, days: input.days });
+      },
+      onSuccess: (_result, input) => invalidateMemories(input.memory),
+    }),
+    clearFollowUp: useMutation({
+      mutationFn: async (memory: FirebaseMessageMemory) => {
+        if (!user) throw new Error("Sign in to manage follow-ups");
+        await clearFirebaseMessageFollowUp({ user, memory });
+      },
+      onSuccess: (_result, memory) => invalidateMemories(memory),
+    }),
+    remove: useMutation({
+      mutationFn: async (memory: FirebaseMessageMemory) => {
+        if (!user) throw new Error("Sign in to manage memories");
+        await deleteFirebaseMessageMemory({ user, memory });
+      },
+      onSuccess: (_result, memory) => invalidateMemories(memory),
+    }),
+  };
 }
 
 export function useFirebaseChatMutations(user?: AppUser | null) {
@@ -703,7 +1060,14 @@ export function useFirebaseChatMutations(user?: AppUser | null) {
     create: useMutation({
       mutationFn: async (input: Omit<CreateConversationInput, "memberIds"> & { memberIds: string[] }) => {
         if (!user) throw new Error("Sign in to create a chat");
-        return createFirebaseConversation({ ...input, memberIds: uniqueMembers([user.id, ...input.memberIds]) });
+        return createFirebaseConversation({ ...input, createdByUserId: user.id, memberIds: uniqueMembers([user.id, ...input.memberIds]) });
+      },
+      onSuccess: conversationId => invalidateConversation(conversationId),
+    }),
+    joinInvite: useMutation({
+      mutationFn: async (code: string) => {
+        if (!user) throw new Error("Sign in to join this group");
+        return joinFirebaseConversationInvite(user, code);
       },
       onSuccess: conversationId => invalidateConversation(conversationId),
     }),
@@ -728,12 +1092,22 @@ export function useFirebaseChatMutations(user?: AppUser | null) {
       },
       onSuccess: (_result, input) => invalidateConversation(input.conversationId),
     }),
+    pin: useMutation({
+      mutationFn: async (input: { conversationId: string; messageId: string; active: boolean }) => {
+        if (!user) throw new Error("Sign in to pin messages");
+        await toggleFirebaseMessagePin({ ...input, userId: user.id });
+      },
+      onSuccess: (_result, input) => invalidateConversation(input.conversationId),
+    }),
     saveMemory: useMutation({
       mutationFn: async (input: { conversationId: string; conversationTitle: string; message: FirebaseMessage }) => {
         if (!user) throw new Error("Sign in to save memories");
         await saveFirebaseMessageMemory({ ...input, user });
       },
-      onSuccess: (_result, input) => invalidateConversation(input.conversationId),
+      onSuccess: (_result, input) => {
+        invalidateConversation(input.conversationId);
+        queryClient.invalidateQueries({ queryKey: chatKeys.memories(user?.id) });
+      },
     }),
   };
 }

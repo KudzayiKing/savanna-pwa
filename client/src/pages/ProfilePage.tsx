@@ -7,10 +7,15 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { startLogin } from "@/const";
 import { useTheme } from "@/contexts/ThemeContext";
+import { MAX_CUSTOM_WALLPAPER_BYTES, SAVANNA_WALLPAPERS, useWallpaper, WALLPAPER_COLOR_SWATCHES } from "@/contexts/WallpaperContext";
+import { useFirebaseMessageMemories, useFirebaseMessageMemoryMutations, type FirebaseMessageMemory } from "@/lib/firebaseChat";
 import { createFirebaseBlock, createFirebaseSafetyReport } from "@/lib/firebaseSafety";
+import { useFirebaseStories, useFirebaseStoryAnalytics, type FirebaseStory } from "@/lib/firebaseStories";
+import { SAVANNA_MEMORY_TAG_LABELS, type SavannaMemoryTag } from "@/lib/savannaRecall";
 import { normalizeUsername, updateUserProfile } from "@/lib/userProfile";
-import { AtSign, Ban, Check, EyeOff, KeyRound, Loader2, MessageCircle, Moon, ShieldCheck, Smartphone, Store, Sun, UserRound } from "lucide-react";
-import { useEffect, useState } from "react";
+import { cn } from "@/lib/utils";
+import { AtSign, Ban, BarChart3, Bookmark, CalendarClock, Check, Clock3, Eye, EyeOff, Heart, KeyRound, Loader2, MessageCircle, Moon, Palette, Plus, RotateCcw, Search, Send, ShieldCheck, Smartphone, Store, Sun, Trash2, Upload, UserRound } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { toast } from "sonner";
 import { Link } from "wouter";
 
@@ -34,6 +39,192 @@ type PrivacyForm = {
 
 const blankProfile: ProfileForm = { displayName: "", username: "", bio: "", countryCode: "", city: "", profileVisibility: "connections" };
 const blankPrivacy: PrivacyForm = { phoneVisibility: "nobody", handleDiscoverability: "exact_match", storyAudienceDefault: "connections", readReceiptsEnabled: true, lastSeenVisibility: "connections", courseProgressOptIn: false };
+const memoryTagOptions = Object.keys(SAVANNA_MEMORY_TAG_LABELS) as SavannaMemoryTag[];
+
+function formatMemoryDate(value: Date | string) {
+  return new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function formatFollowUpDate(value: Date | string | null) {
+  if (!value) return null;
+  return new Date(value).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+}
+
+function StoryPerformanceRow({ story }: { story: FirebaseStory }) {
+  const { user } = useAuth();
+  const analytics = useFirebaseStoryAnalytics(story, user);
+  const data = analytics.data;
+  const title = story.productName ?? story.storefrontName ?? story.communityName ?? story.textBody ?? "Story";
+  return (
+    <Link href={`/stories?story=${story.id}`} className="savanna-profile-card-muted flex items-center gap-3 rounded-2xl bg-[#D9A441]/10 p-3 transition-colors hover:bg-[#D9A441]/15">
+      <span className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-2xl bg-[#D9A441]/20 text-[#D9A441]">
+        {story.primaryMediaUrl && story.primaryMediaType === "image" ? <img src={story.primaryMediaUrl} alt="" className="size-full object-cover" /> : <BarChart3 className="size-5" />}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold text-[#151A17] dark:text-[#E9EDEF]">{title}</span>
+        <span className="mt-1 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-[#5F6861] dark:text-[#AEBAC1]">
+          {story.storefrontId ? <span>Shop</span> : story.communityId ? <span>Community</span> : <span>{story.isMemory ? "Memory" : "Story"}</span>}
+          <span>{story.publishedAt.toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
+        </span>
+      </span>
+      <span className="grid shrink-0 grid-cols-3 gap-1 text-[11px] font-semibold text-[#5F6861] dark:text-[#AEBAC1] sm:grid-cols-5">
+        <span className="inline-flex items-center gap-1"><Eye className="size-3" />{data?.viewCount ?? 0}</span>
+        <span className="inline-flex items-center gap-1"><Heart className="size-3" />{data?.likeCount ?? 0}</span>
+        <span className="inline-flex items-center gap-1"><MessageCircle className="size-3" />{data?.commentCount ?? 0}</span>
+        <span className="hidden items-center gap-1 sm:inline-flex"><Send className="size-3" />{data?.replyCount ?? 0}</span>
+        <span className="hidden items-center gap-1 sm:inline-flex"><Bookmark className="size-3" />{data?.saveCount ?? 0}</span>
+      </span>
+    </Link>
+  );
+}
+
+function isLightHex(color: string) {
+  const hex = color.replace("#", "");
+  if (hex.length !== 6) return false;
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  return 0.299 * r + 0.587 * g + 0.114 * b > 160;
+}
+
+function WallpaperSection() {
+  const { setting, setColor, setSavannaWallpaper, setCustomImage, resetWallpaper } = useWallpaper();
+
+  const handleWallpaperFile = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Choose a PNG or JPG image");
+      return;
+    }
+    if (file.size > MAX_CUSTOM_WALLPAPER_BYTES) {
+      toast.error("Images up to 3 MB are supported");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setCustomImage(reader.result);
+        toast.success("Wallpaper updated");
+      }
+    };
+    reader.onerror = () => toast.error("That image could not be read");
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <section className="savanna-profile-card rounded-[28px] border border-[#eadfca] bg-white p-5 shadow-[0_14px_35px_rgba(94,58,11,0.04)] sm:p-6 dark:bg-[#202C33]">
+      <div className="flex items-start gap-3">
+        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#D9A441]/20 text-[#D9A441]"><Palette className="size-5" /></span>
+        <div className="min-w-0">
+          <h2 className="font-display text-2xl font-semibold tracking-[-0.045em] text-[#151A17] dark:text-[#E9EDEF]">Wallpaper</h2>
+          <p className="mt-1 text-sm leading-6 text-[#5F6861] dark:text-[#AEBAC1]">Pick the backdrop behind your chats on this device. It follows your light and dark mode.</p>
+        </div>
+      </div>
+
+      <div className="mt-5 space-y-6">
+        <div>
+          <p className="text-sm font-semibold text-[#151A17] dark:text-[#E9EDEF]">Chat background colors</p>
+          <div className="mt-3 flex flex-wrap items-center gap-2.5">
+            {WALLPAPER_COLOR_SWATCHES.map(swatch => {
+              const active = swatch.color === null
+                ? setting.kind === "default"
+                : setting.kind === "color" && setting.color?.toLowerCase() === swatch.color.toLowerCase();
+              return (
+                <button
+                  key={swatch.label}
+                  type="button"
+                  title={swatch.label}
+                  aria-label={`Use ${swatch.label} background`}
+                  aria-pressed={active}
+                  onClick={() => setColor(swatch.color)}
+                  className={cn(
+                    "grid size-9 place-items-center rounded-full border transition-transform",
+                    active ? "scale-110 border-[#D9A441] ring-2 ring-[#D9A441]/40" : "border-black/10 hover:scale-105 dark:border-white/20",
+                  )}
+                  style={swatch.color ? { backgroundColor: swatch.color } : { background: "linear-gradient(135deg, #fcfaf4 50%, #0B0F0E 50%)" }}
+                >
+                  {active ? <Check className={cn("size-4", swatch.color && isLightHex(swatch.color) ? "text-black/60" : "text-white")} /> : null}
+                </button>
+              );
+            })}
+            <label
+              title="Pick a custom color"
+              className="grid size-9 cursor-pointer place-items-center rounded-full border border-black/10 shadow-[inset_0_0_0_2px_rgba(255,255,255,0.55)] transition-transform hover:scale-105 dark:border-white/20"
+              style={{ background: "conic-gradient(#f87171, #fbbf24, #34d399, #60a5fa, #a78bfa, #f87171)" }}
+            >
+              <Plus className="size-4 text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.5)]" />
+              <input
+                type="color"
+                aria-label="Pick a custom color"
+                className="sr-only"
+                value={setting.kind === "color" && setting.color ? setting.color : "#D9A441"}
+                onChange={event => setColor(event.target.value)}
+              />
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <p className="text-sm font-semibold text-[#151A17] dark:text-[#E9EDEF]">Savanna wallpapers</p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {SAVANNA_WALLPAPERS.map(option => {
+              const active = setting.kind === option.id;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => setSavannaWallpaper(option.id)}
+                  aria-pressed={active}
+                  className={cn(
+                    "rounded-2xl border p-2 text-left transition-colors",
+                    active ? "border-[#D9A441] bg-[#D9A441]/10" : "border-[#eadfca] hover:bg-[#D9A441]/5 dark:border-[#2A3942]",
+                  )}
+                >
+                  <span className="grid grid-cols-2 gap-2">
+                    <span className={cn("block w-full rounded-xl bg-cover bg-center", option.aspect)} style={{ backgroundImage: `url(${option.lightImage})` }} />
+                    <span className={cn("block w-full rounded-xl bg-cover bg-center", option.aspect)} style={{ backgroundImage: `url(${option.darkImage})` }} />
+                  </span>
+                  <span className="mt-2 flex items-center justify-between gap-2 px-1 pb-1">
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold text-[#151A17] dark:text-[#E9EDEF]">{option.label}</span>
+                      <span className="block truncate text-xs text-[#5F6861] dark:text-[#AEBAC1]">{option.description}</span>
+                    </span>
+                    {active ? <span className="grid size-6 shrink-0 place-items-center rounded-full bg-[#D9A441] text-white"><Check className="size-3.5" /></span> : null}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div>
+          <p className="text-sm font-semibold text-[#151A17] dark:text-[#E9EDEF]">Your own wallpaper</p>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-xl bg-[#D9A441]/20 px-4 text-sm font-semibold text-[#9a6410] transition-colors hover:bg-[#D9A441]/30 dark:bg-[#2A3942] dark:text-[#F2C14E] dark:hover:bg-[#2A3942]">
+              <Upload className="size-4" />
+              Upload image
+              <input type="file" accept="image/*" className="sr-only" onChange={handleWallpaperFile} />
+            </label>
+            {setting.kind === "custom" && setting.customImage ? (
+              <span className="flex items-center gap-2 rounded-full bg-[#D9A441]/10 py-1 pl-1 pr-3">
+                <span className="size-8 rounded-full bg-cover bg-center" style={{ backgroundImage: `url(${setting.customImage})` }} />
+                <span className="text-xs font-semibold text-[#5F6861] dark:text-[#AEBAC1]">In use</span>
+              </span>
+            ) : null}
+            {setting.kind !== "default" ? (
+              <Button type="button" variant="outline" onClick={resetWallpaper} className="rounded-xl border-0 bg-transparent text-[#5F6861] shadow-none hover:bg-[#D9A441]/10 dark:text-[#AEBAC1]">
+                <RotateCcw className="mr-2 size-4" />Reset to default
+              </Button>
+            ) : null}
+          </div>
+          <p className="mt-2 text-xs text-[#5F6861] dark:text-[#9AA1A6]">PNG or JPG up to 3 MB. Stored on this device only.</p>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 export default function ProfilePage() {
   const { user, isAuthenticated, loading, refresh } = useAuth();
@@ -47,6 +238,33 @@ export default function ProfilePage() {
   const [savingPrivacy, setSavingPrivacy] = useState(false);
   const [blockingAccount, setBlockingAccount] = useState(false);
   const [sendingReport, setSendingReport] = useState(false);
+  const [memorySearch, setMemorySearch] = useState("");
+  const [memoryFilter, setMemoryFilter] = useState<SavannaMemoryTag | "all">("all");
+  const memories = useFirebaseMessageMemories(user);
+  const memoryMutations = useFirebaseMessageMemoryMutations(user);
+  const creatorStories = useFirebaseStories(user, Boolean(user));
+  const visibleMemories = useMemo(() => {
+    const query = memorySearch.trim().toLowerCase();
+    return (memories.data ?? []).filter(memory => {
+      const matchesFilter = memoryFilter === "all" || memory.tags.includes(memoryFilter);
+      const matchesQuery = !query
+        || memory.snippet.toLowerCase().includes(query)
+        || memory.conversationTitle.toLowerCase().includes(query)
+        || [memory.productName, memory.productDescription, memory.storefrontName, memory.communityName, memory.storyAuthorName].some(value => value?.toLowerCase().includes(query))
+        || memory.tags.some(tag => (SAVANNA_MEMORY_TAG_LABELS[tag] ?? tag).toLowerCase().includes(query));
+      return matchesFilter && matchesQuery;
+    });
+  }, [memories.data, memoryFilter, memorySearch]);
+  const upcomingFollowUps = useMemo(() => (
+    (memories.data ?? [])
+      .filter(memory => memory.followUpAt || memory.tags.includes("follow_up"))
+      .sort((left, right) => {
+        const leftTime = left.followUpAt ? new Date(left.followUpAt).getTime() : Number.MAX_SAFE_INTEGER;
+        const rightTime = right.followUpAt ? new Date(right.followUpAt).getTime() : Number.MAX_SAFE_INTEGER;
+        return leftTime - rightTime;
+      })
+      .slice(0, 3)
+  ), [memories.data]);
 
   useEffect(() => {
     if (!user) return;
@@ -168,6 +386,24 @@ export default function ProfilePage() {
     }
   };
 
+  const prepareMemoryConversation = (memory: FirebaseMessageMemory) => {
+    if (memory.sourceType === "story") return;
+    sessionStorage.setItem("savanna-open-conversation", memory.conversationId);
+    sessionStorage.setItem("savanna-open-message", memory.messageId);
+  };
+
+  const memoryHref = (memory: FirebaseMessageMemory) => memory.sourceType === "story" ? memory.storyHref ?? `/stories?story=${memory.storyId}` : "/messages";
+  const memoryTitle = (memory: FirebaseMessageMemory) => memory.sourceType === "story"
+    ? memory.productName ?? memory.storefrontName ?? memory.communityName ?? memory.storyAuthorName ?? "Saved Story"
+    : memory.conversationTitle;
+
+  const removeMemory = (memory: FirebaseMessageMemory) => {
+    memoryMutations.remove.mutate(memory, {
+      onSuccess: () => toast.success("Memory removed"),
+      onError: error => toast.error(error.message),
+    });
+  };
+
   return (
     <SavannaShell hideMobileHeader>
       <div className="savanna-profile-page mx-auto max-w-[960px] space-y-6 pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-8">
@@ -207,10 +443,124 @@ export default function ProfilePage() {
           })}
         </nav>
 
+        <section className="savanna-profile-card rounded-[28px] border border-[#eadfca] bg-white p-5 shadow-[0_14px_35px_rgba(94,58,11,0.04)] sm:p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#D9A441]/20 text-[#D9A441]"><BarChart3 className="size-5" /></span>
+              <div className="min-w-0">
+                <h2 className="font-display text-2xl font-semibold tracking-[-0.045em] text-[#151A17]">Story performance</h2>
+                <p className="mt-1 text-sm leading-6 text-[#5F6861]">Views, likes, replies, comments, and saves for the Stories you created.</p>
+              </div>
+            </div>
+            <span className="rounded-full bg-[#D9A441]/20 px-3 py-1 text-xs font-semibold text-[#D9A441]">{creatorStories.data?.filter(story => story.authorUserId === user?.id).length ?? 0}</span>
+          </div>
+          <div className="mt-5 grid gap-3">
+            {creatorStories.isLoading ? (
+              <div className="grid min-h-24 place-items-center rounded-2xl bg-[#D9A441]/10"><Loader2 className="size-5 animate-spin text-[#D9A441]" /></div>
+            ) : creatorStories.data?.some(story => story.authorUserId === user?.id) ? (
+              creatorStories.data.filter(story => story.authorUserId === user?.id).slice(0, 6).map(story => <StoryPerformanceRow key={story.id} story={story} />)
+            ) : (
+              <div className="rounded-2xl bg-[#D9A441]/10 p-5 text-sm leading-6 text-[#5F6861] dark:text-[#AEBAC1]">Share a Story or product Memory to see creator stats here.</div>
+            )}
+          </div>
+        </section>
+
+        <section className="savanna-profile-card rounded-[28px] border border-[#eadfca] bg-white p-5 shadow-[0_14px_35px_rgba(94,58,11,0.04)] sm:p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#D9A441]/20 text-[#D9A441]"><Bookmark className="size-5" /></span>
+              <div className="min-w-0">
+                <h2 className="font-display text-2xl font-semibold tracking-[-0.045em] text-[#151A17]">Chat memories</h2>
+                <p className="mt-1 text-sm leading-6 text-[#5F6861]">Saved messages live here, ready for Recall and future context.</p>
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <Button asChild variant="outline" size="sm" className="rounded-full border-0 bg-[#D9A441]/20 text-[#9a6410] shadow-none hover:bg-[#D9A441]/30 dark:text-[#D9A441]">
+                <Link href="/recall"><AtSign className="size-3.5" />Open Recall</Link>
+              </Button>
+              <span className="rounded-full bg-[#D9A441]/20 px-3 py-1 text-xs font-semibold text-[#D9A441]">{memories.data?.length ?? 0}</span>
+            </div>
+          </div>
+
+          <div className="mt-5 space-y-3">
+            {memories.isLoading ? (
+              <div className="grid min-h-24 place-items-center rounded-2xl bg-[#D9A441]/10"><Loader2 className="size-5 animate-spin text-[#D9A441]" /></div>
+            ) : memories.data?.length ? (
+              <>
+                {upcomingFollowUps.length ? (
+                  <div className="rounded-2xl border border-[#D9A441]/20 bg-[#D9A441]/10 p-4">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-[#151A17] dark:text-[#E9EDEF]">
+                      <CalendarClock className="size-4 text-[#D9A441]" />
+                      Upcoming follow-ups
+                    </div>
+                    <div className="mt-3 grid gap-2">
+                      {upcomingFollowUps.map(memory => (
+                        <Link key={memory.id} href={memoryHref(memory)} onClick={() => prepareMemoryConversation(memory)} className="flex items-center justify-between gap-3 rounded-2xl bg-white/70 px-3 py-2 text-sm transition-colors hover:bg-white dark:bg-[#202C33]/70 dark:hover:bg-[#202C33]">
+                          <span className="min-w-0">
+                            <span className="block truncate font-semibold text-[#151A17] dark:text-[#E9EDEF]">{memory.followUpAction || memory.snippet}</span>
+                            <span className="block truncate text-xs text-[#5F6861] dark:text-[#AEBAC1]">{memoryTitle(memory)}</span>
+                          </span>
+                          <span className="shrink-0 rounded-full bg-[#D9A441]/20 px-2 py-1 text-[11px] font-semibold text-[#D9A441]">{memory.followUpLabel || formatFollowUpDate(memory.followUpAt) || "Follow-up"}</span>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                <label className="savanna-memory-search-field savanna-profile-card-muted flex h-11 items-center gap-2 rounded-full bg-[#D9A441]/10 px-4 text-[#5F6861] dark:text-[#D9A441]">
+                  <Search className="size-4" />
+                  <Input value={memorySearch} onChange={event => setMemorySearch(event.target.value)} placeholder="Search your memories" aria-label="Search your memories" className="savanna-memory-search-input h-auto border-0 bg-transparent p-0 shadow-none focus-visible:ring-0" />
+                </label>
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  <button type="button" onClick={() => setMemoryFilter("all")} data-active={memoryFilter === "all"} className="savanna-memory-filter-tab shrink-0 rounded-full border bg-transparent px-3 py-1.5 text-xs font-semibold text-[#5F6861] transition-colors hover:bg-[#D9A441]/10 data-[active=true]:bg-[#D9A441]/20 data-[active=true]:text-[#D9A441] dark:text-[#AEBAC1]">All</button>
+                  {memoryTagOptions.map(tag => (
+                    <button key={tag} type="button" onClick={() => setMemoryFilter(tag)} data-active={memoryFilter === tag} className="savanna-memory-filter-tab shrink-0 rounded-full border bg-transparent px-3 py-1.5 text-xs font-semibold text-[#5F6861] transition-colors hover:bg-[#D9A441]/10 data-[active=true]:bg-[#D9A441]/20 data-[active=true]:text-[#D9A441] dark:text-[#AEBAC1]">
+                      {SAVANNA_MEMORY_TAG_LABELS[tag] ?? tag}
+                    </button>
+                  ))}
+                </div>
+                {visibleMemories.length ? visibleMemories.slice(0, 12).map(memory => (
+                  <article key={memory.id} className="savanna-profile-card-muted rounded-2xl bg-[#D9A441]/10 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-[#151A17] dark:text-[#E9EDEF]">{memoryTitle(memory)}</p>
+                        <p className="mt-1 line-clamp-2 text-sm leading-6 text-[#5F6861] dark:text-[#AEBAC1]">{memory.snippet}</p>
+                      </div>
+                      <span className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-[#5F6861] dark:text-[#9AA1A6]"><Clock3 className="size-3.5" />{formatMemoryDate(memory.updatedAt)}</span>
+                    </div>
+                    {memory.tags.length ? (
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {memory.tags.slice(0, 4).map(tag => <span key={tag} className="rounded-full bg-[#D9A441]/20 px-2 py-1 text-[11px] font-semibold text-[#D9A441]">{SAVANNA_MEMORY_TAG_LABELS[tag] ?? tag}</span>)}
+                      </div>
+                    ) : null}
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <Button asChild variant="outline" size="sm" className="rounded-full border-0 bg-[#D9A441]/20 text-[#9a6410] shadow-none hover:bg-[#D9A441]/30 dark:text-[#D9A441]">
+                        <Link href={memoryHref(memory)} onClick={() => prepareMemoryConversation(memory)}><MessageCircle className="size-3.5" />{memory.sourceType === "story" ? "Open story" : "Open chat"}</Link>
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onClick={() => removeMemory(memory)} disabled={memoryMutations.remove.isPending} className="rounded-full border-0 bg-transparent text-[#5F6861] shadow-none hover:bg-[#D9A441]/10 dark:text-[#AEBAC1]">
+                        <Trash2 className="size-3.5" />Remove
+                      </Button>
+                    </div>
+                  </article>
+                )) : (
+                  <div className="rounded-2xl bg-[#D9A441]/10 p-5 text-sm leading-6 text-[#5F6861] dark:text-[#AEBAC1]">
+                    No saved memories match this search.
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="rounded-2xl bg-[#D9A441]/10 p-5 text-sm leading-6 text-[#5F6861] dark:text-[#AEBAC1]">
+                Long-press a message on mobile or click a message bubble on web, then save it to Memory.
+              </div>
+            )}
+          </div>
+        </section>
+
         <section className="savanna-profile-card flex items-center justify-between gap-4 rounded-[24px] border border-[#eadfca] bg-white p-5 shadow-[0_10px_24px_rgba(94,58,11,0.035)] dark:bg-[#202C33]">
           <div><p className="text-sm font-semibold text-[#151A17] dark:text-[#E9EDEF]">Appearance</p><p className="mt-1 text-xs text-[#5F6861] dark:text-[#9AA1A6]">Choose how Savanna looks on this device.</p></div>
           <Button type="button" variant="outline" onClick={toggleTheme} className="shrink-0 rounded-xl border-0 bg-[#D9A441]/20 text-[#9a6410] hover:bg-[#D9A441]/30 dark:bg-[#2A3942] dark:text-[#F2C14E] dark:hover:bg-[#2A3942]">{theme === "light" ? <Moon className="mr-2 size-4" /> : <Sun className="mr-2 size-4" />}Use {theme === "light" ? "dark" : "light"} mode</Button>
         </section>
+
+        <WallpaperSection />
 
         {isLoading ? <div className="savanna-profile-card grid min-h-64 place-items-center rounded-[26px] bg-white"><Loader2 className="size-5 animate-spin text-[#D9A441]" /></div> : <>
           <section className="savanna-profile-card rounded-[28px] border border-[#eadfca] bg-white p-6 shadow-[0_14px_35px_rgba(94,58,11,0.04)] sm:p-8">

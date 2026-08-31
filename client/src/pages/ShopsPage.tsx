@@ -2,15 +2,17 @@ import { AnimatedSearchIcon, AnimatedStoreIcon } from "@/components/AnimatedNavI
 import { SavannaShell } from "@/components/SavannaShell";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useFirebaseCommunityDiscoveryPosts } from "@/lib/firebaseCommunities";
 import { useFirebaseProductMemories, useFirebaseProducts, useFirebaseStorefronts } from "@/lib/firebaseShops";
-import { ArrowRight, BadgeCheck, Image as ImageIcon, Loader2, PackageSearch, Play, Video } from "lucide-react";
+import { ArrowRight, BadgeCheck, Image as ImageIcon, Loader2, MessageCircle, PackageSearch, Play, Video } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 
 const SHOPPING_BANNER_URL = "/shops_banner.png";
 type ShopFilter = "all" | "around" | "memories" | "products" | "shops";
 
-function formatPrice(minor: number, currency: string) {
+function formatPrice(minor?: number | null, currency?: string | null) {
+  if (minor == null || !currency) return null;
   return new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: 2 }).format(minor / 100);
 }
 
@@ -21,12 +23,16 @@ export default function ShopsPage() {
   const shops = useFirebaseStorefronts(query, user);
   const products = useFirebaseProducts(query, user);
   const memories = useFirebaseProductMemories(query, user);
+  const communityPosts = useFirebaseCommunityDiscoveryPosts(user, true);
   const featuredProducts = useMemo(() => (products.data ?? []).slice(0, 6), [products.data]);
   const aroundProducts = useMemo(() => (products.data ?? []).filter(product => product.discovery?.slot === "around_you").slice(0, 3), [products.data]);
   const aroundShops = useMemo(() => (shops.data ?? []).filter(shop => shop.discovery?.slot === "around_you").slice(0, 3), [shops.data]);
   const productMemories = useMemo(() => (memories.data ?? []).slice(0, 6), [memories.data]);
-  const isLoading = shops.isLoading || products.isLoading || memories.isLoading;
-  const hasResults = (shops.data?.length ?? 0) > 0 || (products.data?.length ?? 0) > 0 || (memories.data?.length ?? 0) > 0;
+  const communityProductPosts = useMemo(() => (communityPosts.data ?? []).filter(post =>
+    post.productId || post.storefrontId || post.kind === "listing",
+  ).slice(0, 6), [communityPosts.data]);
+  const isLoading = shops.isLoading || products.isLoading || memories.isLoading || communityPosts.isLoading;
+  const hasResults = (shops.data?.length ?? 0) > 0 || (products.data?.length ?? 0) > 0 || (memories.data?.length ?? 0) > 0 || communityProductPosts.length > 0;
   const hasAroundYou = aroundProducts.length > 0 || aroundShops.length > 0;
 
   return <SavannaShell>
@@ -63,6 +69,15 @@ export default function ShopsPage() {
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{productMemories.map(memory => {
             const media = memory.media?.[0];
             return <Link key={memory.id} href={`/shops/${memory.storefrontSlug}`} className="savanna-discovery-card group overflow-hidden rounded-[22px] bg-white shadow-[0_8px_20px_rgba(94,58,11,0.03)] transition-transform hover:-translate-y-0.5"><div className="relative grid h-40 place-items-center overflow-hidden bg-[#151A17]">{media?.url && media.type === "image" ? <img src={media.url} alt="" className="h-full w-full object-cover" /> : null}{media?.url && media.type === "video" ? <video src={media.url} className="h-full w-full object-cover" muted playsInline /> : null}{!media?.url ? <div className="absolute inset-0 bg-[#D9A441]/20" /> : null}<div className="absolute inset-0 bg-black/20" /><span className="absolute left-4 top-4 grid size-10 place-items-center rounded-xl bg-white/18 text-[#F8E8C4] backdrop-blur-md">{media?.type === "video" ? <Video className="size-4" /> : media?.type === "image" ? <ImageIcon className="size-4" /> : <Play className="size-4" />}</span><p className="absolute inset-x-4 bottom-4 line-clamp-2 text-sm font-semibold leading-5 text-white">{memory.textBody || memory.productDescription || "A product memory from this shop."}</p></div><div className="p-4"><div className="flex items-start justify-between gap-3"><span className="grid size-10 place-items-center rounded-xl bg-[#D9A441]/20 text-[#D9A441]"><Play className="size-4" /></span>{memory.productPriceMinor && memory.productCurrencyCode ? <span className="text-lg font-semibold text-[#7b4a0d]">{formatPrice(memory.productPriceMinor, memory.productCurrencyCode)}</span> : null}</div><p className="mt-4 font-semibold text-[#4a3824]">{memory.productName || "Product memory"}</p><p className="mt-1 line-clamp-2 min-h-10 text-sm leading-5 text-[#796b56]">{memory.productDescription || memory.discovery?.reason || "A saved shop story."}</p><div className="mt-4 flex items-center justify-between gap-3 text-xs"><span className="truncate text-[#8a765d]">{memory.discovery?.label ?? memory.storefrontName}</span><span className="inline-flex items-center gap-1 font-semibold text-[#9a6410]">Visit <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" /></span></div></div></Link>;
+          })}</div>
+        </section> : null}
+
+        {(filter === "all" || filter === "around" || filter === "products") && communityProductPosts.length > 0 ? <section className="savanna-discovery-section space-y-4" aria-labelledby="community-commerce-heading">
+          <div className="flex items-end justify-between gap-4"><div><p className="savanna-route-eyebrow text-xs font-semibold uppercase tracking-[0.16em] text-[#9a6410]">From communities</p><h2 id="community-commerce-heading" className="mt-1 font-display text-2xl font-semibold tracking-[-0.045em] text-[#3d2d1a]">Products people are talking about</h2></div><span className="text-xs text-[#796b56]">Community context</span></div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{communityProductPosts.map(post => {
+            const href = post.productId && post.storefrontSlug ? `/shops/${post.storefrontSlug}/products/${post.productId}` : `/communities/${post.communityId}`;
+            const price = formatPrice(post.productPriceMinor, post.productCurrencyCode);
+            return <Link key={`${post.communityId}-${post.id}`} href={href} className="savanna-discovery-card group overflow-hidden rounded-[22px] bg-white shadow-[0_8px_20px_rgba(94,58,11,0.03)] transition-transform hover:-translate-y-0.5">{post.productPrimaryImageUrl ? <img src={post.productPrimaryImageUrl} alt="" className="h-32 w-full object-cover" /> : <div className="grid h-32 place-items-center bg-[#f7e5bd] text-[#9a6410]"><MessageCircle className="size-7" /></div>}<div className="p-4"><div className="flex items-start justify-between gap-3"><span className="grid size-10 place-items-center rounded-xl bg-[#D9A441]/20 text-[#D9A441]"><MessageCircle className="size-4" /></span>{price ? <span className="text-lg font-semibold text-[#7b4a0d]">{price}</span> : null}</div><p className="mt-4 font-semibold text-[#4a3824]">{post.productName || post.title || "Community listing"}</p><p className="mt-1 line-clamp-2 min-h-10 text-sm leading-5 text-[#796b56]">{post.productDescription || post.body || "A product surfaced through a local community."}</p><div className="mt-4 flex items-center justify-between gap-3 text-xs"><span className="truncate text-[#8a765d]">{post.storefrontName || post.communityName}</span><span className="inline-flex items-center gap-1 font-semibold text-[#9a6410]">View <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" /></span></div></div></Link>;
           })}</div>
         </section> : null}
 
