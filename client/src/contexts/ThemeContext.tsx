@@ -33,7 +33,8 @@ export function ThemeProvider({
 
   useEffect(() => {
     const root = document.documentElement;
-    const themeColor = theme === "dark" ? "#111B21" : "#FFFFFF";
+    const pageColor = theme === "dark" ? "#111B21" : "#FFFFFF";
+    const statusBarColor = theme === "dark" ? "rgba(17, 27, 33, 0.72)" : "rgba(255, 255, 255, 0.72)";
     if (theme === "dark") {
       root.classList.add("dark");
     } else {
@@ -46,9 +47,9 @@ export function ThemeProvider({
       themeMeta.name = "theme-color";
       document.head.appendChild(themeMeta);
     }
-    themeMeta.content = themeColor;
-    document.documentElement.style.backgroundColor = themeColor;
-    document.body.style.backgroundColor = themeColor;
+    themeMeta.content = statusBarColor;
+    document.documentElement.style.backgroundColor = pageColor;
+    document.body.style.backgroundColor = pageColor;
 
     if (switchable) {
       localStorage.setItem("theme", theme);

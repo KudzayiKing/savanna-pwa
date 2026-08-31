@@ -6,6 +6,7 @@ import { ConversationHeader } from "@/components/ConversationHeader";
 import { SafetyActions } from "@/components/SafetyActions";
 import { SavannaShell } from "@/components/SavannaShell";
 import { StoryComposer } from "@/components/StoriesPanel";
+import { WallpaperSection } from "@/components/WallpaperSection";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
@@ -191,6 +192,7 @@ export default function MessagesPage() {
   const [conversationSearch, setConversationSearch] = useState("");
   const [locallyCreatedConversations, setLocallyCreatedConversations] = useState<ConversationListItem[]>([]);
   const [storyComposerOpen, setStoryComposerOpen] = useState(false);
+  const [wallpaperDrawerOpen, setWallpaperDrawerOpen] = useState(false);
   const [sendPulse, setSendPulse] = useState(0);
   const [recording, setRecording] = useState(false);
   const chatPreviewMode = import.meta.env.DEV ? new URLSearchParams(window.location.search).get("chatPreview") : null;
@@ -893,6 +895,9 @@ export default function MessagesPage() {
       {selected.kind === "group" && selected.inviteCode ? (
         <DropdownMenuItem onSelect={() => window.setTimeout(shareSelectedInviteLink, 0)}>Share invite link</DropdownMenuItem>
       ) : null}
+      {selected.kind === "group" ? (
+        <DropdownMenuItem onSelect={() => window.setTimeout(() => setWallpaperDrawerOpen(true), 0)}>Wallpaper</DropdownMenuItem>
+      ) : null}
       {pinnedMessages.length ? (
         <DropdownMenuItem onSelect={() => openPinnedMessage(pinnedMessages[0].id)}>View pinned message</DropdownMenuItem>
       ) : null}
@@ -1347,6 +1352,18 @@ export default function MessagesPage() {
     </Drawer>
   );
 
+  const wallpaperDrawer = (
+    <Drawer open={wallpaperDrawerOpen} onOpenChange={setWallpaperDrawerOpen}>
+      <DrawerContent className="max-h-[88vh] overflow-y-auto rounded-t-[28px] border-[#ead2a4] bg-[#fffaf0] p-4 dark:border-[#2C3336] dark:bg-[#111B21]">
+        <WallpaperSection
+          compact
+          title="Group wallpaper"
+          description="Choose the backdrop for group chats on this device. Use a color, Savanna art, or your own image."
+        />
+      </DrawerContent>
+    </Drawer>
+  );
+
   const renderChatRow = (conversation: ConversationListItem, index: number) => {
     const active = selectedConversationId === conversation.id;
     const presence = getConversationPresence(conversation, index);
@@ -1448,6 +1465,7 @@ export default function MessagesPage() {
       <SavannaShell hideChrome>
         <div className="savanna-mobile-conversation flex h-[100dvh] flex-col overflow-hidden bg-[#faf7f0] dark:bg-[#17120d]">
           <ConversationHeader
+            className="savanna-mobile-chat-header"
             title={conversationTitle(selected)}
             avatar={conversationAvatar(selected)}
             presenceLabel={presence.headline}
@@ -1479,6 +1497,7 @@ export default function MessagesPage() {
             ) : <div className="grid h-full place-items-center text-center"><div><MessageCircle className="mx-auto size-8 text-[#d2a34f]" /><p className="mt-3 text-sm font-semibold text-[#5b4934] dark:text-[#f2e7d5]">No messages yet</p></div></div>}
           </div>
           {renderComposer("mobile")}
+          {wallpaperDrawer}
         </div>
       </SavannaShell>
     );
@@ -1504,6 +1523,7 @@ export default function MessagesPage() {
           </div>
           <Button onClick={() => setNewChatOpen(true)} size="icon" className="savanna-brand-token fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-4 z-40 size-12 rounded-full shadow-none" aria-label="Start a new chat"><AnimatedPlusIcon size={20} /></Button>
           {newChatDrawer}
+          {wallpaperDrawer}
         </div>
       </SavannaShell>
     );
@@ -1582,6 +1602,7 @@ export default function MessagesPage() {
         </section>
         {newChatDrawer}
         {storyComposerDrawer}
+        {wallpaperDrawer}
       </div>
     </SavannaShell>
   );

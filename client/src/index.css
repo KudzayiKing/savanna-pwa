@@ -112,6 +112,26 @@ body {
   font-feature-settings: "ss01" 1, "cv11" 1;
 }
 
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 2147483000;
+  height: env(safe-area-inset-top, 0px);
+  pointer-events: none;
+  border-bottom: 1px solid color-mix(in srgb, #DDE3DC 54%, transparent);
+  background: color-mix(in srgb, #FFFFFF 56%, transparent);
+  -webkit-backdrop-filter: saturate(180%) blur(22px);
+  backdrop-filter: saturate(180%) blur(22px);
+}
+
+.dark body::before {
+  border-bottom-color: color-mix(in srgb, #2A3942 62%, transparent);
+  background: color-mix(in srgb, #111B21 52%, transparent);
+}
+
 button, a, input, textarea, select { -webkit-tap-highlight-color: transparent; }
 
 button:active:not(:disabled), [role="button"]:active { transform: scale(0.97); }
@@ -2020,14 +2040,63 @@ button:not(:disabled), a {
   .savanna-app .savanna-mobile-conversation {
     height: var(--savanna-visual-viewport-height, 100dvh) !important;
     min-height: var(--savanna-visual-viewport-height, 100dvh) !important;
+    position: relative;
   }
 
   .savanna-app .savanna-mobile-message-thread {
+    padding-top: calc(4.75rem + env(safe-area-inset-top)) !important;
+    padding-bottom: calc(var(--savanna-mobile-composer-height, 76px) + max(1rem, env(safe-area-inset-bottom)) + 1rem) !important;
     scroll-padding-bottom: calc(var(--savanna-mobile-composer-height, 76px) + env(safe-area-inset-bottom)) !important;
   }
 
   .savanna-app .savanna-mobile-composer {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 30;
+    border-color: transparent !important;
+    background: transparent !important;
+    background-color: transparent !important;
     padding: 0.625rem 0.75rem max(0.625rem, env(safe-area-inset-bottom)) !important;
+  }
+
+  :root:not(.dark) .savanna-app .savanna-mobile-conversation .savanna-mobile-composer,
+  .dark .savanna-app .savanna-mobile-conversation .savanna-mobile-composer {
+    border-color: transparent !important;
+    background: transparent !important;
+    background-color: transparent !important;
+  }
+
+  .savanna-app .savanna-mobile-chat-header.savanna-chat-glass-header {
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: 0;
+    z-index: 30;
+    border-width: 0 0 1px 0 !important;
+    border-style: solid !important;
+    border-color: color-mix(in srgb, #FFFFFF 58%, #DDE3DC) !important;
+    background: color-mix(in srgb, #FFFFFF 50%, transparent) !important;
+    background-color: color-mix(in srgb, #FFFFFF 44%, transparent) !important;
+    border-radius: 0 !important;
+    padding: calc(env(safe-area-inset-top) + 0.625rem) 0.75rem 0.625rem !important;
+  }
+
+  .dark .savanna-app .savanna-mobile-chat-header.savanna-chat-glass-header {
+    border-color: color-mix(in srgb, var(--chat-border) 74%, rgba(255, 255, 255, 0.22)) !important;
+    background: color-mix(in srgb, var(--chat-surface) 46%, transparent) !important;
+    background-color: color-mix(in srgb, var(--chat-surface) 40%, transparent) !important;
+  }
+
+  .savanna-app .savanna-mobile-composer .savanna-composer-field {
+    background: color-mix(in srgb, #F6F5F5 54%, transparent) !important;
+    background-color: color-mix(in srgb, #F6F5F5 48%, transparent) !important;
+  }
+
+  .dark .savanna-app .savanna-mobile-composer .savanna-composer-field {
+    background: color-mix(in srgb, var(--chat-surface) 46%, transparent) !important;
+    background-color: color-mix(in srgb, var(--chat-surface) 40%, transparent) !important;
   }
 
   .dark .savanna-app .savanna-mobile-conversation .savanna-incoming-message {
@@ -2700,7 +2769,8 @@ button:not(:disabled), a {
  * messages scroll over it, and iOS Safari (which ignores `fixed`) behaves.
  */
 :root[data-wallpaper] body .savanna-app .savanna-mobile-conversation,
-:root[data-wallpaper] body .savanna-app .savanna-desktop-conversation-panel {
+:root[data-wallpaper] body .savanna-app .savanna-desktop-conversation-panel,
+:root[data-wallpaper] body .savanna-app .savanna-community-chat-room {
   background-color: var(--savanna-wallpaper-color, transparent) !important;
   background-image: var(--savanna-wallpaper-image, none) !important;
   /* Every longhand needs !important: the opaque conversation fills above use
@@ -2716,7 +2786,8 @@ button:not(:disabled), a {
 }
 
 .dark[data-wallpaper] body .savanna-app .savanna-mobile-conversation,
-.dark[data-wallpaper] body .savanna-app .savanna-desktop-conversation-panel {
+.dark[data-wallpaper] body .savanna-app .savanna-desktop-conversation-panel,
+.dark[data-wallpaper] body .savanna-app .savanna-community-chat-room {
   background-color: var(--savanna-wallpaper-color, transparent) !important;
   background-image: var(--savanna-wallpaper-image, none) !important;
   background-size: cover !important;
@@ -2743,13 +2814,29 @@ button:not(:disabled), a {
   background-image: none !important;
 }
 
+:root[data-wallpaper] body .savanna-app .savanna-community-composer {
+  background: color-mix(in srgb, #FFFFFF 50%, transparent) !important;
+  background-color: color-mix(in srgb, #FFFFFF 44%, transparent) !important;
+  -webkit-backdrop-filter: saturate(180%) blur(22px);
+  backdrop-filter: saturate(180%) blur(22px);
+}
+
+.dark[data-wallpaper] body .savanna-app .savanna-community-composer {
+  background: color-mix(in srgb, var(--chat-surface) 46%, transparent) !important;
+  background-color: color-mix(in srgb, var(--chat-surface) 40%, transparent) !important;
+  -webkit-backdrop-filter: saturate(180%) blur(22px);
+  backdrop-filter: saturate(180%) blur(22px);
+}
+
 /* The bundled Savanna art ships as a portrait cut for phones and a landscape
    cut for desktops; the provider publishes both and the breakpoint chooses. */
 @media (min-width: 1024px) {
   :root[data-wallpaper] body .savanna-app .savanna-mobile-conversation,
   :root[data-wallpaper] body .savanna-app .savanna-desktop-conversation-panel,
+  :root[data-wallpaper] body .savanna-app .savanna-community-chat-room,
   .dark[data-wallpaper] body .savanna-app .savanna-mobile-conversation,
-  .dark[data-wallpaper] body .savanna-app .savanna-desktop-conversation-panel {
+  .dark[data-wallpaper] body .savanna-app .savanna-desktop-conversation-panel,
+  .dark[data-wallpaper] body .savanna-app .savanna-community-chat-room {
     background-image: var(--savanna-wallpaper-image-landscape, var(--savanna-wallpaper-image, none)) !important;
   }
 }

@@ -5,8 +5,11 @@
     <meta charset="UTF-8" />
     <!-- No `maximum-scale`: blocking pinch-zoom fails WCAG 1.4.4 (Resize Text)
          and hurts low-vision users on mobile. -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#1a1a1a" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="rgba(255, 255, 255, 0.72)" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="application-name" content="Savanna" />
     <meta name="description" content="A thoughtful space for private conversations, local commerce, and learning." />
     <link rel="manifest" href="/manifest.webmanifest" />
@@ -64,6 +67,10 @@
           if (dark) {
             document.documentElement.classList.add("dark");
             document.documentElement.style.backgroundColor = "#111B21";
+          }
+          var themeMeta = document.querySelector('meta[name="theme-color"]');
+          if (themeMeta) {
+            themeMeta.setAttribute("content", dark ? "rgba(17, 27, 33, 0.72)" : "rgba(255, 255, 255, 0.72)");
           }
         } catch (e) {
           /* localStorage unavailable (privacy mode): stay light */

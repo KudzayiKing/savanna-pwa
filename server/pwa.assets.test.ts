@@ -254,12 +254,25 @@ describe("Savanna PWA assets", () => {
   });
 
   it("syncs the browser status bar color with the active theme", async () => {
-    const themeContext = await readFile(resolve(projectRoot, "client/src/contexts/ThemeContext.tsx"), "utf8");
+    const [themeContext, html, styles] = await Promise.all([
+      readFile(resolve(projectRoot, "client/src/contexts/ThemeContext.tsx"), "utf8"),
+      readFile(resolve(projectRoot, "client/index.html"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/index.css"), "utf8"),
+    ]);
 
-    expect(themeContext).toContain('const themeColor = theme === "dark" ? "#111B21" : "#FFFFFF";');
+    expect(html).toContain('content="width=device-width, initial-scale=1.0, viewport-fit=cover"');
+    expect(html).toContain('name="apple-mobile-web-app-status-bar-style" content="black-translucent"');
+    expect(html).toContain('content="rgba(255, 255, 255, 0.72)"');
+    expect(html).toContain('dark ? "rgba(17, 27, 33, 0.72)" : "rgba(255, 255, 255, 0.72)"');
+    expect(themeContext).toContain('const pageColor = theme === "dark" ? "#111B21" : "#FFFFFF";');
+    expect(themeContext).toContain('const statusBarColor = theme === "dark" ? "rgba(17, 27, 33, 0.72)" : "rgba(255, 255, 255, 0.72)";');
     expect(themeContext).toContain('document.querySelector<HTMLMetaElement>(\'meta[name="theme-color"]\')');
-    expect(themeContext).toContain("themeMeta.content = themeColor");
-    expect(themeContext).toContain("document.body.style.backgroundColor = themeColor");
+    expect(themeContext).toContain("themeMeta.content = statusBarColor");
+    expect(themeContext).toContain("document.body.style.backgroundColor = pageColor");
+    expect(styles).toContain("body::before");
+    expect(styles).toContain("height: env(safe-area-inset-top, 0px);");
+    expect(styles).toContain("-webkit-backdrop-filter: saturate(180%) blur(22px);");
+    expect(styles).toContain(".dark body::before");
   });
 
   it("keeps the SAVANNA Ramabhadra wordmark in the supplied Gold color", async () => {
@@ -332,6 +345,7 @@ describe("Savanna PWA assets", () => {
       stories,
       messages,
       profile,
+      wallpaperSection,
       styles,
       animatedIcons,
       shops,
@@ -355,6 +369,7 @@ describe("Savanna PWA assets", () => {
       readFile(resolve(projectRoot, "client/src/components/StoriesPanel.tsx"), "utf8"),
       readFile(resolve(projectRoot, "client/src/pages/MessagesPage.tsx"), "utf8"),
       readFile(resolve(projectRoot, "client/src/pages/ProfilePage.tsx"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/components/WallpaperSection.tsx"), "utf8"),
       readFile(resolve(projectRoot, "client/src/index.css"), "utf8"),
       readFile(resolve(projectRoot, "client/src/components/AnimatedNavIcons.tsx"), "utf8"),
       readFile(resolve(projectRoot, "client/src/pages/ShopsPage.tsx"), "utf8"),
@@ -641,6 +656,10 @@ describe("Savanna PWA assets", () => {
     expect(communityDetailPage).toContain("shareInvite");
     expect(communityDetailPage).toContain("Share a community Story");
     expect(communityDetailPage).toContain("<StoryComposer compact communityMode communityId={community.id} communityName={community.name}");
+    expect(communityDetailPage).toContain("WallpaperSection");
+    expect(communityDetailPage).toContain("Community wallpaper");
+    expect(communityDetailPage).toContain("savanna-community-chat-room");
+    expect(communityDetailPage).toContain("savanna-community-composer");
     expect(storefrontPage).toContain("storyComposerHref");
     expect(storefrontPage).toContain("Share story");
     expect(storefrontPage).toContain('href={storyComposerHref}');
@@ -693,6 +712,13 @@ describe("Savanna PWA assets", () => {
     expect(messages).toContain("const showPreviewDelivery = Boolean(");
     expect(messages).toContain("conversation.lastMessageSenderId === user.id");
     expect(messages).toContain("savanna-outgoing-message");
+    expect(messages).toContain("setWallpaperDrawerOpen(true)");
+    expect(messages).toContain("Group wallpaper");
+    expect(profile).toContain("<WallpaperSection />");
+    expect(wallpaperSection).toContain("MAX_CUSTOM_WALLPAPER_BYTES");
+    expect(wallpaperSection).toContain("SAVANNA_WALLPAPERS");
+    expect(wallpaperSection).toContain("WALLPAPER_COLOR_SWATCHES");
+    expect(wallpaperSection).toContain("setCustomImage(reader.result)");
     expect(messages).toContain("const lastAutoScrolledMessageId = useRef<string | null>(null);");
     expect(messages).toContain("const autoScrollRetryTimer = useRef<number | null>(null);");
     expect(messages).toContain("const latestUnreadIncomingMessageId = useMemo(() => {");
@@ -1057,6 +1083,21 @@ describe("Savanna PWA assets", () => {
     expect(styles).toContain('.dark .savanna-app .savanna-mobile-conversation .savanna-incoming-message {\n    background: var(--chat-search) !important;');
     expect(styles).toContain('.savanna-app .savanna-chat-glass-header');
     expect(styles).toContain('.dark .savanna-app .savanna-chat-glass-header');
+    expect(messages).toContain('className="savanna-mobile-chat-header"');
+    expect(styles).toContain('.savanna-app .savanna-mobile-chat-header.savanna-chat-glass-header');
+    expect(styles).toContain('position: absolute;');
+    expect(styles).toContain('top: 0;');
+    expect(styles).toContain('border-radius: 0 !important;');
+    expect(styles).toContain('padding: calc(env(safe-area-inset-top) + 0.625rem) 0.75rem 0.625rem !important;');
+    expect(styles).toContain('padding-top: calc(4.75rem + env(safe-area-inset-top)) !important;');
+    expect(styles).toContain('padding-bottom: calc(var(--savanna-mobile-composer-height, 76px) + max(1rem, env(safe-area-inset-bottom)) + 1rem) !important;');
+    expect(styles).toContain(':root:not(.dark) .savanna-app .savanna-mobile-conversation .savanna-mobile-composer');
+    expect(styles).toContain('.dark .savanna-app .savanna-mobile-conversation .savanna-mobile-composer');
+    expect(styles).toContain('.dark .savanna-app .savanna-mobile-composer .savanna-composer-field');
+    expect(styles).toContain(':root[data-wallpaper] body .savanna-app .savanna-community-chat-room');
+    expect(styles).toContain('.dark[data-wallpaper] body .savanna-app .savanna-community-chat-room');
+    expect(styles).toContain(':root[data-wallpaper] body .savanna-app .savanna-community-composer');
+    expect(styles).toContain('.dark[data-wallpaper] body .savanna-app .savanna-community-composer');
     expect(animatedIcons).toContain('export function AnimatedSendIcon');
     expect(animatedIcons).toContain('className={cn("inline-flex items-center justify-center", className)}');
     // The send glyph must be rotated a quarter turn anticlockwise so the plane

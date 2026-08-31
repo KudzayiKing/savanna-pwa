@@ -2,6 +2,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { AnimatedPlusIcon, AnimatedSendIcon, MobileNavIcon } from "@/components/AnimatedNavIcons";
 import { SavannaShell } from "@/components/SavannaShell";
 import { StoryComposer } from "@/components/StoriesPanel";
+import { WallpaperSection } from "@/components/WallpaperSection";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -13,7 +14,7 @@ import {
 } from "@/lib/firebaseCommunities";
 import { useMyFirebaseStorefront } from "@/lib/firebaseShops";
 import { cn } from "@/lib/utils";
-import { ArrowLeft, ArrowRight, Loader2, Lock, Megaphone, MessageSquare, PackageSearch, Share2, ShoppingBag, Store, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Loader2, Lock, Megaphone, MessageSquare, PackageSearch, Palette, Share2, ShoppingBag, Store, X } from "lucide-react";
 import { type FormEvent, useMemo, useState } from "react";
 import { Link, useLocation, useRoute } from "wouter";
 import { toast } from "sonner";
@@ -58,6 +59,7 @@ export default function CommunityDetailPage() {
   const [postKind, setPostKind] = useState<FirebaseCommunityPostKind>("post");
   const [selectedProductId, setSelectedProductId] = useState("");
   const [storyComposerOpen, setStoryComposerOpen] = useState(false);
+  const [wallpaperOpen, setWallpaperOpen] = useState(false);
   const detail = useFirebaseCommunityDetail(communityId, user);
   const isMember = Boolean(detail.data?.member);
   const isOwner = detail.data?.member?.role === "owner";
@@ -182,6 +184,11 @@ export default function CommunityDetailPage() {
                   <Share2 className="size-5" />
                 </Button>
               ) : null}
+              {isMember ? (
+                <Button type="button" onClick={() => setWallpaperOpen(true)} variant="ghost" size="icon" className="size-11 rounded-full bg-[#D9A441]/10 text-[#D9A441] hover:bg-[#D9A441]/20" aria-label="Community wallpaper">
+                  <Palette className="size-5" />
+                </Button>
+              ) : null}
               {!isMember ? (
                 <Button type="button" onClick={joinCommunity} disabled={community.visibility === "private" || communityMutations.join.isPending} className="savanna-brand-token h-11 rounded-full px-5 shadow-none">
                   {communityMutations.join.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <AnimatedPlusIcon className="mr-2 size-4" />}
@@ -238,7 +245,7 @@ export default function CommunityDetailPage() {
               </div>
             ) : (
               <>
-                <div className="min-h-72 space-y-3 rounded-[28px] border border-[#DDE3DC] bg-white p-4 dark:border-[#26343A] dark:bg-[#111B21]">
+                <div className="savanna-community-chat-room min-h-72 space-y-3 rounded-[28px] border border-[#DDE3DC] bg-white p-4 dark:border-[#26343A] dark:bg-[#111B21]">
                   {messages.isLoading ? (
                     <div className="grid min-h-56 place-items-center"><Loader2 className="size-5 animate-spin text-[#D9A441]" /></div>
                   ) : messages.data?.length ? messages.data.map(message => {
@@ -266,7 +273,7 @@ export default function CommunityDetailPage() {
                     </div>
                   )}
                 </div>
-                <form onSubmit={submitMessage} className="flex items-center gap-2 rounded-full border border-[#DDE3DC] bg-white p-2 dark:border-[#26343A] dark:bg-[#111B21]">
+                <form onSubmit={submitMessage} className="savanna-community-composer flex items-center gap-2 rounded-full border border-[#DDE3DC] bg-white p-2 dark:border-[#26343A] dark:bg-[#111B21]">
                   <Input value={chatBody} onChange={event => setChatBody(event.target.value)} placeholder="Message this community" className="min-w-0 flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0" />
                   <Button type="submit" disabled={communityMutations.sendMessage.isPending} size="icon" className="savanna-brand-token shrink-0 rounded-full shadow-none">
                     {communityMutations.sendMessage.isPending ? <Loader2 className="size-4 animate-spin" /> : <AnimatedSendIcon size={18} />}
@@ -422,6 +429,20 @@ export default function CommunityDetailPage() {
                 <Button type="button" variant="ghost" size="icon" onClick={() => setStoryComposerOpen(false)} className="rounded-full" aria-label="Close community Story composer"><X className="size-5" /></Button>
               </div>
               <StoryComposer compact communityMode communityId={community.id} communityName={community.name} onDone={() => setStoryComposerOpen(false)} />
+            </div>
+          </div>
+        ) : null}
+        {wallpaperOpen ? (
+          <div role="dialog" aria-modal="true" aria-label="Community wallpaper" className="fixed inset-0 z-[90] grid items-end bg-black/55 p-4 sm:items-center">
+            <div className="mx-auto max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-[28px] bg-[#fffaf0] p-4 shadow-2xl dark:bg-[#111B21]">
+              <div className="mb-3 flex justify-end">
+                <Button type="button" variant="ghost" size="icon" onClick={() => setWallpaperOpen(false)} className="rounded-full" aria-label="Close community wallpaper"><X className="size-5" /></Button>
+              </div>
+              <WallpaperSection
+                compact
+                title="Community wallpaper"
+                description="Choose the backdrop for community chats on this device. Use a color, Savanna art, or your own image."
+              />
             </div>
           </div>
         ) : null}
