@@ -929,6 +929,7 @@ describe("Savanna PWA assets", () => {
     expect(messages).toContain('[["all", "All"], ["unread", "Unread"]');
     expect(messages).toContain('chatFilter === "unread" && conversation.unreadCount > 0');
     expect(messages).toContain("aria-label={`${unreadLabel} unread messages`}");
+    expect(messages).toContain("bg-[#D9A441]/20 px-2 py-1 text-[11px] font-bold leading-none text-[#D9A441]");
     expect(firebaseChat).toContain("markLatestMessageDelivered");
     expect(firebaseChat).toContain("markVisibleMessagesRead");
     expect(firebaseChat).toContain('if (document.visibilityState !== "visible") return;');

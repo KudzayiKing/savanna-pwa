@@ -1477,22 +1477,24 @@ export default function MessagesPage() {
             <span className="truncate text-sm font-semibold text-[#3d2d1a] dark:text-[#fff8ed]">{conversationTitle(conversation)}</span>
             <span className="ml-auto shrink-0 text-[11px] text-[#5f6861] dark:text-[#9AA1A6]">{conversation.mutedUntil ? "Muted" : presence.headline}</span>
           </span>
-          <span className="mt-1 flex items-center gap-1 truncate text-xs text-[#5f6861] dark:text-[#9AA1A6]">
-            {conversation.previewMessage ? (
-              <>
-                {showPreviewDelivery ? (
-                  <ChatListDeliveryIcon status={previewStatus ?? "sent"} />
-                ) : null}
-                {conversation.previewMessage}
-              </>
-            ) : conversation.kind === "merchant_support" ? "Merchant support" : "Tap to open your conversation"}
+          <span className="mt-1 flex items-center gap-2 text-xs text-[#5f6861] dark:text-[#9AA1A6]">
+            <span className="flex min-w-0 flex-1 items-center gap-1 truncate">
+              {conversation.previewMessage ? (
+                <>
+                  {showPreviewDelivery ? (
+                    <ChatListDeliveryIcon status={previewStatus ?? "sent"} />
+                  ) : null}
+                  <span className="truncate">{conversation.previewMessage}</span>
+                </>
+              ) : conversation.kind === "merchant_support" ? "Merchant support" : "Tap to open your conversation"}
+            </span>
+            {unreadCount > 0 ? (
+              <span aria-label={`${unreadLabel} unread messages`} className="grid min-w-6 shrink-0 place-items-center rounded-full bg-[#D9A441]/20 px-2 py-1 text-[11px] font-bold leading-none text-[#D9A441]">
+                {unreadLabel}
+              </span>
+            ) : null}
           </span>
         </span>
-        {unreadCount > 0 ? (
-          <span aria-label={`${unreadLabel} unread messages`} className="grid min-w-6 shrink-0 place-items-center rounded-full bg-[#D9A441] px-2 py-1 text-[11px] font-bold leading-none text-white shadow-[0_8px_18px_rgba(217,164,65,0.22)]">
-            {unreadLabel}
-          </span>
-        ) : null}
       </div>
     );
   };
