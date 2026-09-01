@@ -32,6 +32,11 @@ export interface ShoppingBasketIconHandle {
   stopAnimation: () => void;
 }
 
+export interface PlusIconHandle {
+  startAnimation: () => void;
+  stopAnimation: () => void;
+}
+
 interface SendHorizontalIconProps extends Omit<
   HTMLAttributes<HTMLDivElement>,
   | "color"
@@ -53,6 +58,21 @@ interface UserIconProps extends SendHorizontalIconProps {}
 interface ShoppingBasketIconProps extends SendHorizontalIconProps {}
 
 interface BookTextIconProps extends SendHorizontalIconProps {}
+
+interface PlusIconProps extends Omit<
+  HTMLAttributes<HTMLDivElement>,
+  | "color"
+  | "onDrag"
+  | "onDragStart"
+  | "onDragEnd"
+  | "onAnimationStart"
+  | "onAnimationEnd"
+  | "onAnimationIteration"
+> {
+  size?: number;
+  isAnimated?: boolean;
+  color?: string;
+}
 
 const iconTransition = { duration: 0.42, ease: [0.23, 1, 0.32, 1] as const };
 
@@ -145,6 +165,121 @@ export function AnimatedPlusIcon({ size = 18, ...props }: AnimatedIconProps) {
     </motion.svg>
   );
 }
+
+const PlusIcon = forwardRef<PlusIconHandle, PlusIconProps>(
+  (
+    {
+      onMouseEnter,
+      onMouseLeave,
+      onPointerDown,
+      onTouchStart,
+      onFocus,
+      onBlur,
+      className,
+      size = 28,
+      isAnimated = true,
+      color,
+      style,
+      ...props
+    },
+    ref
+  ) => {
+    const controls = useAnimation();
+    const reduced = useReducedMotion();
+    const isControlled = useRef(false);
+    const restoreTimer = useRef<number | null>(null);
+
+    const animateOnce = useCallback(() => {
+      if (!isAnimated || reduced) return;
+      if (restoreTimer.current) window.clearTimeout(restoreTimer.current);
+      void controls.start("animate");
+      restoreTimer.current = window.setTimeout(() => {
+        void controls.start("normal");
+        restoreTimer.current = null;
+      }, 520);
+    }, [controls, isAnimated, reduced]);
+
+    useImperativeHandle(ref, () => {
+      isControlled.current = true;
+      return {
+        startAnimation: () => reduced ? controls.start("normal") : controls.start("animate"),
+        stopAnimation: () => controls.start("normal"),
+      };
+    });
+
+    useEffect(() => () => {
+      if (restoreTimer.current) window.clearTimeout(restoreTimer.current);
+    }, []);
+
+    const handleEnter = useCallback((event: MouseEvent<HTMLDivElement>) => {
+      if (isControlled.current) onMouseEnter?.(event);
+      else animateOnce();
+    }, [animateOnce, onMouseEnter]);
+
+    const handleLeave = useCallback((event: MouseEvent<HTMLDivElement>) => {
+      if (isControlled.current) {
+        onMouseLeave?.(event);
+      } else {
+        void controls.start("normal");
+      }
+    }, [controls, onMouseLeave]);
+
+    return (
+      <LazyMotion features={domMin} strict>
+        <m.div
+          className={cn("inline-flex items-center justify-center", className)}
+          onMouseEnter={handleEnter}
+          onMouseLeave={handleLeave}
+          onPointerDown={(event) => {
+            if (!isControlled.current) animateOnce();
+            onPointerDown?.(event);
+          }}
+          onTouchStart={(event) => {
+            if (!isControlled.current) animateOnce();
+            onTouchStart?.(event);
+          }}
+          onFocus={(event) => {
+            if (!isControlled.current) animateOnce();
+            onFocus?.(event);
+          }}
+          onBlur={(event) => {
+            if (!isControlled.current) void controls.start("normal");
+            onBlur?.(event);
+          }}
+          {...props}
+          style={{ color, ...style }}
+        >
+          <m.svg
+            animate={controls}
+            fill="none"
+            height={size}
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            transition={{ type: "spring", stiffness: 100, damping: 15 }}
+            variants={{
+              normal: { rotate: 0 },
+              animate: { rotate: 180 },
+            }}
+            initial="normal"
+            viewBox="0 0 24 24"
+            width={size}
+            xmlns="http://www.w3.org/2000/svg"
+            style={{ transformOrigin: "center", overflow: "visible" }}
+          >
+            <path d="M5 12h14" />
+            <path d="M12 5v14" />
+          </m.svg>
+        </m.div>
+      </LazyMotion>
+    );
+  }
+);
+
+PlusIcon.displayName = "PlusIcon";
+
+export { PlusIcon };
 
 export function AnimatedSearchIcon({ size = 18, pulse = 0, ...props }: AnimatedIconProps) {
   const reducedMotion = useReducedMotion();

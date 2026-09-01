@@ -347,6 +347,7 @@ describe("Savanna PWA assets", () => {
       messages,
       profile,
       wallpaperSection,
+      wallpaperContext,
       styles,
       animatedIcons,
       shops,
@@ -388,6 +389,7 @@ describe("Savanna PWA assets", () => {
       readFile(resolve(projectRoot, "client/src/pages/MessagesPage.tsx"), "utf8"),
       readFile(resolve(projectRoot, "client/src/pages/ProfilePage.tsx"), "utf8"),
       readFile(resolve(projectRoot, "client/src/components/WallpaperSection.tsx"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/contexts/WallpaperContext.tsx"), "utf8"),
       readFile(resolve(projectRoot, "client/src/index.css"), "utf8"),
       readFile(resolve(projectRoot, "client/src/components/AnimatedNavIcons.tsx"), "utf8"),
       readFile(resolve(projectRoot, "client/src/pages/ShopsPage.tsx"), "utf8"),
@@ -431,6 +433,9 @@ describe("Savanna PWA assets", () => {
     expect(shell).toContain("mobileNavigation.map((item) =>");
     expect(shell).toContain('{ href: "/stories", label: "Stories" }');
     expect(shell).toContain('{ href: "/communities", label: "Communities" }');
+    expect(shell).toContain('isMessagesWorkspace ? "lg:h-screen lg:min-h-0 lg:max-h-screen lg:overflow-hidden"');
+    expect(shell).toContain('isMessagesWorkspace ? "min-h-screen p-0 lg:h-screen lg:min-h-0 lg:overflow-hidden"');
+    expect(shell).toContain('isMessagesWorkspace ? "w-full lg:h-full lg:min-h-0 lg:overflow-hidden"');
     expect(shell).not.toContain('{ href: "/profile", label: "Profile" }');
     expect(shell).not.toContain('{ href: "/orders", label: "Orders" }');
     expect(shell).toContain('import { AnimatedPlusIcon, MobileNavIcon, type MobileNavIconName } from "@/components/AnimatedNavIcons";');
@@ -724,6 +729,10 @@ describe("Savanna PWA assets", () => {
     expect(messages).toContain('mx-2 mt-2 flex h-11 items-center gap-2 rounded-2xl');
     expect(messages).toContain('overflow-x-auto px-3 pb-1');
     expect(messages).toContain("savanna-mobile-chat-rows mt-3 divide-y-0 px-2");
+    expect(messages).toContain("savanna-desktop-messages grid h-screen max-h-screen overflow-hidden");
+    expect(messages).toContain("savanna-desktop-chat-list flex h-screen min-h-0 flex-col overflow-hidden");
+    expect(messages).toContain("savanna-desktop-conversation-panel flex h-screen min-h-0 flex-col overflow-hidden");
+    expect(messages).toContain("savanna-desktop-message-thread min-h-0 flex-1 space-y-3 overflow-y-auto");
     expect(messages).toContain('dark:bg-[#23282C] dark:text-[#D9A441]');
     expect(messages).toContain('savanna-mobile-messages-canvas -mx-4');
     expect(messages).not.toContain(">Chats</h1>");
@@ -757,6 +766,15 @@ describe("Savanna PWA assets", () => {
     expect(wallpaperSection).toContain("SAVANNA_WALLPAPERS");
     expect(wallpaperSection).toContain("WALLPAPER_COLOR_SWATCHES");
     expect(wallpaperSection).toContain("setCustomImage(reader.result)");
+    expect(wallpaperContext).toContain('window.matchMedia("(min-width: 768px), (orientation: landscape)")');
+    expect(wallpaperContext).toContain("prefersLandscapeWallpaper ? landscapeImage : portraitImage");
+    expect(wallpaperContext).toContain("setting.kind === \"savanna-mobile\" || setting.kind === \"savanna-web\"");
+    expect(styles).toContain("@media (min-width: 768px), (orientation: landscape)");
+    expect(styles).toContain(":root:has(body .savanna-app .savanna-desktop-messages)");
+    expect(styles).toContain("body:has(.savanna-desktop-messages)");
+    expect(styles).toContain("height: 100dvh;");
+    expect(styles).toContain("background-size: contain !important;");
+    expect(styles).toContain("background-repeat: repeat !important;");
     expect(messages).toContain("const lastAutoScrolledMessageId = useRef<string | null>(null);");
     expect(messages).toContain("const autoScrollRetryTimer = useRef<number | null>(null);");
     expect(messages).toContain("const latestUnreadIncomingMessageId = useMemo(() => {");
@@ -965,8 +983,8 @@ describe("Savanna PWA assets", () => {
     expect(messages).toContain('aria-label="Delivered"');
     expect(messages).toContain('aria-label="Read"');
     expect(messages).toContain('AnimatedSearchIcon size={16}');
-    expect(messages).toContain('AnimatedPlusIcon size={16}');
-    expect(messages).toContain('AnimatedPlusIcon size={20}');
+    expect(messages).toContain('PlusIcon size={16}');
+    expect(messages).toContain('PlusIcon size={20}');
     expect(messages).toContain('text-[#5f6861] dark:text-[#9AA1A6]');
     expect(stories).toContain('aria-label="Open profile"');
     expect(stories).toContain("<UserIcon size={22} />");
@@ -977,6 +995,11 @@ describe("Savanna PWA assets", () => {
     expect(animatedIcons).toContain("M5 14.5C5 14.5 6.5 14.5 8.5 18");
     expect(animatedIcons).toContain("M8 13.3333C8 13.3333 9.5 14 11.5 17");
     expect(animatedIcons).toContain("export function AnimatedPlusIcon");
+    expect(animatedIcons).toContain("const PlusIcon = forwardRef");
+    expect(animatedIcons).toContain("PlusIcon.displayName = \"PlusIcon\"");
+    expect(animatedIcons).toContain("export { PlusIcon }");
+    expect(animatedIcons).toContain("animate: { rotate: 180 }");
+    expect(animatedIcons).toContain("onTouchStart={(event) =>");
     expect(animatedIcons).toContain("export function AnimatedSearchIcon");
     expect(animatedIcons).toContain("export function AnimatedMenuIcon");
     expect(animatedIcons).toContain("export function AnimatedStoreIcon");
@@ -1177,7 +1200,7 @@ describe("Savanna PWA assets", () => {
     expect(orders).toContain('cancelled: "savanna-order-status bg-[#FFFDF7] text-[#FF5B6B]"');
     expect(messages).toContain('className="savanna-new-chat-drawer rounded-t-[28px]');
     expect(messages).toContain("savanna-new-chat-tabs");
-    expect(messages).toContain("savanna-desktop-messages grid min-h-screen lg:grid-cols-[470px_minmax(0,1fr)]");
+    expect(messages).toContain("savanna-desktop-messages grid h-screen max-h-screen overflow-hidden lg:grid-cols-[470px_minmax(0,1fr)]");
     expect(messages).toContain("const active = selectedConversationId === conversation.id;");
     expect(messages).toContain("data-active={active}");
     expect(styles).toContain("border-right: 1px solid var(--chat-border) !important;");
@@ -1187,7 +1210,7 @@ describe("Savanna PWA assets", () => {
     expect(styles).toContain(".savanna-app .savanna-collapsed-story-cluster button + button");
     expect(messages).toContain('aria-label="Desktop chat filters"');
     expect(messages).toContain("const filteredChatList = filteredConversations.filter");
-    expect(messages).toContain('AnimatedPlusIcon size={16}');
+    expect(messages).toContain('PlusIcon size={16}');
     expect(messages).toContain('text-[#FF5B6B]');
     // `/home` used to render the Home page directly; it now redirects to
     // /messages, which is the app's landing route. Assert the redirect rather
@@ -1212,17 +1235,29 @@ describe("Savanna PWA assets", () => {
     expect(styles).toContain('background: var(--chat-search) !important;');
     expect(styles).toContain('border-radius: 1rem !important;');
     expect(styles).toContain('.dark .savanna-app .savanna-incoming-message {\n    background: var(--chat-search) !important;');
+    expect(styles).toContain('.dark body .savanna-app .savanna-message-bubble.savanna-outgoing-message :is(p, span)');
+    expect(styles).toContain('color: #FDFBF5 !important;');
+    expect(styles.indexOf('.dark body .savanna-app .savanna-message-bubble.savanna-outgoing-message')).toBeGreaterThan(
+      styles.indexOf('.dark .savanna-app .savanna-desktop-messages p,')
+    );
     expect(styles).toContain('.dark .savanna-app .savanna-mobile-conversation .savanna-incoming-message {\n    background: var(--chat-search) !important;');
     expect(styles).toContain('.savanna-app .savanna-chat-glass-header');
     expect(styles).toContain('.dark .savanna-app .savanna-chat-glass-header');
     expect(messages).toContain('className="savanna-mobile-chat-header"');
+    expect(messages).toContain('className="savanna-desktop-chat-header gap-3 px-6 py-4"');
     expect(styles).toContain('.savanna-app .savanna-mobile-chat-header.savanna-chat-glass-header');
+    expect(styles).toContain('.savanna-app .savanna-desktop-chat-header.savanna-chat-glass-header');
+    expect(styles).toContain('.dark .savanna-app .savanna-desktop-chat-header.savanna-chat-glass-header');
     expect(styles).toContain('position: absolute;');
     expect(styles).toContain('top: 0;');
     expect(styles).toContain('border-radius: 0 !important;');
     expect(styles).toContain('padding: calc(env(safe-area-inset-top) + 0.625rem) 0.75rem 0.625rem !important;');
+    expect(styles).toContain('padding-top: 6.25rem !important;');
+    expect(styles).toContain('scroll-padding-bottom: 7rem !important;');
     expect(styles).toContain('padding-top: calc(4.75rem + env(safe-area-inset-top)) !important;');
     expect(styles).toContain('padding-bottom: calc(var(--savanna-mobile-composer-height, 76px) + max(1rem, env(safe-area-inset-bottom)) + 1rem) !important;');
+    expect(styles).toContain('.savanna-app .savanna-desktop-composer {\n    position: absolute;');
+    expect(styles).toContain('background-color: transparent !important;');
     expect(styles).toContain(':root:not(.dark) .savanna-app .savanna-mobile-conversation .savanna-mobile-composer');
     expect(styles).toContain('.dark .savanna-app .savanna-mobile-conversation .savanna-mobile-composer');
     expect(styles).toContain('.dark .savanna-app .savanna-mobile-composer .savanna-composer-field');

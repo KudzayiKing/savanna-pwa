@@ -51,7 +51,7 @@ export function SavannaShell({ children, context, hideChrome = false, hideMobile
 
       {hideChrome || hideMobileHeader ? null : <MobileStoriesHeader />}
 
-      <div className={cn("mx-auto flex min-h-screen", usesIconRail ? "max-w-none" : "max-w-[1720px]")}>
+      <div className={cn("mx-auto flex min-h-screen", isMessagesWorkspace ? "lg:h-screen lg:min-h-0 lg:max-h-screen lg:overflow-hidden" : "", usesIconRail ? "max-w-none" : "max-w-[1720px]")}>
         <aside className={cn("sticky top-0 hidden h-screen shrink-0 flex-col lg:flex", usesIconRail ? "savanna-message-rail w-[84px] items-center border-r px-3 py-5" : "w-[248px] border-r border-[#eadfca] bg-[#f6f0e2] px-4 py-7")}>
           {usesIconRail ? <>
             <Link href="/messages" aria-label="Savanna" className="mb-5 block size-11 shrink-0">
@@ -118,7 +118,7 @@ export function SavannaShell({ children, context, hideChrome = false, hideMobile
           </>}
         </aside>
 
-        <section className={cn("min-w-0 flex-1", hideChrome ? "" : "pb-10 lg:pb-0")}>
+        <section className={cn("min-w-0 flex-1", isMessagesWorkspace ? "lg:h-screen lg:min-h-0 lg:overflow-hidden" : "", hideChrome ? "" : "pb-10 lg:pb-0")}>
           {!hideDesktopHeader && !usesIconRail ? <div className="savanna-glass-header hidden h-[76px] items-center justify-between border-b border-[#eadfca]/70 bg-[#fcfaf4]/72 px-7 backdrop-blur-xl lg:flex xl:px-10">
             <button className="group flex h-10 w-[min(440px,42vw)] items-center gap-3 rounded-xl border border-[#d7ddd0] bg-white/65 px-3 text-left text-sm text-[#7a8276] shadow-[0_4px_12px_rgba(39,54,37,0.035)] transition-colors hover:border-[#b7c5b4]" aria-label="Open search and command menu">
               <Search className="size-4" />
@@ -134,8 +134,8 @@ export function SavannaShell({ children, context, hideChrome = false, hideMobile
             </div>
           </div> : null}
 
-          <main id="savanna-main" className={cn(isMessagesWorkspace ? "min-h-screen p-0" : usesIconRail ? "min-h-[calc(100vh-76px)] px-4 py-5 sm:px-6 lg:min-h-screen lg:px-7 lg:py-8 xl:px-10" : "min-h-[calc(100vh-76px)] px-4 py-5 sm:px-6 lg:px-7 lg:py-8 xl:px-10")}>
-            <div className={cn(isMessagesWorkspace ? "w-full" : "mx-auto", !isMessagesWorkspace && (context ? "max-w-[1280px]" : "max-w-[1050px]"))}>{children}</div>
+          <main id="savanna-main" className={cn(isMessagesWorkspace ? "min-h-screen p-0 lg:h-screen lg:min-h-0 lg:overflow-hidden" : usesIconRail ? "min-h-[calc(100vh-76px)] px-4 py-5 sm:px-6 lg:min-h-screen lg:px-7 lg:py-8 xl:px-10" : "min-h-[calc(100vh-76px)] px-4 py-5 sm:px-6 lg:px-7 lg:py-8 xl:px-10")}>
+            <div className={cn(isMessagesWorkspace ? "w-full lg:h-full lg:min-h-0 lg:overflow-hidden" : "mx-auto", !isMessagesWorkspace && (context ? "max-w-[1280px]" : "max-w-[1050px]"))}>{children}</div>
           </main>
         </section>
 

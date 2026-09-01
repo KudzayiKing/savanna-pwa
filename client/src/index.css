@@ -1190,7 +1190,7 @@ button:not(:disabled), a {
   background: #F6F5F5 !important;
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 768px), (orientation: landscape) {
   .savanna-app .savanna-desktop-chat-rows .savanna-chat-row {
     padding-left: 0.75rem !important;
     padding-right: 0.75rem !important;
@@ -1401,6 +1401,23 @@ button:not(:disabled), a {
 .savanna-profile-page,
 .savanna-desktop-messages {
   color: var(--ink);
+}
+
+@media (min-width: 1024px) {
+  :root:has(body .savanna-app .savanna-desktop-messages),
+  body:has(.savanna-desktop-messages) {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .savanna-app:has(.savanna-desktop-messages),
+  .savanna-app:has(.savanna-desktop-messages) > div,
+  .savanna-app:has(.savanna-desktop-messages) main,
+  .savanna-app:has(.savanna-desktop-messages) main > div {
+    height: 100dvh;
+    min-height: 100dvh;
+    overflow: hidden;
+  }
 }
 
 @media (max-width: 1023px) {
@@ -1819,6 +1836,48 @@ button:not(:disabled), a {
 
   .savanna-app .savanna-desktop-composer > div {
     border-radius: 9999px;
+  }
+
+  .savanna-app .savanna-desktop-conversation-panel {
+    position: relative;
+  }
+
+  .savanna-app .savanna-desktop-chat-header.savanna-chat-glass-header {
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: 0;
+    z-index: 30;
+    border-width: 0 0 1px 0 !important;
+    border-style: solid !important;
+    border-radius: 0 !important;
+    background: color-mix(in srgb, #FFFFFF 50%, transparent) !important;
+    background-color: color-mix(in srgb, #FFFFFF 44%, transparent) !important;
+  }
+
+  .dark .savanna-app .savanna-desktop-chat-header.savanna-chat-glass-header {
+    background: color-mix(in srgb, var(--chat-surface) 46%, transparent) !important;
+    background-color: color-mix(in srgb, var(--chat-surface) 40%, transparent) !important;
+  }
+
+  .savanna-app .savanna-desktop-message-thread {
+    height: 100%;
+    padding-top: 6.25rem !important;
+    padding-bottom: 7rem !important;
+    scroll-padding-top: 6.25rem !important;
+    scroll-padding-bottom: 7rem !important;
+  }
+
+  .savanna-app .savanna-desktop-composer {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 30;
+    border-color: transparent !important;
+    background: transparent !important;
+    background-color: transparent !important;
+    padding: 1rem 1.5rem !important;
   }
 }
 
@@ -2830,7 +2889,7 @@ button:not(:disabled), a {
 
 /* The bundled Savanna art ships as a portrait cut for phones and a landscape
    cut for desktops; the provider publishes both and the breakpoint chooses. */
-@media (min-width: 1024px) {
+@media (min-width: 768px), (orientation: landscape) {
   :root[data-wallpaper] body .savanna-app .savanna-mobile-conversation,
   :root[data-wallpaper] body .savanna-app .savanna-desktop-conversation-panel,
   :root[data-wallpaper] body .savanna-app .savanna-community-chat-room,
@@ -2838,5 +2897,17 @@ button:not(:disabled), a {
   .dark[data-wallpaper] body .savanna-app .savanna-desktop-conversation-panel,
   .dark[data-wallpaper] body .savanna-app .savanna-community-chat-room {
     background-image: var(--savanna-wallpaper-image-landscape, var(--savanna-wallpaper-image, none)) !important;
+    background-size: contain !important;
+    background-position: top center !important;
+    background-repeat: repeat !important;
   }
+}
+
+/* Final chat text contrast guard.
+   This lives last because broad dark-mode compatibility rules repaint generic
+   paragraph and utility text. Outgoing gold bubbles must keep white copy in
+   dark mode on both mobile and web. */
+.dark body .savanna-app .savanna-message-bubble.savanna-outgoing-message,
+.dark body .savanna-app .savanna-message-bubble.savanna-outgoing-message :is(p, span) {
+  color: #FDFBF5 !important;
 }

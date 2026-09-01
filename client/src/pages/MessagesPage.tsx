@@ -1,5 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
-import { AnimatedCheckCheckIcon, AnimatedCheckIcon, AnimatedPlusIcon, AnimatedSearchIcon, AnimatedSendIcon, MobileNavIcon } from "@/components/AnimatedNavIcons";
+import { AnimatedCheckCheckIcon, AnimatedCheckIcon, AnimatedSearchIcon, AnimatedSendIcon, MobileNavIcon, PlusIcon } from "@/components/AnimatedNavIcons";
 import { MicIcon, type ChatIconHandle } from "@/components/AnimatedChatIcons";
 import { CommunityVisibilitySelect } from "@/components/CommunityVisibilitySelect";
 import { ConversationHeader } from "@/components/ConversationHeader";
@@ -162,7 +162,7 @@ function DesktopStoryRail({ items, onCreateStory }: { items: Array<{ id: string 
       <div className="flex gap-3 overflow-x-auto pb-1">
         <button type="button" onClick={onCreateStory} className="flex w-11 shrink-0 flex-col items-center gap-1 text-left">
           <span aria-label="Add to your Story" className="savanna-brand-token grid size-11 place-items-center rounded-full text-xs font-semibold">
-            <AnimatedPlusIcon size={18} />
+            <PlusIcon size={18} />
           </span>
           <span className="max-w-11 truncate text-center text-[10px] text-[#5f6861]">Your</span>
         </button>
@@ -1354,7 +1354,7 @@ export default function MessagesPage() {
 
   const createButton = (isPending: boolean) => (
     <Button type="submit" disabled={chatMutations.create.isPending || communityMutations.create.isPending} className="savanna-brand-token rounded-xl">
-      {isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <AnimatedPlusIcon className="mr-2 size-4" />}
+      {isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <PlusIcon className="mr-2" size={16} />}
       {creationMode === "community" ? "Create community" : "Create chat"}
     </Button>
   );
@@ -1577,12 +1577,12 @@ export default function MessagesPage() {
           <div className="story-rail mt-4 flex gap-2 overflow-x-auto px-3 pb-1" role="tablist" aria-label="Chat filters">
             {filterTabs.map(([value, label]) => <button key={value} role="tab" aria-selected={chatFilter === value} onClick={() => setChatFilter(value)} className={`shrink-0 rounded-full px-3 py-2 text-xs font-semibold ${chatFilter === value ? "bg-[#e3a43c] text-[#3a260e] dark:bg-[#23282C] dark:text-[#D9A441]" : "bg-[#f4f0e8] text-[#715d43] dark:bg-[#2b2118] dark:text-[#dac7a9]"}`}>{label}</button>)}
             {customTabs.map(tab => <button key={tab} role="tab" aria-selected={chatFilter === tab} onClick={() => setChatFilter(tab)} className={`shrink-0 rounded-full px-3 py-2 text-xs font-semibold ${chatFilter === tab ? "bg-[#e3a43c] text-[#3a260e] dark:bg-[#23282C] dark:text-[#D9A441]" : "bg-[#f4f0e8] text-[#715d43] dark:bg-[#2b2118] dark:text-[#dac7a9]"}`}>{tab}</button>)}
-            <button onClick={addCustomTab} className="savanna-brand-token grid size-8 shrink-0 place-items-center rounded-full" aria-label="Create a chat tab"><AnimatedPlusIcon size={16} /></button>
+            <button type="button" onClick={addCustomTab} className="savanna-brand-token grid size-8 shrink-0 place-items-center rounded-full" aria-label="Create a chat tab"><PlusIcon size={16} /></button>
           </div>
           <div className="savanna-mobile-chat-rows mt-3 divide-y-0 px-2">
             {conversations.isLoading ? <div className="grid min-h-48 place-items-center"><Loader2 className="size-5 animate-spin text-[#9a6410]" /></div> : filteredChatList.length ? filteredChatList.map(renderChatRow) : <div className="grid min-h-56 place-items-center"><MessageCircle className="size-8 text-[#d2a34f]" /></div>}
           </div>
-          <Button onClick={() => setNewChatOpen(true)} size="icon" className="savanna-brand-token fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-4 z-40 size-12 rounded-full shadow-none" aria-label="Start a new chat"><AnimatedPlusIcon size={20} /></Button>
+          <Button onClick={() => setNewChatOpen(true)} size="icon" className="savanna-brand-token fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-4 z-40 size-12 rounded-full shadow-none" aria-label="Start a new chat"><PlusIcon size={20} /></Button>
           {newChatDrawer}
           {wallpaperDrawer}
         </div>
@@ -1592,11 +1592,11 @@ export default function MessagesPage() {
 
   return (
     <SavannaShell>
-      <div className="savanna-desktop-messages grid min-h-screen lg:grid-cols-[470px_minmax(0,1fr)]">
-        <aside className="savanna-desktop-chat-list flex min-h-0 flex-col border-r p-4">
+      <div className="savanna-desktop-messages grid h-screen max-h-screen overflow-hidden lg:grid-cols-[470px_minmax(0,1fr)]">
+        <aside className="savanna-desktop-chat-list flex h-screen min-h-0 flex-col overflow-hidden border-r p-4">
           <header className="flex items-center justify-between gap-3">
             <span className="savanna-wordmark text-[28px]">Savanna</span>
-            <Button onClick={() => setNewChatOpen(true)} size="icon" className="savanna-brand-token size-10 rounded-2xl shadow-none" aria-label="Start a new chat"><AnimatedPlusIcon size={19} /></Button>
+            <Button onClick={() => setNewChatOpen(true)} size="icon" className="savanna-brand-token size-10 rounded-2xl shadow-none" aria-label="Start a new chat"><PlusIcon size={19} /></Button>
           </header>
           <label className="savanna-desktop-chat-search mt-5 flex h-11 items-center gap-2 rounded-2xl px-3 text-sm">
             <AnimatedSearchIcon size={17} />
@@ -1608,17 +1608,17 @@ export default function MessagesPage() {
           <div className="savanna-desktop-message-tabs flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Desktop chat filters">
             {filterTabs.map(([value, label]) => <button key={value} role="tab" aria-selected={chatFilter === value} onClick={() => setChatFilter(value)} data-active={chatFilter === value} className="shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold">{label}</button>)}
             {customTabs.map(tab => <button key={tab} role="tab" aria-selected={chatFilter === tab} onClick={() => setChatFilter(tab)} data-active={chatFilter === tab} className="shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold">{tab}</button>)}
-            <button type="button" onClick={addCustomTab} className="savanna-brand-token grid size-8 shrink-0 place-items-center rounded-full" aria-label="Create a chat tab"><AnimatedPlusIcon size={15} /></button>
+            <button type="button" onClick={addCustomTab} className="savanna-brand-token grid size-8 shrink-0 place-items-center rounded-full" aria-label="Create a chat tab"><PlusIcon size={15} /></button>
           </div>
           <div className="savanna-desktop-chat-rows mt-3 flex-1 overflow-y-auto">
             {conversations.isLoading ? <div className="grid min-h-48 place-items-center"><Loader2 className="size-5 animate-spin text-[#A87820]" /></div> : filteredChatList.length ? filteredChatList.map(renderChatRow) : <div className="grid min-h-48 place-items-center"><MessageCircle className="size-7 text-[#9AA1A6]" /></div>}
           </div>
         </aside>
-        <section className="savanna-desktop-conversation-panel flex min-h-0 flex-col">
+        <section className="savanna-desktop-conversation-panel flex h-screen min-h-0 flex-col overflow-hidden">
           {selected ? (
             <>
               <ConversationHeader
-                className="gap-3 px-6 py-4"
+                className="savanna-desktop-chat-header gap-3 px-6 py-4"
                 title={conversationTitle(selected)}
                 avatar={conversationAvatar(selected)}
                 presenceLabel={selectedPresence ? `${selectedPresence.headline} · ${selectedPresence.subline}` : "Conversation members only"}
@@ -1630,7 +1630,7 @@ export default function MessagesPage() {
               />
               {renderThreadSearchBar()}
               {renderPinnedMessages()}
-              <div className="savanna-desktop-message-thread flex-1 space-y-3 overflow-y-auto p-6">
+              <div className="savanna-desktop-message-thread min-h-0 flex-1 space-y-3 overflow-y-auto p-6">
                 {messages.isLoading ? <Loader2 className="size-5 animate-spin text-[#A87820]" /> : (messages.data?.length || selectedSavannaAnswers.length) ? (
                   <>
                     {messages.data?.map(message => (
