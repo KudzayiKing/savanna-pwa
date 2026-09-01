@@ -29,6 +29,17 @@ export const ENV = {
 
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
+
+  // --- Optional Gemma cloud fallback --------------------------------------
+  // The browser-local path uses LiteRT-LM/WebGPU; these are server-only fallbacks.
+  gemmaApiBaseUrl: (process.env.GEMMA_API_BASE_URL ?? "").replace(/\/+$/, ""),
+  gemmaApiKey: process.env.GEMMA_API_KEY ?? "",
+  gemmaChatEndpoint: process.env.GEMMA_CHAT_ENDPOINT ?? "",
+  gemmaEmbeddingEndpoint: process.env.GEMMA_EMBEDDING_ENDPOINT ?? "",
+  gemmaTranslateEndpoint: process.env.GEMMA_TRANSLATE_ENDPOINT ?? "",
+  gemmaChatModel: process.env.GEMMA_CHAT_MODEL ?? "",
+  gemmaEmbeddingModel: process.env.GEMMA_EMBEDDING_MODEL ?? "",
+  gemmaTranslateModel: process.env.GEMMA_TRANSLATE_MODEL ?? "",
 };
 
 export function assertSupabaseConfig(): void {

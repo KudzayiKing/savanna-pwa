@@ -94,5 +94,6 @@ describe("Vite dev-server integration", () => {
     expect(config).toContain("function manualChunks(id: string)");
     expect(config).toContain('return "vendor-firebase";');
     expect(config).toContain("manualChunks,");
+    expect(config).toContain("chunkSizeWarningLimit: 650");
   });
 });

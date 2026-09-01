@@ -203,7 +203,7 @@ export function isSavannaFollowUpDue(memory: FirebaseMessageMemory, nowValue: Da
   return new Date(memory.followUpAt).getTime() < endOfToday.getTime();
 }
 
-function memorySource(memory: FirebaseMessageMemory): SavannaRecallSource {
+export function savannaMemorySource(memory: FirebaseMessageMemory): SavannaRecallSource {
   return {
     sourceType: memory.sourceType,
     conversationId: memory.conversationId,
@@ -256,7 +256,7 @@ export function answerConversationRecall(input: {
       };
     }
 
-    const sources = selectedFollowUps.map(memorySource);
+    const sources = selectedFollowUps.map(savannaMemorySource);
     return {
       id: crypto.randomUUID(),
       query,
@@ -307,7 +307,7 @@ export function answerConversationRecall(input: {
         score: score + (score > 0 ? 1 : 0),
         createdAt: memory.updatedAt,
         mode: "memory" as const,
-        source: memorySource(memory),
+        source: savannaMemorySource(memory),
         title: memory.conversationTitle,
       };
     });

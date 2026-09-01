@@ -23,6 +23,7 @@ import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { getFirebaseStorage, getFirestoreDb } from "./firebase";
 import { replyToStoryInFirebase } from "./firebaseChat";
 import { listFirebaseBlockedUserIds } from "./firebaseSafety";
+import { enrichMemoryWithEmbeddingGemma } from "./gemmaAi";
 import { inferSavannaMemoryTags } from "./savannaRecall";
 
 export type FirebaseStoryAudience = "public" | "custom" | "private";
@@ -374,6 +375,23 @@ export async function saveFirebaseStoryMemory(story: FirebaseStory, user: AppUse
       : story.communityName
         ? `${story.communityName} Story`
         : `${story.authorName}'s Story`;
+  const ai = await enrichMemoryWithEmbeddingGemma([
+    conversationTitle,
+    snippet,
+    story.productName,
+    story.productDescription,
+    story.storefrontName,
+    story.communityName,
+  ].filter(Boolean).join(" "));
+  const aiFields = ai ? {
+    embedding: ai.embedding,
+    embeddingModel: ai.embeddingModel,
+    embeddingProvider: ai.embeddingProvider,
+    embeddingDimensions: ai.embeddingDimensions,
+    embeddingUpdatedAt: timestamp,
+    semanticSummary: ai.semanticSummary,
+    languageCode: ai.languageCode,
+  } : {};
   const batch = writeBatch(db);
   batch.set(doc(db, "stories", story.id, "reactions", `${user.id}_save`), {
     userId: user.id,
@@ -407,6 +425,7 @@ export async function saveFirebaseStoryMemory(story: FirebaseStory, user: AppUse
     followUpLabel: null,
     followUpAction: null,
     followUpCompletedAt: null,
+    ...aiFields,
     sourceCreatedAt: story.publishedAt,
     createdAt: timestamp,
     updatedAt: timestamp,

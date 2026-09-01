@@ -106,7 +106,7 @@ service cloud.firestore {
           'kind', 'title', 'memberIds', 'directKey', 'inviteCode', 'storefrontId',
           'storefrontSlug', 'createdAt', 'updatedAt', 'lastMessageAt',
           'lastMessageId', 'lastMessageSenderId', 'lastMessagePreview',
-          'lastMessageStatus', 'mutedUntil'
+          'lastMessageStatus', 'mutedUntil', 'unreadCount'
         ])
         && request.resource.data.kind in ['direct', 'group', 'merchant_support']
         && request.resource.data.memberIds is list
@@ -180,7 +180,7 @@ service cloud.firestore {
             'conversationId', 'kind', 'title', 'memberIds', 'mutedUntil',
             'storefrontId', 'storefrontSlug', 'updatedAt', 'lastMessageAt',
             'lastMessageId', 'lastMessageSenderId', 'lastMessagePreview',
-            'lastMessageStatus', 'inviteCode'
+            'lastMessageStatus', 'inviteCode', 'unreadCount'
           ]);
 
         allow delete: if false;
@@ -202,6 +202,9 @@ service cloud.firestore {
             'productDescription', 'productPriceMinor', 'productCurrencyCode',
             'snippet', 'tags', 'followUpAt',
             'followUpLabel', 'followUpAction', 'followUpCompletedAt',
+            'embedding', 'embeddingModel', 'embeddingProvider',
+            'embeddingDimensions', 'embeddingUpdatedAt', 'semanticSummary',
+            'languageCode',
             'sourceCreatedAt', 'createdAt', 'updatedAt'
           ]);
       }

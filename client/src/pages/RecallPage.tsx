@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { startLogin } from "@/const";
 import { useFirebaseMessageMemories, useFirebaseMessageMemoryMutations, type FirebaseMessageMemory } from "@/lib/firebaseChat";
-import { answerConversationRecall, isSavannaFollowUpMemory, SAVANNA_MEMORY_TAG_LABELS, type SavannaMemoryTag, type SavannaRecallAnswer, type SavannaRecallSource } from "@/lib/savannaRecall";
+import { isSavannaFollowUpMemory, SAVANNA_MEMORY_TAG_LABELS, type SavannaMemoryTag, type SavannaRecallAnswer, type SavannaRecallSource } from "@/lib/savannaRecall";
+import { generateAnswer } from "@/savanna/orchestrator/SavannaOrchestrator";
 import { AtSign, BellOff, Bookmark, CalendarClock, CheckCircle2, Clock3, Loader2, MessageCircle, RotateCcw, Search, Sparkles, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -51,6 +52,7 @@ export default function RecallPage() {
   const memoryMutations = useFirebaseMessageMemoryMutations(user);
   const [draft, setDraft] = useState("");
   const [answer, setAnswer] = useState<SavannaRecallAnswer | null>(null);
+  const [answering, setAnswering] = useState(false);
   const [memorySearch, setMemorySearch] = useState("");
   const [memoryFilter, setMemoryFilter] = useState<SavannaMemoryTag | "all">("all");
   const visibleMemories = useMemo(() => {
@@ -76,17 +78,22 @@ export default function RecallPage() {
       .slice(0, 5)
   ), [memories.data]);
 
-  const askRecall = (value = draft) => {
+  const askRecall = async (value = draft) => {
     const query = value.trim();
     if (!query) return toast.info("Ask Savanna what to find in your memory.");
-    setAnswer(answerConversationRecall({
-      conversationId: "recall",
-      conversationTitle: "your Savanna memory",
-      query,
-      messages: [],
-      memories: memories.data ?? [],
-    }));
-    setDraft(query);
+    setAnswering(true);
+    try {
+      setAnswer(await generateAnswer({
+        conversationId: "recall",
+        conversationTitle: "your Savanna memory",
+        query,
+        messages: [],
+        memories: memories.data ?? [],
+      }));
+      setDraft(query);
+    } finally {
+      setAnswering(false);
+    }
   };
 
   const removeMemory = (memory: FirebaseMessageMemory) => {
@@ -144,16 +151,16 @@ export default function RecallPage() {
           <span className="inline-flex items-center gap-2 rounded-full bg-[#D9A441]/20 px-3 py-1.5 text-xs font-semibold text-[#D9A441]"><AtSign className="size-4" /> Recall</span>
           <h1 className="mt-5 font-display text-4xl font-semibold tracking-[-0.06em] text-[#151A17] sm:text-5xl">Ask your Savanna memory.</h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-[#5F6861]">Find follow-ups, saved prices, links, products, people, places, and decisions from your private chat memories.</p>
-          <form className="mt-5 flex flex-col gap-2 sm:flex-row" onSubmit={event => { event.preventDefault(); askRecall(); }}>
+          <form className="mt-5 flex flex-col gap-2 sm:flex-row" onSubmit={event => { event.preventDefault(); void askRecall(); }}>
             <label className="savanna-profile-card-muted flex h-12 flex-1 items-center gap-2 rounded-full bg-[#D9A441]/10 px-4 text-[#5F6861] dark:text-[#AEBAC1]">
               <Search className="size-4" />
               <Input value={draft} onChange={event => setDraft(event.target.value)} placeholder="Ask Savanna about your memory" aria-label="Ask Savanna about your memory" className="h-auto border-0 bg-transparent p-0 shadow-none focus-visible:ring-0" />
             </label>
-            <Button type="submit" className="savanna-brand-token h-12 rounded-full px-5 shadow-none"><Sparkles className="size-4" />Ask</Button>
+            <Button type="submit" disabled={answering} className="savanna-brand-token h-12 rounded-full px-5 shadow-none">{answering ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}Ask</Button>
           </form>
           <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
             {quickPrompts.map(prompt => (
-              <button key={prompt} type="button" onClick={() => askRecall(prompt)} className="shrink-0 rounded-full bg-[#D9A441]/20 px-3 py-1.5 text-xs font-semibold text-[#D9A441]">
+              <button key={prompt} type="button" onClick={() => void askRecall(prompt)} className="shrink-0 rounded-full bg-[#D9A441]/20 px-3 py-1.5 text-xs font-semibold text-[#D9A441]">
                 {prompt}
               </button>
             ))}

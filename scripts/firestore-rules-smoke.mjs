@@ -27,6 +27,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  increment,
   getFirestore,
   limit,
   orderBy,
@@ -150,6 +151,7 @@ await step("create conversation doc + both inbox rows", async () => {
       lastMessageSenderId: null,
       lastMessagePreview: "",
       lastMessageStatus: null,
+      unreadCount: 0,
     }, { merge: true });
   }
   await batch.commit();
@@ -196,6 +198,7 @@ await step("send message batch (message + conversation update + 2 inbox rows)", 
       lastMessageSenderId: userA,
       lastMessagePreview: "hello",
       lastMessageStatus: "sent",
+      unreadCount: uid === userA ? 0 : increment(1),
     }, { merge: true });
   }
   await batch.commit();
@@ -262,6 +265,7 @@ await step("recipient marks incoming message read", async () => {
   for (const uid of memberIds) {
     batch.update(inboxRef(uid, conversationId), {
       lastMessageStatus: "read",
+      unreadCount: 0,
       updatedAt: timestamp,
     });
   }
@@ -325,6 +329,7 @@ await step("recipient replies to a source message", async () => {
       lastMessageSenderId: userB,
       lastMessagePreview: "replying with context",
       lastMessageStatus: "sent",
+      unreadCount: uid === userB ? 0 : increment(1),
     }, { merge: true });
   }
   await batch.commit();
@@ -421,6 +426,7 @@ await step("create group conversation + invite link", async () => {
       lastMessageSenderId: null,
       lastMessagePreview: "",
       lastMessageStatus: null,
+      unreadCount: 0,
     }, { merge: true });
   }
   batch.set(conversationInviteRef(groupInviteCode), {
@@ -982,6 +988,7 @@ await step("non-member joins group through invite link", async () => {
     lastMessageSenderId: null,
     lastMessagePreview: "",
     lastMessageStatus: null,
+    unreadCount: 0,
   }, { merge: true });
   await batch.commit();
 });

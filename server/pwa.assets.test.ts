@@ -213,7 +213,8 @@ describe("Savanna PWA assets", () => {
     expect(recall).toContain("Done");
     expect(recall).toContain("Snooze");
     expect(recall).toContain("Clear");
-    expect(recall).toContain("answerConversationRecall");
+    expect(recall).toContain("generateAnswer");
+    expect(recall).toContain("answering");
     expect(messages).toContain("renderDueFollowUpsPrompt");
     expect(messages).toContain("isSavannaFollowUpDue");
     expect(messages).toContain('navigate("/recall")');
@@ -364,6 +365,23 @@ describe("Savanna PWA assets", () => {
       firestoreRules,
       storageRules,
       firestoreIndexes,
+      gemmaAi,
+      aiRoutes,
+      serverGemma,
+      savannaOrchestrator,
+      inferenceProvider,
+      localGemmaProvider,
+      cloudGemmaProvider,
+      mockInferenceProvider,
+      embeddingProvider,
+      localEmbeddingGemmaProvider,
+      translationProvider,
+      localTranslateGemmaProvider,
+      cloudTranslationProvider,
+      savannaWorker,
+      viteEnv,
+      envExample,
+      netlifyFunction,
     ] = await Promise.all([
       readFile(resolve(projectRoot, "client/src/components/SavannaShell.tsx"), "utf8"),
       readFile(resolve(projectRoot, "client/src/components/StoriesPanel.tsx"), "utf8"),
@@ -388,6 +406,23 @@ describe("Savanna PWA assets", () => {
       readFile(resolve(projectRoot, "firestore.rules"), "utf8"),
       readFile(resolve(projectRoot, "storage.rules"), "utf8"),
       readFile(resolve(projectRoot, "firestore.indexes.json"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/lib/gemmaAi.ts"), "utf8"),
+      readFile(resolve(projectRoot, "server/_core/aiRoutes.ts"), "utf8"),
+      readFile(resolve(projectRoot, "server/_core/gemma.ts"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/savanna/orchestrator/SavannaOrchestrator.ts"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/savanna/inference/InferenceProvider.ts"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/savanna/inference/LocalGemmaProvider.ts"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/savanna/inference/CloudGemmaProvider.ts"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/savanna/inference/MockInferenceProvider.ts"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/savanna/embedding/EmbeddingProvider.ts"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/savanna/embedding/LocalEmbeddingGemmaProvider.ts"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/savanna/translation/TranslationProvider.ts"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/savanna/translation/LocalTranslateGemmaProvider.ts"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/savanna/translation/CloudTranslationProvider.ts"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/workers/savanna.worker.ts"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/vite-env.d.ts"), "utf8"),
+      readFile(resolve(projectRoot, ".env.example"), "utf8"),
+      readFile(resolve(projectRoot, "server/_core/netlify.ts"), "utf8"),
     ]);
 
     expect(shell).toContain("<MobileStoriesHeader />");
@@ -583,7 +618,7 @@ describe("Savanna PWA assets", () => {
     expect(shops).toContain("From communities");
     expect(shops).toContain("Products people are talking about");
     expect(messages).toContain("Create a chat tab");
-    expect(messages).toContain('const filterTabs = ([["all", "All"], ["direct", "Chats"], ["group", "Groups"], ["merchant_support", "Support"]] as const);');
+    expect(messages).toContain('const filterTabs = ([["all", "All"], ["unread", "Unread"], ["direct", "Chats"], ["group", "Groups"], ["merchant_support", "Support"]] as const);');
     expect(messages).toContain("savanna-message-tab-membership");
     expect(messages).toContain("setMobileDetail(true)");
     expect(messages).toContain("DrawerContent");
@@ -707,6 +742,9 @@ describe("Savanna PWA assets", () => {
     expect(messages).toContain('if (status === "read") return <AnimatedCheckCheckIcon className="text-[#22C55E]" size={13} aria-label="Read" />;');
     expect(messages).toContain('if (status === "delivered") return <AnimatedCheckCheckIcon className={className ?? "text-current"} size={13} aria-label="Delivered" />;');
     expect(messages).toContain('<AnimatedCheckIcon className={className ?? "text-current"} size={13} aria-label="Sent" />');
+    expect(messages).toContain("function ChatListDeliveryIcon");
+    expect(messages).toContain('const grey = "text-[#5f6861] dark:text-[#9AA1A6]"');
+    expect(messages).toContain('<ChatListDeliveryIcon status={previewStatus ?? "sent"} />');
     expect(messages).toContain("!isMobile || mobileDetail");
     expect(messages).toContain('<DeliveryIcon status={message.status} className="text-white/90" />');
     expect(messages).toContain("const showPreviewDelivery = Boolean(");
@@ -737,7 +775,7 @@ describe("Savanna PWA assets", () => {
     expect(messages).toContain('root.style.setProperty("--savanna-mobile-composer-height"');
     expect(messages).toContain('scrollMobileThreadToBottom("smooth")');
     expect(messages).toContain("parseSavannaInvocation");
-    expect(messages).toContain("answerConversationRecall");
+    expect(messages).toContain("generateAnswer");
     expect(messages).toContain("openRecallSource");
     expect(messages).toContain("answer.sources.length");
     expect(messages).toContain("source.label");
@@ -771,7 +809,84 @@ describe("Savanna PWA assets", () => {
     expect(messages).toContain("savanna-desktop-message-bubble max-w-[58%] cursor-pointer rounded-2xl px-3 py-2");
     expect(messages).not.toContain('targetLabel="this message" blockUserId={message.senderUserId}');
     expect(messages).toContain("saveMessageMemory(message)");
+    expect(messages).toContain("translateWithTranslateGemma");
+    expect(messages).toContain("messageTranslations");
+    expect(messages).toContain('<Languages className="size-3" />');
     expect(messages).toContain("Already saved to memory");
+    expect(gemmaAi).toContain("LocalEmbeddingGemmaProvider");
+    expect(gemmaAi).toContain("LocalTranslateGemmaProvider");
+    expect(gemmaAi).toContain("CloudTranslationProvider");
+    expect(gemmaAi).toContain('"/api/ai/memory-enrichment"');
+    expect(gemmaAi).toContain('"/api/ai/recall-answer"');
+    expect(gemmaAi).not.toContain('postJson<GemmaTranslationResponse>("/api/ai/translate"');
+    expect(aiRoutes).toContain('app.post("/api/ai/recall-answer"');
+    expect(aiRoutes).toContain('app.post("/api/ai/memory-enrichment"');
+    expect(aiRoutes).toContain('app.post("/api/ai/translate"');
+    expect(netlifyFunction).not.toContain("assertRuntimeConfig()");
+    expect(serverGemma).toContain("google/gemma-4-E2B-it-qat-mobile-transformers");
+    expect(serverGemma).toContain("google/embeddinggemma-300m");
+    expect(serverGemma).toContain("google/translategemma-4b-it");
+    expect(serverGemma).toContain("Optional CloudGemma/Savanna fallback URLs only");
+    expect(savannaOrchestrator).toContain("export async function generateAnswer");
+    expect(savannaOrchestrator).toContain("retrieveMemories");
+    expect(savannaOrchestrator).toContain("retrieveSemanticMemorySources");
+    expect(savannaOrchestrator).toContain("LocalEmbeddingGemmaProvider");
+    expect(savannaOrchestrator).toContain("selectProvider");
+    expect(savannaOrchestrator).toContain("answerConversationRecall");
+    expect(savannaOrchestrator).toContain("savannaMemorySource");
+    expect(inferenceProvider).toContain('export type SavannaInferenceProviderId = "local-gemma" | "cloud-gemma" | "mock"');
+    expect(inferenceProvider).toContain('SAVANNA_LOCAL_GEMMA_CHECKPOINT_ID = "google/gemma-4-E2B-it-qat-mobile-transformers"');
+    expect(inferenceProvider).toContain("SAVANNA_LOCAL_GEMMA_WEB_MODEL_URL");
+    expect(inferenceProvider).toContain("gemma-4-E2B-it-web.litertlm");
+    expect(inferenceProvider).toContain("SAVANNA_EMBEDDING_GEMMA_WEB_MODEL_ID");
+    expect(inferenceProvider).toContain("SAVANNA_TRANSLATE_GEMMA_WEB_MODEL_URL");
+    expect(inferenceProvider).toContain("translategemma-4b-it-int8-web.task");
+    expect(localGemmaProvider).toContain("detectSavannaCapabilities");
+    expect(localGemmaProvider).toContain("new Worker");
+    expect(localGemmaProvider).toContain("navigator.gpu");
+    expect(localGemmaProvider).toContain("navigator.storage");
+    expect(localGemmaProvider).toContain("buildGroundedPrompt");
+    expect(localGemmaProvider).toContain('request("generate"');
+    expect(cloudGemmaProvider).toContain("requestGemmaRecallAnswer");
+    expect(mockInferenceProvider).toContain("MockInferenceProvider");
+    expect(embeddingProvider).toContain('export type EmbeddingProviderId = "local-embedding-gemma" | "local-hash"');
+    expect(localEmbeddingGemmaProvider).toContain('@huggingface/transformers');
+    expect(localEmbeddingGemmaProvider).toContain('pipeline("feature-extraction"');
+    expect(localEmbeddingGemmaProvider).toContain("SAVANNA_EMBEDDING_GEMMA_WEB_MODEL_ID");
+    expect(localEmbeddingGemmaProvider).toContain("localHashEmbedding");
+    expect(translationProvider).toContain('export type TranslationProviderId = "local-translate-gemma" | "cloud-translation" | "passthrough"');
+    expect(localTranslateGemmaProvider).toContain("SAVANNA_TRANSLATE_GEMMA_MODEL_ID");
+    expect(localTranslateGemmaProvider).toContain("SAVANNA_TRANSLATE_GEMMA_WEB_MODEL_URL");
+    expect(localTranslateGemmaProvider).toContain("SAVANNA_MEDIAPIPE_GENAI_RUNTIME_URL");
+    expect(localTranslateGemmaProvider).toContain("FilesetResolver.forGenAiTasks");
+    expect(localTranslateGemmaProvider).toContain("LlmInference.createFromOptions");
+    expect(localTranslateGemmaProvider).toContain('caches.open("savanna-translategemma-models-v1")');
+    expect(cloudTranslationProvider).toContain('"/api/ai/translate"');
+    expect(savannaWorker).toContain("Engine.create");
+    expect(savannaWorker).toContain("SAVANNA_LOCAL_GEMMA_WEB_MODEL_URL");
+    expect(savannaWorker).toContain('caches.open("savanna-litertlm-models-v1")');
+    expect(savannaWorker).toContain("@vite-ignore");
+    expect(savannaWorker).toContain("sendMessage");
+    expect(viteEnv).toContain("VITE_SAVANNA_INFERENCE");
+    expect(viteEnv).toContain("VITE_SAVANNA_LOCAL_GEMMA_MODEL_URL");
+    expect(viteEnv).toContain("VITE_SAVANNA_LITERT_LM_RUNTIME_URL");
+    expect(viteEnv).toContain("VITE_SAVANNA_EMBEDDING_GEMMA_MODEL_ID");
+    expect(viteEnv).toContain("VITE_SAVANNA_TRANSLATE_GEMMA_MODEL_ID");
+    expect(viteEnv).toContain("VITE_SAVANNA_TRANSLATE_GEMMA_MODEL_URL");
+    expect(viteEnv).toContain("VITE_SAVANNA_MEDIAPIPE_GENAI_RUNTIME_URL");
+    expect(viteEnv).toContain("VITE_SAVANNA_MEDIAPIPE_GENAI_WASM_URL");
+    expect(envExample).toContain("VITE_SAVANNA_INFERENCE=auto");
+    expect(envExample).toContain("VITE_SAVANNA_LOCAL_GEMMA_MODEL_URL=https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it-web.litertlm");
+    expect(envExample).toContain("VITE_SAVANNA_LITERT_LM_RUNTIME_URL=https://cdn.jsdelivr.net/npm/@litert-lm/core/+esm");
+    expect(envExample).toContain("VITE_SAVANNA_EMBEDDING_GEMMA_MODEL_ID=onnx-community/embeddinggemma-300m-ONNX");
+    expect(envExample).toContain("VITE_SAVANNA_TRANSLATE_GEMMA_MODEL_ID=google/translategemma-4b-it");
+    expect(envExample).toContain("VITE_SAVANNA_TRANSLATE_GEMMA_MODEL_URL=https://huggingface.co/litert-community/TranslateGemma-4B-IT/resolve/main/translategemma-4b-it-int8-web.task");
+    expect(envExample).toContain("VITE_SAVANNA_MEDIAPIPE_GENAI_RUNTIME_URL=https://cdn.jsdelivr.net/npm/@mediapipe/tasks-genai/+esm");
+    expect(envExample).toContain("VITE_SAVANNA_MEDIAPIPE_GENAI_WASM_URL=https://cdn.jsdelivr.net/npm/@mediapipe/tasks-genai/wasm");
+    expect(envExample).toContain("The PWA never needs GEMMA_API_KEY or GEMMA_*_ENDPOINT for local inference.");
+    expect(envExample).toContain("GEMMA_CHAT_MODEL=google/gemma-4-E2B-it-qat-mobile-transformers");
+    expect(envExample).toContain("GEMMA_EMBEDDING_MODEL=google/embeddinggemma-300m");
+    expect(envExample).toContain("GEMMA_TRANSLATE_MODEL=google/translategemma-4b-it");
     expect(firebaseChat).toContain("export type FirebaseMessageReactionKey");
     expect(firebaseChat).toContain("FIREBASE_MESSAGE_REACTIONS");
     expect(firebaseChat).toContain("toggleFirebaseMessageReaction");
@@ -789,6 +904,12 @@ describe("Savanna PWA assets", () => {
     expect(firebaseChat).toContain("followUpLabel: followUp.label");
     expect(firebaseChat).toContain("followUpAction: followUp.action");
     expect(firebaseChat).toContain("followUpCompletedAt: null");
+    expect(firebaseChat).toContain("enrichMemoryWithEmbeddingGemma");
+    expect(firebaseChat).toContain("embeddingProvider: ai.embeddingProvider");
+    expect(firebaseChat).toContain("semanticSummary: ai.semanticSummary");
+    expect(firebaseStories).toContain("enrichMemoryWithEmbeddingGemma");
+    expect(firebaseStories).toContain("embeddingProvider: ai.embeddingProvider");
+    expect(firebaseStories).toContain("semanticSummary: ai.semanticSummary");
     expect(firebaseChat).toContain("completeFirebaseMessageFollowUp");
     expect(firebaseChat).toContain("snoozeFirebaseMessageFollowUp");
     expect(firebaseChat).toContain("clearFirebaseMessageFollowUp");
@@ -802,6 +923,12 @@ describe("Savanna PWA assets", () => {
     expect(firebaseChat).toContain("readBy: [input.senderId]");
     expect(firebaseChat).toContain("lastMessageId: messageRef.id");
     expect(firebaseChat).toContain("lastMessageSenderId: input.senderId");
+    expect(firebaseChat).toContain("unreadCount: memberId === input.senderId ? 0 : increment(1)");
+    expect(firebaseChat).toContain("const storedUnreadCount = typeof data.unreadCount === \"number\"");
+    expect(firebaseChat).toContain("const migratedUnreadCount = storedUnreadCount ??");
+    expect(messages).toContain('[["all", "All"], ["unread", "Unread"]');
+    expect(messages).toContain('chatFilter === "unread" && conversation.unreadCount > 0');
+    expect(messages).toContain("aria-label={`${unreadLabel} unread messages`}");
     expect(firebaseChat).toContain("markLatestMessageDelivered");
     expect(firebaseChat).toContain("markVisibleMessagesRead");
     expect(firebaseChat).toContain('if (document.visibilityState !== "visible") return;');
@@ -816,12 +943,16 @@ describe("Savanna PWA assets", () => {
     expect(styles).toContain("padding-left: 0.75rem !important;");
     expect(firestoreRules).toContain("'deliveredTo', 'readBy'");
     expect(firestoreRules).toContain("'receiptUpdatedAt'");
+    expect(firestoreRules).toContain("'unreadCount'");
     expect(firestoreRules).toContain("'lastMessageId', 'lastMessageSenderId'");
     expect(firestoreRules).toContain("match /memories/{memoryId}");
     expect(firestoreRules).toContain("request.resource.data.sourceType in ['message', 'story']");
     expect(firestoreRules).toContain("'storyId', 'storyAuthorUserId'");
     expect(firestoreRules).toContain("'followUpLabel', 'followUpAction'");
     expect(firestoreRules).toContain("'followUpCompletedAt'");
+    expect(firestoreRules).toContain("'embedding', 'embeddingModel', 'embeddingProvider'");
+    expect(firestoreRules).toContain("'embeddingDimensions', 'embeddingUpdatedAt', 'semanticSummary'");
+    expect(firestoreRules).toContain("'languageCode'");
     expect(firestoreRules).toContain("'replyToMessageId', 'replyToSenderId'");
     expect(firestoreRules).toContain("'reactions', 'reactionUpdatedAt', 'savedBy'");
     expect(firestoreRules).toContain("'pinnedBy', 'pinnedAt'");

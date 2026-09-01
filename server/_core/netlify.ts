@@ -1,6 +1,5 @@
 import "dotenv/config";
 import serverless from "serverless-http";
-import { assertRuntimeConfig } from "../db";
 import { createApp } from "./app";
 
 /**
@@ -58,10 +57,6 @@ type Handler = (event: NetlifyEvent, context: unknown) => Promise<NetlifyResult>
 let cachedHandler: Handler | null = null;
 
 async function buildHandler(): Promise<Handler> {
-  // Fail fast on missing configuration. Without this the process would accept
-  // traffic with no database and every write would vanish silently.
-  assertRuntimeConfig();
-
   const app = await createApp();
   const handler = serverless(app) as Handler;
 

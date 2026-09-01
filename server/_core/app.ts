@@ -4,6 +4,7 @@ import express, { type Request } from "express";
 import { getPaymentIntentForProviderReference, pingDatabase, recordVerifiedProviderResult } from "../db";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
+import { registerAiRoutes } from "./aiRoutes";
 import { disableFingerprint, errorHandler, securityHeaders, selectLimiter, verifyOrigin } from "./security";
 import { registerStorageProxy } from "./storageProxy";
 
@@ -77,6 +78,7 @@ export async function createApp(): Promise<express.Express> {
   app.use(express.urlencoded({ limit: "100kb", extended: true }));
 
   registerStorageProxy(app);
+  registerAiRoutes(app);
 
   // Flutterwave: verifies the raw-body HMAC signature and then re-verifies the
   // transaction server-side against Flutterwave's own API before settling. This

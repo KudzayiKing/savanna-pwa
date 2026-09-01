@@ -1,5 +1,6 @@
 import type { AppUser } from "@/lib/userProfile";
 import { inferSavannaFollowUp, inferSavannaMemoryTags, type SavannaMemoryTag } from "@/lib/savannaRecall";
+import { enrichMemoryWithEmbeddingGemma } from "@/lib/gemmaAi";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   arrayRemove,
@@ -9,6 +10,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  increment,
   limit,
   onSnapshot,
   orderBy,
@@ -45,6 +47,7 @@ export type FirebaseConversationListItem = {
   lastMessageSenderId?: string | null;
   previewMessage?: string;
   previewStatus?: FirebaseMessageStatus;
+  unreadCount: number;
   inviteCode?: string | null;
   /**
    * Every participant, viewer included, as written on the Firestore document.
@@ -110,6 +113,13 @@ export type FirebaseMessageMemory = {
   followUpLabel: string | null;
   followUpAction: string | null;
   followUpCompletedAt: Date | string | null;
+  embedding: number[] | null;
+  embeddingModel: string | null;
+  embeddingProvider: "cloud-embedding-gemma" | "gemma" | "local" | "local-embedding-gemma" | "local-hash" | null;
+  embeddingDimensions: number | null;
+  embeddingUpdatedAt: Date | string | null;
+  semanticSummary: string | null;
+  languageCode: string | null;
   sourceCreatedAt: Date | string;
   createdAt: Date | string;
   updatedAt: Date | string;
@@ -179,7 +189,13 @@ function mapMessageReactions(value: unknown): Partial<Record<FirebaseMessageReac
   }, {});
 }
 
-function mapConversation(id: string, data: DocumentData): FirebaseConversationListItem {
+function mapConversation(id: string, data: DocumentData, viewerId?: string | null): FirebaseConversationListItem {
+  const storedUnreadCount = typeof data.unreadCount === "number" ? Math.max(0, data.unreadCount) : null;
+  const lastMessageSenderId = typeof data.lastMessageSenderId === "string" ? data.lastMessageSenderId : null;
+  const lastMessageStatus = (data.lastMessageStatus as FirebaseMessageStatus | undefined) ?? undefined;
+  const migratedUnreadCount = storedUnreadCount ?? (
+    viewerId && lastMessageSenderId && lastMessageSenderId !== viewerId && lastMessageStatus && lastMessageStatus !== "read" ? 1 : 0
+  );
   return {
     id,
     kind: (data.kind as FirebaseConversationKind) ?? "direct",
@@ -187,9 +203,10 @@ function mapConversation(id: string, data: DocumentData): FirebaseConversationLi
     mutedUntil: data.mutedUntil ? toDate(data.mutedUntil) : null,
     lastMessageAt: data.lastMessageAt ? toDate(data.lastMessageAt) : null,
     lastMessageId: typeof data.lastMessageId === "string" ? data.lastMessageId : null,
-    lastMessageSenderId: typeof data.lastMessageSenderId === "string" ? data.lastMessageSenderId : null,
+    lastMessageSenderId,
     previewMessage: typeof data.lastMessagePreview === "string" ? data.lastMessagePreview : undefined,
-    previewStatus: (data.lastMessageStatus as FirebaseMessageStatus | undefined) ?? undefined,
+    previewStatus: lastMessageStatus,
+    unreadCount: migratedUnreadCount,
     inviteCode: typeof data.inviteCode === "string" ? data.inviteCode : null,
     memberIds: Array.isArray(data.memberIds) ? data.memberIds.map(String) : [],
   };
@@ -233,6 +250,7 @@ function inboxPayload(input: {
   lastMessageSenderId?: string | null;
   lastMessagePreview: string;
   lastMessageStatus?: FirebaseMessageStatus | null;
+  unreadCount?: number | ReturnType<typeof increment>;
   storefrontId?: string | null;
   storefrontSlug?: string | null;
   inviteCode?: string | null;
@@ -251,6 +269,7 @@ function inboxPayload(input: {
     lastMessageSenderId: input.lastMessageSenderId ?? null,
     lastMessagePreview: input.lastMessagePreview,
     lastMessageStatus: input.lastMessageStatus ?? null,
+    unreadCount: input.unreadCount ?? 0,
     inviteCode: input.inviteCode ?? null,
   };
 }
@@ -355,6 +374,13 @@ function mapMessageMemory(id: string, data: DocumentData): FirebaseMessageMemory
     followUpLabel: typeof data.followUpLabel === "string" ? data.followUpLabel : null,
     followUpAction: typeof data.followUpAction === "string" ? data.followUpAction : null,
     followUpCompletedAt: data.followUpCompletedAt ? toDate(data.followUpCompletedAt) : null,
+    embedding: Array.isArray(data.embedding) ? data.embedding.map(Number).filter(Number.isFinite) : null,
+    embeddingModel: typeof data.embeddingModel === "string" ? data.embeddingModel : null,
+    embeddingProvider: typeof data.embeddingProvider === "string" ? data.embeddingProvider as FirebaseMessageMemory["embeddingProvider"] : null,
+    embeddingDimensions: typeof data.embeddingDimensions === "number" ? data.embeddingDimensions : null,
+    embeddingUpdatedAt: data.embeddingUpdatedAt ? toDate(data.embeddingUpdatedAt) : null,
+    semanticSummary: typeof data.semanticSummary === "string" ? data.semanticSummary : null,
+    languageCode: typeof data.languageCode === "string" ? data.languageCode : null,
     sourceCreatedAt: data.sourceCreatedAt ? toDate(data.sourceCreatedAt) : new Date(),
     createdAt: data.createdAt ? toDate(data.createdAt) : new Date(),
     updatedAt: data.updatedAt ? toDate(data.updatedAt) : new Date(),
@@ -402,6 +428,10 @@ async function markVisibleMessagesRead(conversationId: string, uid: string, docs
       updatedAt: timestamp,
     }, { merge: true });
   }
+  batch.update(conversationInboxRef(uid, conversationId), {
+    unreadCount: 0,
+    updatedAt: timestamp,
+  });
   if (latestMessageId && unreadIncoming.some(item => item.id === latestMessageId) && conversationMembers.length <= 2) {
     batch.update(conversationRef(conversationId), {
       lastMessageStatus: "read",
@@ -584,6 +614,7 @@ export async function sendFirebaseMessage(input: {
       lastMessageSenderId: input.senderId,
       lastMessagePreview: body || "Attachment",
       lastMessageStatus: input.status ?? "sent",
+      unreadCount: memberId === input.senderId ? 0 : increment(1),
       storefrontId: typeof conversationData?.storefrontId === "string" ? conversationData.storefrontId : null,
       storefrontSlug: typeof conversationData?.storefrontSlug === "string" ? conversationData.storefrontSlug : null,
       inviteCode: typeof conversationData?.inviteCode === "string" ? conversationData.inviteCode : null,
@@ -597,7 +628,7 @@ export async function listFirebaseConversations(user?: AppUser | null) {
   const blockedUserIds = new Set(await listFirebaseBlockedUserIds(user));
   const snapshot = await getDocs(conversationInboxQuery(user.id));
   return snapshot.docs
-    .map(item => mapConversation(item.id, item.data()))
+    .map(item => mapConversation(item.id, item.data(), user.id))
     .filter(conversation => {
       const peerId = getConversationPeerId(conversation, user.id);
       return !peerId || !blockedUserIds.has(peerId);
@@ -675,6 +706,7 @@ export async function sendFirebaseAttachment(input: {
       lastMessageSenderId: input.sender.id,
       lastMessagePreview: input.file.name,
       lastMessageStatus: "sent",
+      unreadCount: memberId === input.sender.id ? 0 : increment(1),
       storefrontId: typeof conversationData?.storefrontId === "string" ? conversationData.storefrontId : null,
       storefrontSlug: typeof conversationData?.storefrontSlug === "string" ? conversationData.storefrontSlug : null,
       inviteCode: typeof conversationData?.inviteCode === "string" ? conversationData.inviteCode : null,
@@ -770,6 +802,16 @@ export async function saveFirebaseMessageMemory(input: {
     ...inferSavannaMemoryTags(snippet),
     ...(followUp.action ? ["follow_up" as const] : []),
   ]));
+  const ai = await enrichMemoryWithEmbeddingGemma(`${input.conversationTitle} ${snippet}`);
+  const aiFields = ai ? {
+    embedding: ai.embedding,
+    embeddingModel: ai.embeddingModel,
+    embeddingProvider: ai.embeddingProvider,
+    embeddingDimensions: ai.embeddingDimensions,
+    embeddingUpdatedAt: timestamp,
+    semanticSummary: ai.semanticSummary,
+    languageCode: ai.languageCode,
+  } : {};
   const batch = writeBatch(db);
   batch.set(doc(db, "users", input.user.id, "memories", `message_${input.message.id}`), {
     ownerUserId: input.user.id,
@@ -797,6 +839,7 @@ export async function saveFirebaseMessageMemory(input: {
     followUpLabel: followUp.label,
     followUpAction: followUp.action,
     followUpCompletedAt: null,
+    ...aiFields,
     sourceCreatedAt: input.message.createdAt,
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -929,7 +972,7 @@ export function useFirebaseConversations(user?: AppUser | null) {
       conversationInboxQuery(uid),
       snapshot => {
         const nextConversations = snapshot.docs
-          .map(item => mapConversation(item.id, item.data()))
+          .map(item => mapConversation(item.id, item.data(), uid))
           .filter(conversation => {
             const peerId = getConversationPeerId(conversation, uid);
             return !peerId || !blockedUserIdsRef.current.has(peerId);

@@ -30,11 +30,13 @@ import {
 } from "@/lib/firebaseChat";
 import { useFirebaseCommunityMutations, type FirebaseCommunityVisibility } from "@/lib/firebaseCommunities";
 import { useFirebaseStories } from "@/lib/firebaseStories";
-import { answerConversationRecall, isSavannaFollowUpDue, parseSavannaInvocation, type SavannaRecallAnswer, type SavannaRecallSource } from "@/lib/savannaRecall";
+import { translateWithTranslateGemma } from "@/lib/gemmaAi";
+import { isSavannaFollowUpDue, parseSavannaInvocation, type SavannaRecallAnswer, type SavannaRecallSource } from "@/lib/savannaRecall";
+import { generateAnswer } from "@/savanna/orchestrator/SavannaOrchestrator";
 import { isSameUser, normalizeUsername, searchUserProfilesByUsername, type AppUser } from "@/lib/userProfile";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
-import { Bookmark, CalendarClock, ChevronDown, ChevronUp, FileText, Heart, Loader2, MessageCircle, Paperclip, Pin, Reply, Search, StopCircle, Users, X } from "lucide-react";
+import { Bookmark, CalendarClock, ChevronDown, ChevronUp, FileText, Heart, Languages, Loader2, MessageCircle, Paperclip, Pin, Reply, Search, StopCircle, Users, X } from "lucide-react";
 import { type ChangeEvent, type FormEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
@@ -146,6 +148,14 @@ function DeliveryIcon({ status, className }: { status: FirebaseMessageStatus; cl
   return <AnimatedCheckIcon className={className ?? "text-current"} size={13} aria-label="Sent" />;
 }
 
+function ChatListDeliveryIcon({ status }: { status: FirebaseMessageStatus }) {
+  const grey = "text-[#5f6861] dark:text-[#9AA1A6]";
+  if (status === "read") return <AnimatedCheckCheckIcon className="text-[#22C55E]" size={13} aria-label="Read" />;
+  if (status === "delivered") return <AnimatedCheckCheckIcon className={grey} size={13} aria-label="Delivered" />;
+  if (status === "failed") return <X className="size-3 shrink-0 text-[#FF5B6B]" aria-label="Failed" />;
+  return <AnimatedCheckIcon className={grey} size={13} aria-label="Sent" />;
+}
+
 function DesktopStoryRail({ items, onCreateStory }: { items: Array<{ id: string | number; label: string }>; onCreateStory: () => void }) {
   return (
     <div className="savanna-desktop-story-rail" aria-label="Stories">
@@ -186,6 +196,8 @@ export default function MessagesPage() {
   const [threadSearchOpen, setThreadSearchOpen] = useState(false);
   const [threadSearchQuery, setThreadSearchQuery] = useState("");
   const [threadSearchIndex, setThreadSearchIndex] = useState(0);
+  const [messageTranslations, setMessageTranslations] = useState<Record<string, string>>({});
+  const [translatingMessages, setTranslatingMessages] = useState<Record<string, boolean>>({});
   const [groupTitle, setGroupTitle] = useState("");
   const [inviteeSearch, setInviteeSearch] = useState("");
   const [selectedInvitees, setSelectedInvitees] = useState<AppUser[]>([]);
@@ -354,6 +366,7 @@ export default function MessagesPage() {
               lastMessageAt: new Date(),
               previewMessage: "",
               previewStatus: "sent",
+              unreadCount: 0,
               memberIds: [user.id, peerUserId].sort(),
             },
             ...current.filter(item => item.id !== pendingConversationId),
@@ -434,7 +447,12 @@ export default function MessagesPage() {
     return chatPreviewMode ? previewConversations : [];
   }, [chatPreviewMode, conversations.data, locallyCreatedConversations]);
   const filteredConversations = conversationSource.filter(conversation => conversationTitle(conversation).toLowerCase().includes(conversationSearch.toLowerCase()));
-  const filteredChatList = filteredConversations.filter(conversation => chatFilter === "all" || conversation.kind === chatFilter || tabMembership[chatFilter]?.includes(conversation.id));
+  const filteredChatList = filteredConversations.filter(conversation =>
+    chatFilter === "all"
+    || (chatFilter === "unread" && conversation.unreadCount > 0)
+    || conversation.kind === chatFilter
+    || tabMembership[chatFilter]?.includes(conversation.id)
+  );
   const desktopStoryItems = desktopStories.data?.length ? desktopStories.data.slice(0, 8).map(story => ({ id: story.id, label: story.authorName })) : import.meta.env.DEV ? previewConversations.map(conversation => ({ id: conversation.id, label: conversationTitle(conversation) })) : [];
   const selected = conversationSource.find(conversation => conversation.id === selectedConversationId) ?? (isPreviewConversation ? previewConversations.find(conversation => conversation.id === selectedConversationId) : undefined);
   const selectedPresence = selected ? getConversationPresence(selected, filteredChatList.findIndex(conversation => conversation.id === selected.id)) : null;
@@ -575,6 +593,7 @@ export default function MessagesPage() {
               lastMessageAt: new Date(),
               previewMessage: "",
               previewStatus: "sent",
+              unreadCount: 0,
               memberIds: [user.id, profile.id].sort(),
             },
             ...current.filter(item => item.id !== conversationId),
@@ -629,6 +648,7 @@ export default function MessagesPage() {
               lastMessageAt: new Date(),
               previewMessage: "",
               previewStatus: "sent",
+              unreadCount: 0,
               memberIds: [user.id, ...parsedMembers].filter(Boolean).sort(),
             },
             ...current.filter(item => item.id !== conversationId),
@@ -668,7 +688,7 @@ export default function MessagesPage() {
     if (savannaQuery !== null) {
       if (attachment) return toast.error("@Savanna recall works with text questions for now.");
       if (!savannaQuery) return toast.info("Ask Savanna what to find in this conversation.");
-      const answer = answerConversationRecall({
+      const answer = await generateAnswer({
         conversationId: selectedConversationId,
         conversationTitle: selected ? conversationTitle(selected) : "this chat",
         query: savannaQuery,
@@ -734,7 +754,7 @@ export default function MessagesPage() {
     toast.success(`Chat saved to ${tab}`);
   };
 
-  const filterTabs = ([["all", "All"], ["direct", "Chats"], ["group", "Groups"], ["merchant_support", "Support"]] as const);
+  const filterTabs = ([["all", "All"], ["unread", "Unread"], ["direct", "Chats"], ["group", "Groups"], ["merchant_support", "Support"]] as const);
 
   const addInvitee = (profile: AppUser) => {
     setSelectedInvitees(current => current.some(item => item.id === profile.id) ? current : [...current, profile].slice(0, creationMode === "direct" ? 1 : 20));
@@ -1081,6 +1101,33 @@ export default function MessagesPage() {
     );
   };
 
+  const translateMessage = async (message: FirebaseMessage) => {
+    const text = message.contentType === "attachment" ? "" : message.payload.trim();
+    if (!text) return toast.info("Only text messages can be translated.");
+    scheduleMessageActionsHide();
+    const key = message.id;
+    setTranslatingMessages(current => ({ ...current, [key]: true }));
+    try {
+      const result = await translateWithTranslateGemma({
+        text,
+        targetLanguage: navigator.language || "en",
+        sourceLanguage: null,
+      });
+      if (!result?.translatedText) {
+        toast.error("Translation is unavailable right now.");
+        return;
+      }
+      setMessageTranslations(current => ({ ...current, [key]: result.translatedText }));
+      toast.success(result.provider === "local-translate-gemma" || result.provider === "cloud-translation" ? "Translated with TranslateGemma" : "Translation fallback shown");
+    } finally {
+      setTranslatingMessages(current => {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      });
+    }
+  };
+
   const stopVoiceRecording = () => {
     mediaRecorder.current?.stop();
   };
@@ -1190,6 +1237,10 @@ export default function MessagesPage() {
       <button type="button" onClick={() => { setReplyTo(message); scheduleMessageActionsHide(); }} className="inline-flex h-7 items-center gap-1 rounded-full bg-[#D9A441]/10 px-2 text-[11px] font-semibold text-[#A87820] dark:bg-[#D9A441]/15 dark:text-[#D9A441]">
         <Reply className="size-3" />
         Reply
+      </button>
+      <button type="button" onClick={() => void translateMessage(message)} className="inline-flex h-7 items-center gap-1 rounded-full bg-[#D9A441]/10 px-2 text-[11px] font-semibold text-[#A87820] disabled:opacity-60 dark:bg-[#D9A441]/15 dark:text-[#D9A441]" disabled={Boolean(translatingMessages[message.id])}>
+        {translatingMessages[message.id] ? <Loader2 className="size-3 animate-spin" /> : <Languages className="size-3" />}
+        Translate
       </button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -1368,6 +1419,8 @@ export default function MessagesPage() {
     const active = selectedConversationId === conversation.id;
     const presence = getConversationPresence(conversation, index);
     const previewStatus = conversation.previewStatus;
+    const unreadCount = Math.max(0, conversation.unreadCount);
+    const unreadLabel = unreadCount > 99 ? "99+" : String(unreadCount);
     const showPreviewDelivery = Boolean(
       conversation.previewMessage
       && user?.id
@@ -1428,13 +1481,18 @@ export default function MessagesPage() {
             {conversation.previewMessage ? (
               <>
                 {showPreviewDelivery ? (
-                  previewStatus === "failed" ? <X className="size-3 shrink-0 text-[#FF5B6B]" aria-label="Failed" /> : <DeliveryIcon status={previewStatus ?? "sent"} />
+                  <ChatListDeliveryIcon status={previewStatus ?? "sent"} />
                 ) : null}
                 {conversation.previewMessage}
               </>
             ) : conversation.kind === "merchant_support" ? "Merchant support" : "Tap to open your conversation"}
           </span>
         </span>
+        {unreadCount > 0 ? (
+          <span aria-label={`${unreadLabel} unread messages`} className="grid min-w-6 shrink-0 place-items-center rounded-full bg-[#D9A441] px-2 py-1 text-[11px] font-bold leading-none text-white shadow-[0_8px_18px_rgba(217,164,65,0.22)]">
+            {unreadLabel}
+          </span>
+        ) : null}
       </div>
     );
   };
@@ -1485,6 +1543,7 @@ export default function MessagesPage() {
                     <article {...messageActionTriggerProps(message.id)} className={`savanna-message-bubble max-w-[82%] rounded-2xl px-3 py-2.5 text-sm shadow-sm ${activeThreadSearchMessageId === message.id ? "ring-2 ring-[#D9A441]" : ""} ${isSameUser(message.senderUserId, user?.id) ? "savanna-outgoing-message rounded-tr-none bg-[#D9A441] text-[#3d2d1a] dark:text-[#F0F2F5]" : "savanna-incoming-message rounded-tl-none bg-white text-[#3d2d1a] dark:text-[#fff8ed]"}`}>
                       {renderReplyContext(message)}
                       {message.payload ? <p className="whitespace-pre-wrap">{message.payload}</p> : null}
+                      {messageTranslations[message.id] ? <p className="mt-2 rounded-xl bg-white/55 px-3 py-2 text-xs leading-5 text-[#3d2d1a] dark:bg-white/10 dark:text-[#F0F2F5]">{messageTranslations[message.id]}</p> : null}
                       {message.attachments.map(item => <PrivateAttachment key={item.id} url={item.url} fileName={item.fileName} mimeType={item.mimeType} />)}
                       <p className={`mt-1 flex items-center justify-end gap-1 text-[10px] ${isSameUser(message.senderUserId, user?.id) ? "text-[#3d2d1a] dark:text-[#FDFBF5]" : "text-[#5f6861]"}`}>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}{isSameUser(message.senderUserId, user?.id) ? <DeliveryIcon status={message.status} className="text-white/90" /> : null}</p>
                       {renderReactionSummary(message)}
@@ -1577,6 +1636,7 @@ export default function MessagesPage() {
                         <div {...messageActionTriggerProps(message.id)} className={`savanna-message-bubble savanna-desktop-message-bubble max-w-[58%] cursor-pointer rounded-2xl px-3 py-2 text-sm shadow-sm ${activeThreadSearchMessageId === message.id ? "ring-2 ring-[#D9A441]" : ""} ${isSameUser(message.senderUserId, user?.id) ? "savanna-outgoing-message rounded-tr-none bg-[#D9A441] text-[#3d2d1a] dark:text-[#F0F2F5]" : "savanna-incoming-message rounded-tl-none"}`}>
                           {renderReplyContext(message)}
                           {message.payload ? <p className="whitespace-pre-wrap text-sm leading-5">{message.payload}</p> : null}
+                          {messageTranslations[message.id] ? <p className="mt-2 rounded-xl bg-white/55 px-3 py-2 text-xs leading-5 text-[#3d2d1a] dark:bg-white/10 dark:text-[#F0F2F5]">{messageTranslations[message.id]}</p> : null}
                           {message.attachments.map(item => <PrivateAttachment key={item.id} url={item.url} fileName={item.fileName} mimeType={item.mimeType} />)}
                           <div className="mt-1 flex items-center justify-end gap-1 text-[10px] opacity-80"><span>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>{isSameUser(message.senderUserId, user?.id) ? <DeliveryIcon status={message.status} className="text-white/90" /> : null}</div>
                           {renderReactionSummary(message)}
