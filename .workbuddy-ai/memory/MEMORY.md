@@ -1,10 +1,12 @@
 # Savanna PWA — long-term project notes
 
 ## Stack
+
 React 19 + TS + Vite 7 + Tailwind 4 + Wouter · Express 4 + tRPC 11 + Drizzle ORM
 (MySQL/TiDB) + superjson · esbuild bundles the server · pnpm.
 
 ## Auth & backend: Firebase (Supabase was replaced)
+
 As of 2026-08-29 the app runs **direct-to-Firebase from the browser**: Firebase
 Auth (phone + Google), Firestore, and Firebase Storage. Supabase was evaluated
 and dropped — do not reintroduce it.
@@ -37,13 +39,16 @@ nothing reads them.
   config. Getting this wrong locks out every user.
 
 ## Verification commands
+
 `npx tsc --noEmit` · `npx vitest run` · `npm run build` · `node scripts/check-prod-bundle.mjs`
 
 ## Deploying
+
 ```
 firebase deploy --only firestore:rules,firestore:indexes,hosting
 firebase deploy --only storage        # needs Storage enabled in console first
 ```
+
 Build first (`npx vite build` writes `dist/public`, which hosting serves).
 Use the **global** `firebase` binary at `/usr/local/bin/firebase` — invoking
 `npx firebase-tools` wedges the shell (exit 127, empty output).
@@ -51,6 +56,7 @@ Firebase Storage is **not yet initialised** on the project, so `storage` fails
 until someone clicks 'Get Started' in the console.
 
 ## Standing constraints
+
 - **Do not modify the nav or bottom nav.** The user redesigned them deliberately.
   `client/src/components/SavannaShell.tsx` and nav/bottom-nav CSS in
   `client/src/index.css` are off-limits — if `server/pwa.assets.test.ts` fails on
@@ -60,6 +66,7 @@ until someone clicks 'Get Started' in the console.
   plan item P2-13.
 
 ## Styling: the `!important` trap (cost 4 wasted rounds once)
+
 `client/src/index.css` has a **mobile media-query block** that pins layout on
 semantic classes with `!important` — e.g. `.savanna-app .savanna-mobile-bottom-nav`
 sets `width`, `height`, `border-radius`, and `padding-left/right`.
@@ -69,8 +76,9 @@ specificity, so Tailwind's `px-*` (which emits `padding-inline`) loses silently.
 Symptom: the class is in the DOM, the build is clean, nothing moves.
 
 **Diagnostic order when a style tweak does nothing:**
+
 1. Check whether the built CSS hash changed. No delta = the edit changed nothing.
-2. Grep `client/src/index.css` for the element's *semantic* class + `!important`.
+2. Grep `client/src/index.css` for the element's _semantic_ class + `!important`.
 3. Fix the value in that CSS rule, not in the JSX.
 
 The bottom-nav inset now lives in `index.css` as `0.5rem !important` (8px,
@@ -78,6 +86,7 @@ matching `py-2`); the `px-2` on the element is decorative and the test comment
 says so. `server/pwa.assets.test.ts` guards the CSS rule directly.
 
 ## Environment quirks
+
 - No `timeout` binary (macOS) — use background tasks.
 - `pnpm add` fails with `ERR_PNPM_CODEBUDDY_BROKER_DENY` (symlink EEXIST) even with
   the sandbox disabled, so new dependencies generally cannot be installed. That is
@@ -95,14 +104,15 @@ says so. `server/pwa.assets.test.ts` guards the CSS rule directly.
   extensions (Phantom wallet), not app bugs.
 
 ## Firestore rules: never put a bare type test in a rule that a query must satisfy
+
 Security rules are **not filters**: for a `list` query Firestore validates the
-rule against the *query's constraints*, not the documents. It can prove
+rule against the _query's constraints_, not the documents. It can prove
 `uid in memberIds` from `where("memberIds", "array-contains", uid)` — but it
 **cannot prove a standalone `memberIds is list` type test** from that same
 constraint. The unprovable clause is false, so the query is denied.
 
 This shipped as a real bug on 2026-08-30: chat messages sent fine (writes are
-single-document, where rules *do* see the real payload) but never rendered.
+single-document, where rules _do_ see the real payload) but never rendered.
 Fixed by dropping `is list` from the messages **read** rule only — safe, because
 `in` against a non-list field is a type error and denies anyway. `is list` stays
 on the **create** rule, where it is provable and useful.
@@ -124,6 +134,7 @@ now cached). `server/pwa.assets.test.ts` pins the read rule to contain
 `request.auth.uid in resource.data.memberIds` and **not** `is list`.
 
 ## Known unfinished work
+
 - Chat runs on Firestore via `client/src/lib/firebaseChat.ts` and **is** realtime
   for the conversation list and the open thread (`useFirebaseConversations` and
   `useFirebaseMessages` both drive `onSnapshot` alongside `useQuery`). Still

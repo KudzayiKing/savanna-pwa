@@ -1,6 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { AnimatedCheckCheckIcon, AnimatedCheckIcon, AnimatedSearchIcon, AnimatedSendIcon, MobileNavIcon, PlusIcon } from "@/components/AnimatedNavIcons";
-import { MicIcon, type ChatIconHandle } from "@/components/AnimatedChatIcons";
+import { ChatMediaTray, type MediaTrayTab } from "@/components/ChatMediaTray";
+import { KeyboardIcon, MicIcon, StickerIcon, type ChatIconHandle } from "@/components/AnimatedChatIcons";
 import { CommunityVisibilitySelect } from "@/components/CommunityVisibilitySelect";
 import { ConversationHeader } from "@/components/ConversationHeader";
 import { SafetyActions } from "@/components/SafetyActions";
@@ -41,7 +42,7 @@ import { type ChangeEvent, type FormEvent, type MouseEvent as ReactMouseEvent, t
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 
-const allowedMimeTypes = ["image/jpeg", "image/png", "image/webp", "application/pdf", "audio/mpeg", "audio/mp4", "audio/webm", "video/mp4", "video/webm"];
+const allowedMimeTypes = ["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf", "audio/mpeg", "audio/mp4", "audio/webm", "video/mp4", "video/webm"];
 const reactionGlyphs: Record<FirebaseMessageReactionKey, string> = {
   heart: "Love",
   thumbs_up: "+1",
@@ -207,6 +208,11 @@ export default function MessagesPage() {
   const [wallpaperDrawerOpen, setWallpaperDrawerOpen] = useState(false);
   const [sendPulse, setSendPulse] = useState(0);
   const [recording, setRecording] = useState(false);
+  const [mediaTrayOpen, setMediaTrayOpen] = useState(false);
+  const [mediaTrayTab, setMediaTrayTab] = useState<MediaTrayTab>("emojis");
+  const stickerIcon = useRef<ChatIconHandle>(null);
+  const keyboardIcon = useRef<ChatIconHandle>(null);
+  const draftInput = useRef<HTMLInputElement>(null);
   const chatPreviewMode = import.meta.env.DEV ? new URLSearchParams(window.location.search).get("chatPreview") : null;
   const [chatFilter, setChatFilter] = useState<string>("all");
   const [mobileDetail, setMobileDetail] = useState(chatPreviewMode === "detail");
@@ -281,6 +287,7 @@ export default function MessagesPage() {
     if (!conversations.data.some(conversation => conversation.id === selectedConversationId)) setSelectedConversationId(null);
   }, [conversations.data, selectedConversationId]);
   useEffect(() => { setReplyTo(null); }, [selectedConversationId]);
+  useEffect(() => { setMediaTrayOpen(false); }, [selectedConversationId]);
   useEffect(() => { lastAutoScrolledMessageId.current = null; }, [selectedConversationId]);
   useEffect(() => {
     setThreadSearchOpen(false);
@@ -671,6 +678,61 @@ export default function MessagesPage() {
     if (!allowedMimeTypes.includes(file.type)) return toast.error("Choose a PNG, JPEG, WebP, PDF, MP3, or MP4 file");
     if (file.size > 8 * 1024 * 1024) return toast.error("Attachments must be 8 MB or smaller");
     setAttachment(file);
+  };
+
+  const toggleMediaTray = () => {
+    setMediaTrayOpen(open => {
+      const next = !open;
+      if (next) {
+        stickerIcon.current?.startAnimation();
+        draftInput.current?.blur();
+      }
+      return next;
+    });
+  };
+
+  const backToKeyboard = () => {
+    keyboardIcon.current?.startAnimation();
+    setMediaTrayOpen(false);
+    requestAnimationFrame(() => draftInput.current?.focus());
+  };
+
+  const appendEmoji = (emoji: string) => {
+    setDraft(current => current + emoji);
+    draftInput.current?.focus();
+  };
+
+  const sendGif = async (gifUrl: string) => {
+    if (!selectedConversationId) return;
+    if (isPreviewConversation) {
+      toast.info("Development preview - messages are not sent or saved.");
+      return;
+    }
+    try {
+      const response = await fetch(gifUrl);
+      if (!response.ok) throw new Error();
+      const blob = await response.blob();
+      const fileName = `gif-${Date.now()}.gif`;
+      setMediaTrayOpen(false);
+      stickerIcon.current?.stopAnimation();
+      chatMutations.sendAttachment.mutate(
+        {
+          conversationId: selectedConversationId,
+          memberIds: selected?.memberIds ?? [],
+          file: new File([blob], fileName, { type: "image/gif" }),
+          replyTo: replyTo ? { messageId: replyTo.id, senderUserId: replyTo.senderUserId, snippet: messageSnippet(replyTo) } : null,
+        },
+        {
+          onSuccess: () => {
+            setReplyTo(null);
+            toast.success("GIF sent");
+          },
+          onError: error => toast.error(error.message),
+        },
+      );
+    } catch {
+      toast.error("Could not fetch that GIF - try another one.");
+    }
   };
 
   const messageSnippet = (message: FirebaseMessage) => {
@@ -1285,7 +1347,7 @@ export default function MessagesPage() {
         )}
         onSubmit={handleSend}
       >
-        <input ref={attachmentInput} type="file" className="hidden" accept="image/jpeg,image/png,image/webp,application/pdf,audio/mpeg,video/mp4" onChange={handleAttachmentChange} />
+        <input ref={attachmentInput} type="file" className="hidden" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,audio/mpeg,video/mp4" onChange={handleAttachmentChange} />
         {replyTo ? (
           <div className="mb-2 flex items-center gap-2 rounded-2xl border border-[#D9A441]/20 bg-[#D9A441]/10 px-3 py-2 text-xs text-[#5f6861] dark:border-[#D9A441]/25 dark:bg-[#D9A441]/15 dark:text-[#AEBAC1]">
             <Reply className="size-3.5 shrink-0 text-[#D9A441]" />
@@ -1296,27 +1358,47 @@ export default function MessagesPage() {
           </div>
         ) : null}
         {/* `savanna-composer-field` owns the glass surface and the pill radius in
-            both themes and at both breakpoints, so web and mobile cannot drift. */}
-        <div
-          className={cn(
-            "savanna-composer-field flex items-center gap-2 p-2",
-            isDesktop ? "" : "savanna-mobile-composer-field",
-          )}
-        >
-          <Button type="button" variant="ghost" size="icon" onClick={() => attachmentInput.current?.click()} className={cn("shrink-0 rounded-xl", actionSize)} aria-label="Attach private media">
-            <Paperclip className="size-4" />
-          </Button>
-          <Input value={draft} onChange={event => setDraft(event.target.value)} disabled={Boolean(attachment)} placeholder={attachment ? attachment.name : "Message or @Savanna"} aria-label="Message draft" className="min-w-0 flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0" />
-          {attachment ? <Button type="button" variant="ghost" onClick={() => setAttachment(null)} size="icon" className="size-8 shrink-0 rounded-lg" aria-label="Remove attachment"><X className="size-4" /></Button> : null}
-          {showSend ? (
-            <Button type="submit" disabled={sending} size="icon" className={cn("savanna-send-button savanna-composer-action savanna-brand-token shrink-0 rounded-full", actionSize)} aria-label="Send message">
-              {sending ? <Loader2 className="size-4 animate-spin" /> : <AnimatedSendIcon size={18} pulse={sendPulse} />}
+            both themes and at both breakpoints, so web and mobile cannot drift.
+            The media tray renders BELOW the input, in the keyboard zone. */}
+        <div className="flex flex-col gap-2">
+          <div
+            className={cn(
+              "savanna-composer-field flex items-center gap-2 p-2",
+              isDesktop ? "" : "savanna-mobile-composer-field",
+            )}
+          >
+            {mediaTrayOpen ? (
+              <Button type="button" variant="ghost" size="icon" onPointerDown={() => keyboardIcon.current?.startAnimation()} onClick={backToKeyboard} className={cn("shrink-0 rounded-xl", actionSize)} aria-label="Show keyboard">
+                <KeyboardIcon ref={keyboardIcon} size={20} />
+              </Button>
+            ) : (
+              <Button type="button" variant="ghost" size="icon" onPointerDown={() => stickerIcon.current?.startAnimation()} onClick={toggleMediaTray} className={cn("shrink-0 rounded-xl", actionSize)} aria-label="Show stickers, emojis and GIFs">
+                <StickerIcon ref={stickerIcon} size={20} />
+              </Button>
+            )}
+            <Input ref={draftInput} value={draft} onChange={event => setDraft(event.target.value)} disabled={Boolean(attachment)} placeholder={attachment ? attachment.name : "Message or @Savanna"} aria-label="Message draft" className="min-w-0 flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0" />
+            {attachment ? <Button type="button" variant="ghost" onClick={() => setAttachment(null)} size="icon" className="size-8 shrink-0 rounded-lg" aria-label="Remove attachment"><X className="size-4" /></Button> : null}
+            <Button type="button" variant="ghost" size="icon" onClick={() => attachmentInput.current?.click()} className={cn("shrink-0 rounded-xl", actionSize)} aria-label="Attach private media">
+              <Paperclip className="size-4" />
             </Button>
-          ) : (
-            <Button type="button" variant="ghost" size="icon" onPointerDown={() => micIcon.current?.startAnimation()} onClick={startVoiceRecording} className={cn("savanna-composer-action savanna-brand-token shrink-0 rounded-full", actionSize, recording ? "ring-2 ring-[#22C55E]" : "")} aria-label={recording ? "Stop and send voice note" : "Record a voice message"}>
-              {recording ? <StopCircle className="size-[18px]" /> : <MicIcon ref={micIcon} size={18} />}
-            </Button>
-          )}
+            {showSend ? (
+              <Button type="submit" variant="ghost" disabled={sending} size="icon" className={cn("savanna-composer-action shrink-0 rounded-full", actionSize)} aria-label="Send message">
+                {sending ? <Loader2 className="size-4 animate-spin" /> : <AnimatedSendIcon size={18} pulse={sendPulse} />}
+              </Button>
+            ) : (
+              <Button type="button" variant="ghost" size="icon" onPointerDown={() => micIcon.current?.startAnimation()} onClick={startVoiceRecording} className={cn("savanna-composer-action shrink-0 rounded-full", actionSize, recording ? "ring-2 ring-[#22C55E]" : "")} aria-label={recording ? "Stop and send voice note" : "Record a voice message"}>
+                {recording ? <StopCircle className="size-[18px]" /> : <MicIcon ref={micIcon} size={18} />}
+              </Button>
+            )}
+          </div>
+          <ChatMediaTray
+            open={mediaTrayOpen}
+            tab={mediaTrayTab}
+            onTabChange={setMediaTrayTab}
+            onEmojiSelect={appendEmoji}
+            onGifSelect={sendGif}
+            onClose={() => setMediaTrayOpen(false)}
+          />
         </div>
       </form>
     );
@@ -1568,15 +1650,15 @@ export default function MessagesPage() {
     return (
       <SavannaShell>
         <div className="savanna-mobile-messages-canvas -mx-4 min-h-[calc(100vh-190px)] bg-white px-4 pb-8 pt-2 dark:bg-[#0A1014]">
-          <label className="savanna-mobile-chat-search mx-2 mt-2 flex h-11 items-center gap-2 rounded-2xl px-4 text-sm dark:text-[#9AA1A6]">
-            <AnimatedSearchIcon size={16} />
-            <input value={conversationSearch} onChange={event => setConversationSearch(event.target.value)} placeholder="Search chats or people" aria-label="Search chats or people" className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-[#a5947e] dark:bg-[#23282C]" />
+          <label className="savanna-mobile-chat-search savanna-chat-search-with-gold-icon mx-2 mt-2 flex h-11 items-center gap-2 rounded-2xl px-4 text-sm">
+            <AnimatedSearchIcon size={16} className="savanna-chat-search-icon shrink-0" />
+            <input value={conversationSearch} onChange={event => setConversationSearch(event.target.value)} placeholder="Search chats or people" aria-label="Search chats or people" className="min-w-0 flex-1 bg-transparent text-[#151A17] outline-none placeholder:text-[#a5947e] dark:text-[#F0F2F5] dark:placeholder:text-[#9AA1A6]" />
           </label>
           {renderUsernameResults("mobile")}
           {renderDueFollowUpsPrompt("mobile")}
           <div className="story-rail mt-4 flex gap-2 overflow-x-auto px-3 pb-1" role="tablist" aria-label="Chat filters">
-            {filterTabs.map(([value, label]) => <button key={value} role="tab" aria-selected={chatFilter === value} onClick={() => setChatFilter(value)} className={`shrink-0 rounded-full px-3 py-2 text-xs font-semibold ${chatFilter === value ? "bg-[#e3a43c] text-[#3a260e] dark:bg-[#23282C] dark:text-[#D9A441]" : "bg-[#f4f0e8] text-[#715d43] dark:bg-[#2b2118] dark:text-[#dac7a9]"}`}>{label}</button>)}
-            {customTabs.map(tab => <button key={tab} role="tab" aria-selected={chatFilter === tab} onClick={() => setChatFilter(tab)} className={`shrink-0 rounded-full px-3 py-2 text-xs font-semibold ${chatFilter === tab ? "bg-[#e3a43c] text-[#3a260e] dark:bg-[#23282C] dark:text-[#D9A441]" : "bg-[#f4f0e8] text-[#715d43] dark:bg-[#2b2118] dark:text-[#dac7a9]"}`}>{tab}</button>)}
+            {filterTabs.map(([value, label]) => <button key={value} role="tab" aria-selected={chatFilter === value} onClick={() => setChatFilter(value)} className={`savanna-mobile-message-filter-tab shrink-0 rounded-full px-3 py-2 text-xs font-semibold ${chatFilter === value ? "bg-[#D9A441]/20 text-[#A87820] dark:bg-[#D9A441]/20 dark:text-[#D9A441]" : "bg-background text-[#715d43] dark:bg-background dark:text-[#AEBAC1]"}`}>{label}</button>)}
+            {customTabs.map(tab => <button key={tab} role="tab" aria-selected={chatFilter === tab} onClick={() => setChatFilter(tab)} className={`savanna-mobile-message-filter-tab shrink-0 rounded-full px-3 py-2 text-xs font-semibold ${chatFilter === tab ? "bg-[#D9A441]/20 text-[#A87820] dark:bg-[#D9A441]/20 dark:text-[#D9A441]" : "bg-background text-[#715d43] dark:bg-background dark:text-[#AEBAC1]"}`}>{tab}</button>)}
             <button type="button" onClick={addCustomTab} className="savanna-brand-token grid size-8 shrink-0 place-items-center rounded-full" aria-label="Create a chat tab"><PlusIcon size={16} /></button>
           </div>
           <div className="savanna-mobile-chat-rows mt-3 divide-y-0 px-2">
@@ -1598,9 +1680,9 @@ export default function MessagesPage() {
             <span className="savanna-wordmark text-[28px]">Savanna</span>
             <Button onClick={() => setNewChatOpen(true)} size="icon" className="savanna-brand-token size-10 rounded-2xl shadow-none" aria-label="Start a new chat"><PlusIcon size={19} /></Button>
           </header>
-          <label className="savanna-desktop-chat-search mt-5 flex h-11 items-center gap-2 rounded-2xl px-3 text-sm">
-            <AnimatedSearchIcon size={17} />
-            <input value={conversationSearch} onChange={event => setConversationSearch(event.target.value)} placeholder="Search chats or people" aria-label="Search conversations" className="min-w-0 flex-1 bg-transparent outline-none" />
+          <label className="savanna-desktop-chat-search savanna-chat-search-with-gold-icon mt-5 flex h-11 items-center gap-2 rounded-2xl px-3 text-sm">
+            <AnimatedSearchIcon size={17} className="savanna-chat-search-icon shrink-0" />
+            <input value={conversationSearch} onChange={event => setConversationSearch(event.target.value)} placeholder="Search chats or people" aria-label="Search conversations" className="min-w-0 flex-1 bg-transparent text-[#151A17] outline-none placeholder:text-[#5F6861] dark:text-[#F0F2F5] dark:placeholder:text-[#9AA1A6]" />
           </label>
           {renderUsernameResults("desktop")}
           {renderDueFollowUpsPrompt("desktop")}

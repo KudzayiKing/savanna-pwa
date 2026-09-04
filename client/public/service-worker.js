@@ -27,11 +27,21 @@ function isImmutableAsset(url) {
 // never be served cache-first, and this worker is not registered in dev
 // anyway — the guard is here so a stray registration cannot serve stale code.
 function isDevModule(url) {
-  return url.pathname.startsWith("/src/") || url.pathname.startsWith("/@vite/") || url.pathname.startsWith("/node_modules/") || url.pathname.startsWith("/@fs/");
+  return (
+    url.pathname.startsWith("/src/") ||
+    url.pathname.startsWith("/@vite/") ||
+    url.pathname.startsWith("/node_modules/") ||
+    url.pathname.startsWith("/@fs/")
+  );
 }
 
 function isCacheable(request, url) {
-  return request.method === "GET" && url.origin === self.location.origin && !url.pathname.startsWith("/api/") && !isDevModule(url);
+  return (
+    request.method === "GET" &&
+    url.origin === self.location.origin &&
+    !url.pathname.startsWith("/api/") &&
+    !isDevModule(url)
+  );
 }
 
 async function putSafely(cache, request, response) {
@@ -86,7 +96,9 @@ async function precacheShell(cache) {
 
   await Promise.all(
     Array.from(urls).map(url =>
-      cache.add(new Request(url, { credentials: "same-origin" })).catch(() => {})
+      cache
+        .add(new Request(url, { credentials: "same-origin" }))
+        .catch(() => {})
     )
   );
 }
@@ -103,7 +115,9 @@ self.addEventListener("activate", event => {
   event.waitUntil(
     (async () => {
       const keys = await caches.keys();
-      await Promise.all(keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key)));
+      await Promise.all(
+        keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key))
+      );
       await self.clients.claim();
       const clients = await self.clients.matchAll({ type: "window" });
       for (const client of clients) {
@@ -140,7 +154,8 @@ self.addEventListener("fetch", event => {
           await putSafely(cache, "/", response);
           return response;
         } catch {
-          const cached = (await cache.match("/")) || (await cache.match("/index.html"));
+          const cached =
+            (await cache.match("/")) || (await cache.match("/index.html"));
           if (cached) return cached;
           return new Response("You are offline.", {
             status: 503,

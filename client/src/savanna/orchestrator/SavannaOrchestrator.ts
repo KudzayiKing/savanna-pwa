@@ -1,4 +1,5 @@
 import type { FirebaseMessage, FirebaseMessageMemory } from "@/lib/firebaseChat";
+import { captureError } from "@/lib/observability";
 import {
   answerConversationRecall,
   savannaMemorySource,
@@ -36,7 +37,15 @@ function shouldGenerate(answer: SavannaRecallAnswer) {
 
 async function firstAvailable(providers: InferenceProvider[]) {
   for (const provider of providers) {
-    if (await provider.isAvailable().catch(() => false)) return provider;
+    // Availability probes throw for ordinary reasons — no WebGPU, model not
+    // downloaded — so a bare `.catch(() => false)` is right for control flow.
+    // What it hides is *which* provider failed and why, which is the only
+    // signal an admin has that local inference is silently never being used.
+    const available = await provider.isAvailable().catch(error => {
+      captureError("model.load", error, { provider: provider.id, stage: "availability" });
+      return false;
+    });
+    if (available) return provider;
   }
   return null;
 }

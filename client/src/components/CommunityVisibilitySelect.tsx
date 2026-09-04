@@ -9,7 +9,10 @@ import type { FirebaseCommunityVisibility } from "@/lib/firebaseCommunities";
 import { cn } from "@/lib/utils";
 import { ChevronDown } from "lucide-react";
 
-const communityVisibilityOptions: Array<{ value: FirebaseCommunityVisibility; label: string }> = [
+const communityVisibilityOptions: Array<{
+  value: FirebaseCommunityVisibility;
+  label: string;
+}> = [
   { value: "public", label: "Public - listed on Savanna" },
   { value: "private", label: "Private - invite-only" },
 ];
@@ -23,7 +26,9 @@ export function CommunityVisibilitySelect({
   onChange: (value: FirebaseCommunityVisibility) => void;
   className?: string;
 }) {
-  const selected = communityVisibilityOptions.find(option => option.value === value) ?? communityVisibilityOptions[0];
+  const selected =
+    communityVisibilityOptions.find(option => option.value === value) ??
+    communityVisibilityOptions[0];
 
   return (
     <DropdownMenu>
@@ -32,7 +37,7 @@ export function CommunityVisibilitySelect({
           type="button"
           className={cn(
             "savanna-new-chat-input flex h-11 w-full items-center justify-between gap-3 rounded-xl border border-[#ead2a4] bg-background px-3 text-left text-sm font-medium text-[#151A17] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[#D9A441]/35 dark:bg-[#2a2119] dark:text-[#fff8ed]",
-            className,
+            className
           )}
         >
           <span className="truncate">{selected.label}</span>
@@ -46,7 +51,10 @@ export function CommunityVisibilitySelect({
         avoidCollisions={false}
         className="z-[90] w-[var(--radix-dropdown-menu-trigger-width)] rounded-xl border-[#ead2a4] bg-background p-1 text-[#151A17] shadow-[0_14px_34px_rgba(21,26,23,0.16)] dark:border-[#5b4833] dark:bg-[#21180f] dark:text-[#fff8ed]"
       >
-        <DropdownMenuRadioGroup value={value} onValueChange={next => onChange(next as FirebaseCommunityVisibility)}>
+        <DropdownMenuRadioGroup
+          value={value}
+          onValueChange={next => onChange(next as FirebaseCommunityVisibility)}
+        >
           {communityVisibilityOptions.map(option => (
             <DropdownMenuRadioItem
               key={option.value}

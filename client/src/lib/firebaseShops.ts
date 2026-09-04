@@ -453,7 +453,6 @@ export async function saveFirebaseStorefront(user: AppUser, input: StorefrontInp
     ownerCity: user.city ?? null,
     ownerCountryCode: user.countryCode ?? null,
     slug,
-    verificationState: "unverified",
     updatedAt: serverTimestamp(),
   };
 
@@ -464,6 +463,7 @@ export async function saveFirebaseStorefront(user: AppUser, input: StorefrontInp
 
   const storefrontRef = await addDoc(collection(db, "storefronts"), {
     ...payload,
+    verificationState: "unverified",
     coverUrl: null,
     coverPath: null,
     createdAt: serverTimestamp(),

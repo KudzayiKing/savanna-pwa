@@ -1,7 +1,12 @@
 import { startLogin } from "@/const";
 import { getFirebaseAuth, isFirebaseConfigured } from "@/lib/firebase";
+import { setErrorIdentity } from "@/lib/observability";
 import { ensureUserProfile, type AppUser } from "@/lib/userProfile";
-import { onAuthStateChanged, signOut, type User as FirebaseUser } from "firebase/auth";
+import {
+  onAuthStateChanged,
+  signOut,
+  type User as FirebaseUser,
+} from "firebase/auth";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 type UseAuthOptions = {
@@ -105,6 +110,18 @@ export function useAuth(options?: UseAuthOptions) {
       setSigningOut(false);
     }
   }, [configured]);
+
+  /**
+   * Tags subsequent error logs with whoever is signed in.
+   *
+   * Errors are otherwise anonymous, which makes the common case — one user
+   * hitting a failure repeatedly while everyone else is fine — invisible.
+   * Cleared on sign-out so a shared device does not attribute one person's
+   * errors to the next.
+   */
+  useEffect(() => {
+    setErrorIdentity(profile?.id ?? null);
+  }, [profile]);
 
   // The Manus runtime reads this key to decorate error reports. It was
   // previously written as a side effect of a `useMemo` during render, which is

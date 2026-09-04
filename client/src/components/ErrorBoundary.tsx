@@ -1,3 +1,4 @@
+import { captureError } from "@/lib/observability";
 import { cn } from "@/lib/utils";
 import { AlertTriangle, RotateCcw } from "lucide-react";
 import { Component, type ErrorInfo, type ReactNode } from "react";
@@ -50,6 +51,17 @@ class ErrorBoundary extends Component<Props, State> {
     // expose internal module paths, dependency versions and source structure,
     // so it is never rendered into the DOM.
     console.error("[ErrorBoundary]", error, info.componentStack);
+
+    // Reported with the same digest shown on screen. That is the point of the
+    // pairing: the user quotes a code, support looks it up, and the log entry
+    // with that code is the exact failure — no guessing from timestamps.
+    // The component stack is truncated because React's can be tens of
+    // kilobytes, and only the first few frames are ever useful anyway.
+    captureError("react.render", error, {
+      digest: fingerprint(error),
+      componentStack: (info.componentStack ?? "").trim().slice(0, 800) || null,
+    });
+
     // The pre-React splash overlay in index.html sits above everything; drop it
     // so the error screen is visible instead of hiding behind it.
     document.getElementById("splash")?.remove();

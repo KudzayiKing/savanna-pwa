@@ -307,8 +307,8 @@ function Shell({
   children: React.ReactNode;
 }) {
   return (
-    <main className="grid min-h-screen place-items-center bg-white px-4 py-10 text-[#151A17] dark:bg-[#0A1014] dark:text-[#E9EDEF]">
-      <section className="w-full max-w-[420px] rounded-[28px] border border-[#DDE3DC] bg-[#F6F5F5] p-6 shadow-[0_14px_32px_rgba(21,26,23,0.06)] dark:border-[#2C3336] dark:bg-[#131A1E] sm:p-8">
+    <main className="grid min-h-screen place-items-center bg-white px-5 py-10 text-[#151A17] dark:bg-[#0A1014] dark:text-[#E9EDEF]">
+      <section className="w-full max-w-[420px] rounded-[28px] border border-[#DDE3DC] bg-[#F6F5F5] px-6 py-6 shadow-[0_14px_32px_rgba(21,26,23,0.06)] dark:border-[#2C3336] dark:bg-[#131A1E] sm:px-10 sm:py-8">
         <div className="mb-7 flex items-center gap-3">
           <span className="grid size-11 place-items-center rounded-2xl bg-[#D9A441]/20 text-[#D9A441]">
             {icon}

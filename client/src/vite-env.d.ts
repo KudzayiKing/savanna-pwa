@@ -43,4 +43,15 @@ interface ImportMetaEnv {
   readonly VITE_SAVANNA_MEDIAPIPE_GENAI_RUNTIME_URL?: string;
   /** Public URL for MediaPipe GenAI wasm assets used by TranslateGemma. */
   readonly VITE_SAVANNA_MEDIAPIPE_GENAI_WASM_URL?: string;
+
+  /**
+   * Set to "false" to stop the client reporting errors to Firestore.
+   * See `lib/observability.ts`.
+   */
+  readonly VITE_OBSERVABILITY_ENABLED?: string;
+  /** Stamped onto every error log so a spike can be tied to a release. */
+  readonly VITE_APP_VERSION?: string;
+
+  /** Tenor API key for the chat GIF tray. Free key: https://developers.google.com/tenor */
+  readonly VITE_TENOR_API_KEY?: string;
 }

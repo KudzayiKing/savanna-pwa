@@ -24,6 +24,7 @@ import { getFirebaseStorage, getFirestoreDb } from "./firebase";
 import { replyToStoryInFirebase } from "./firebaseChat";
 import { listFirebaseBlockedUserIds } from "./firebaseSafety";
 import { enrichMemoryWithEmbeddingGemma } from "./gemmaAi";
+import { captureError } from "./observability";
 import { inferSavannaMemoryTags } from "./savannaRecall";
 
 export type FirebaseStoryAudience = "public" | "custom" | "private";
@@ -330,14 +331,33 @@ export async function publishFirebaseStory(user: AppUser, input: PublishStoryInp
 
   const path = storyMediaPath(user.id, storyRef.id, input.file);
   const storageRef = ref(getFirebaseStorage(), path);
-  await uploadBytes(storageRef, input.file, { contentType: input.file.type });
-  const url = await getDownloadURL(storageRef);
-  const media: FirebaseStoryMedia[] = [{ id: crypto.randomUUID(), path, url, mimeType: input.file.type, type: mediaType(input.file.type) }];
-  await setDoc(storyRef, {
-    media,
-    primaryMediaUrl: url,
-    primaryMediaType: media[0].type,
-  }, { merge: true });
+
+  try {
+    await uploadBytes(storageRef, input.file, { contentType: input.file.type });
+    const url = await getDownloadURL(storageRef);
+    const media: FirebaseStoryMedia[] = [{ id: crypto.randomUUID(), path, url, mimeType: input.file.type, type: mediaType(input.file.type) }];
+    await setDoc(storyRef, {
+      media,
+      primaryMediaUrl: url,
+      primaryMediaType: media[0].type,
+    }, { merge: true });
+  } catch (error) {
+    /**
+     * The story document is already committed by this point, so a failed upload
+     * leaves a published story with no media attached — an orphan row that
+     * still renders in feeds. The id is recorded so the orphan is findable;
+     * cleaning it up is a separate decision (deleting here would lose the
+     * author's caption, which they may want to retry with).
+     */
+    captureError("storage.upload", error, {
+      storyId: storyRef.id,
+      path,
+      contentType: input.file.type,
+      sizeBytes: input.file.size,
+      orphanedStory: true,
+    });
+    throw error;
+  }
 
   return storyRef.id;
 }

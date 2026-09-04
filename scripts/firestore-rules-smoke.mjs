@@ -8,9 +8,19 @@
  * step in isolation so the failing operation is named explicitly.
  *
  * Usage (from the repo root):
- *   firebase emulators:exec --only firestore,auth \
- *     --project demo-savanna -c /tmp/savanna-rules-test/firebase.json \
- *     "node scripts/firestore-rules-smoke.mjs"
+ *   npm run test:rules
+ *
+ * That runs `firebase emulators:exec --only firestore,auth --project
+ * demo-savanna "node scripts/firestore-rules-smoke.mjs"` against the REPO's
+ * firebase.json, which is what points the emulator at ./firestore.rules. Do NOT
+ * pass `-c <some other config>`: if that config points anywhere else, the
+ * emulator silently loads different rules and every check below becomes
+ * meaningless.
+ *
+ * Requires the firebase CLI on PATH (`npm i -g firebase-tools`). If it is
+ * installed but not on PATH, invoke it by absolute path, e.g.
+ *   /usr/local/bin/firebase emulators:exec --only firestore,auth \
+ *     --project demo-savanna "node scripts/firestore-rules-smoke.mjs"
  */
 import { initializeApp } from "firebase/app";
 import {
@@ -22,6 +32,7 @@ import {
 } from "firebase/auth";
 import {
   collection,
+  collectionGroup,
   connectFirestoreEmulator,
   deleteDoc,
   doc,
@@ -38,6 +49,54 @@ import {
   writeBatch,
   where,
 } from "firebase/firestore";
+import http from "node:http";
+
+/**
+ * Sets a custom claim on an emulator user.
+ *
+ * The Auth emulator cannot be driven by the firebase-admin SDK (it is not a
+ * dependency of this project), but its REST surface accepts a localId plus
+ * customAttributes when the request carries the emulator owner header. Reusing
+ * the same firebase/auth client after this lands the claim in the next ID
+ * token, which is exactly the claim the rules read.
+ */
+async function setCustomClaims(localId, claims) {
+  await new Promise((resolve, reject) => {
+    const data = JSON.stringify({ localId, customAttributes: JSON.stringify(claims) });
+    const request = http.request({
+      host: "127.0.0.1",
+      port: 9099,
+      path: "/identitytoolkit.googleapis.com/v1/accounts:update?key=fake",
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(data),
+        Authorization: "Bearer owner",
+      },
+    }, response => {
+      let buffer = "";
+      response.on("data", chunk => (buffer += chunk));
+      response.on("end", () => {
+        if (response.statusCode > 299) {
+          reject(new Error(`setCustomClaims ${response.statusCode}: ${buffer}`));
+        } else {
+          resolve();
+        }
+      });
+    });
+    request.on("error", reject);
+    request.write(data);
+    request.end();
+  });
+}
+
+async function signInAs(email) {
+  await signInWithEmailAndPassword(auth, email, PASSWORD);
+  // The claim was minted after this account first signed in. Without a forced
+  // refresh the SDK hands Firestore the cached token from that earlier sign-in,
+  // which predates the claim and therefore does not carry it.
+  await auth.currentUser?.getIdToken(true);
+}
 
 const PROJECT_ID = "demo-savanna";
 const results = [];
@@ -1048,6 +1107,220 @@ await step("non-member sending into the thread is DENIED", async () => {
     throw error;
   }
   throw new Error("SECURITY: non-member posted a message into a thread they are not in");
+});
+
+// --- Admin / moderation paths --------------------------------------------------
+// Rules that gate on Firebase custom claims. Claims are minted through the
+// emulator's REST surface (setCustomClaims) because firebase-admin is not a
+// project dependency, then picked up by the next sign-in.
+const superUid = await register("super@savanna.test");
+await setCustomClaims(superUid, { adminRole: "super_admin" });
+const modUid = await register("mod@savanna.test");
+await setCustomClaims(modUid, { adminRole: "moderator" });
+const analystUid = await register("analyst@savanna.test");
+await setCustomClaims(analystUid, { adminRole: "analyst" });
+
+await step("DEBUG admin claim present in token", async () => {
+  await signInAs("super@savanna.test");
+  const result = await auth.currentUser.getIdTokenResult();
+  console.log("    CLAIMS:", JSON.stringify(result.claims));
+  if (!result.claims.adminRole) throw new Error("NO ADMIN CLAIM IN TOKEN");
+
+  // A self-read proves the basic read path works with this token.
+  await getDoc(doc(db, "users", superUid));
+
+  // isAdmin-gated read of another user's profile — the real assertion.
+  try {
+    await getDoc(doc(db, "users", userB));
+    console.log("    isAdmin read: ALLOWED");
+  } catch (error) {
+    console.log("    isAdmin read: DENIED", error?.code);
+  }
+});
+
+await step("super_admin can read the audit trail", async () => {
+  await signInAs("super@savanna.test");
+  const snap = await getDocs(query(collection(db, "adminAuditLogs"), limit(1)));
+  if (!snap) throw new Error("audit query returned nothing");
+});
+
+await step("super_admin can read error logs", async () => {
+  const snap = await getDocs(query(collection(db, "errorLogs"), limit(1)));
+  if (!snap) throw new Error("error-query returned nothing");
+});
+
+// Fixtures below are created by their OWNER and only then acted on by the
+// admin. The create rules pin the owner/author field to the caller
+// (`authorUserId == request.auth.uid`), so creating them while signed in as
+// super_admin is — correctly — denied. Create as the owner, switch to the
+// admin, act.
+
+await step("super_admin can read a private (custom-audience) story", async () => {
+  const ref = storyRef();
+  await signInAs("b@savanna.test");
+  await setDoc(ref, {
+    authorUserId: userB, authorName: "User B", textBody: "private", audience: "custom",
+    customAudienceUserIds: [userA], media: [], primaryMediaUrl: null, primaryMediaType: null,
+    isMemory: false, storefrontId: null, storefrontSlug: null, storefrontName: null,
+    communityId: null, communityName: null, productName: null, productDescription: null,
+    productPriceMinor: null, productCurrencyCode: null, createdAt: serverTimestamp(),
+    publishedAt: serverTimestamp(), expiresAt: new Date(Date.now() + 86_400_000), deletedAt: null,
+  });
+  await signInAs("super@savanna.test");
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error("admin could not read the private story");
+});
+
+await step("super_admin can take down a story", async () => {
+  const ref = storyRef();
+  await signInAs("b@savanna.test");
+  await setDoc(ref, {
+    authorUserId: userB, authorName: "User B", textBody: "bad", audience: "public",
+    customAudienceUserIds: [], media: [], primaryMediaUrl: null, primaryMediaType: null,
+    isMemory: false, storefrontId: null, storefrontSlug: null, storefrontName: null,
+    communityId: null, communityName: null, productName: null, productDescription: null,
+    productPriceMinor: null, productCurrencyCode: null, createdAt: serverTimestamp(),
+    publishedAt: serverTimestamp(), expiresAt: new Date(Date.now() + 86_400_000), deletedAt: null,
+  });
+  await signInAs("super@savanna.test");
+  await updateDoc(ref, {
+    moderationState: "removed", removedBy: superUid, removedReason: "policy violation",
+    removedAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  });
+  const snap = await getDoc(ref);
+  if (snap.data().moderationState !== "removed") throw new Error("takedown did not persist");
+});
+
+await step("super_admin can flag a shop as suspicious", async () => {
+  const ref = storefrontRef("admin-flag-store");
+  await signInAs("b@savanna.test");
+  await setDoc(ref, {
+    ownerUserId: userB, name: "Flag store", slug: "flag-store", bio: "", category: "food",
+    contactPhone: null, contactEmail: null, visibility: "public", verificationState: "unverified",
+    coverUrl: null, coverPath: null, ownerCity: "Harare", ownerCountryCode: "ZW",
+    createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  });
+  await signInAs("super@savanna.test");
+  await updateDoc(ref, {
+    riskFlag: "suspicious", riskFlaggedBy: superUid, riskFlaggedAt: serverTimestamp(),
+    reviewedBy: superUid, reviewedAt: serverTimestamp(),
+    reviewStatus: "pending", verificationState: "unverified", updatedAt: serverTimestamp(),
+  });
+  const snap = await getDoc(ref);
+  if (snap.data().riskFlag !== "suspicious") throw new Error("risk flag did not persist");
+});
+
+await step("super_admin can set community visibility", async () => {
+  const ref = communityRef("admin-visibility-community");
+  await signInAs("b@savanna.test");
+  await setDoc(ref, {
+    ownerUserId: userB, name: "Vis community", slug: "vis-community", description: "",
+    city: "Harare", countryCode: "ZW", visibility: "public", memberCount: 1,
+    linkedStorefrontIds: [], createdAt: serverTimestamp(), updatedAt: serverTimestamp(), inviteCode: "vis-code",
+  });
+  await signInAs("super@savanna.test");
+  await updateDoc(ref, {
+    visibility: "unlisted", reviewedBy: superUid, reviewedAt: serverTimestamp(),
+    reviewStatus: "approved", updatedAt: serverTimestamp(),
+  });
+  const snap = await getDoc(ref);
+  if (snap.data().visibility !== "unlisted") throw new Error("visibility did not change");
+});
+
+await step("super_admin can record an appeal outcome", async () => {
+  const ref = doc(db, "users", userB);
+  // The profile document has to exist first: the update rule calls
+  // request.resource.data.diff(resource.data), and `resource` is null for a
+  // missing document, which throws a null-value error. The Auth emulator
+  // creates users; it does not create their profile rows.
+  await signInAs("b@savanna.test");
+  await setDoc(ref, {
+    name: "User B", email: "b@savanna.test", accountStatus: "active",
+    createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  });
+  await signInAs("super@savanna.test");
+  await updateDoc(ref, {
+    banAppealStatus: "upheld", banAppealNote: "mistaken report", banAppealReviewedBy: superUid,
+    banAppealReviewedAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  });
+  const snap = await getDoc(ref);
+  if (snap.data().banAppealStatus !== "upheld") throw new Error("appeal status did not persist");
+});
+
+// Permission scoping: a moderator holds content.remove but not user.moderate.
+await step("moderator can take down a community post", async () => {
+  await signInAs("mod@savanna.test");
+  const ref = doc(db, "communities", communityId, "posts", publicCommunityPostId);
+  await updateDoc(ref, {
+    moderationState: "removed", removedBy: modUid, removedReason: "spam",
+    removedAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  });
+  const snap = await getDoc(ref);
+  if (snap.data().moderationState !== "removed") throw new Error("post takedown did not persist");
+});
+
+await step("moderator CANNOT read a private conversation message", async () => {
+  let snap = null;
+  try {
+    snap = await getDoc(doc(db, "conversations", conversationId, "messages", firstMessageId));
+  } catch (error) {
+    if (error?.code === "permission-denied") return;
+    throw error;
+  }
+  throw new Error("SECURITY: moderator read a private message");
+});
+
+await step("moderator CANNOT change an account status", async () => {
+  try {
+    await updateDoc(doc(db, "users", userB), {
+      accountStatus: "banned", moderationUpdatedAt: serverTimestamp(), updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    if (error?.code === "permission-denied") return;
+    throw error;
+  }
+  throw new Error("SECURITY: moderator changed account status without user.moderate");
+});
+
+await step("analyst can read the audit trail but CANNOT write it", async () => {
+  await signInAs("analyst@savanna.test");
+  const read = await getDocs(query(collection(db, "adminAuditLogs"), limit(1)));
+  if (!read) throw new Error("analyst read failed");
+  try {
+    await setDoc(doc(db, "adminAuditLogs", "analyst-forged"), {
+      adminUserId: analystUid, adminName: "analyst", adminRole: "analyst", action: "x",
+      targetType: "user", targetId: "x", reason: "long enough reason to pass the minimum",
+      before: {}, after: {}, createdAt: serverTimestamp(),
+    });
+  } catch (error) {
+    if (error?.code === "permission-denied") return;
+    throw error;
+  }
+  throw new Error("SECURITY: analyst wrote to the audit log");
+});
+
+await step("ordinary user CANNOT take down content", async () => {
+  await signInWithEmailAndPassword(auth, "a@savanna.test", PASSWORD);
+  let ref;
+  try {
+    ref = storyRef();
+    await setDoc(ref, {
+      authorUserId: userB, authorName: "User B", textBody: "bad", audience: "public",
+      customAudienceUserIds: [], media: [], primaryMediaUrl: null, primaryMediaType: null,
+      isMemory: false, storefrontId: null, storefrontSlug: null, storefrontName: null,
+      communityId: null, communityName: null, productName: null, productDescription: null,
+      productPriceMinor: null, productCurrencyCode: null, createdAt: serverTimestamp(),
+      publishedAt: serverTimestamp(), expiresAt: new Date(Date.now() + 86_400_000), deletedAt: null,
+    });
+    await updateDoc(ref, {
+      moderationState: "removed", removedBy: userA, removedReason: "i feel like it",
+      removedAt: serverTimestamp(), updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    if (error?.code === "permission-denied") return;
+    throw error;
+  }
+  throw new Error("SECURITY: ordinary user took down content");
 });
 
 console.log("\n=== Firestore rules smoke test ===");

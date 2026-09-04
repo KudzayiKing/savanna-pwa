@@ -64,7 +64,7 @@ export function ConversationHeader({
     <header
       className={cn(
         "savanna-chat-glass-header flex shrink-0 items-center gap-2 border-b border-[#DDE3DC] px-2 py-2.5 dark:border-[#2C3336]",
-        className,
+        className
       )}
     >
       {onBack ? (

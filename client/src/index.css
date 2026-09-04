@@ -175,6 +175,19 @@ button:not(:disabled), a {
   height: 0;
 }
 
+.savanna-admin-tabs,
+.savanna-admin-country-strip {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.savanna-admin-tabs::-webkit-scrollbar,
+.savanna-admin-country-strip::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 .savanna-wordmark {
   display: inline-block;
   font-family: var(--font-brand);
@@ -720,9 +733,11 @@ button:not(:disabled), a {
     color: #111B21 !important;
   }
 
-  .dark .savanna-app [aria-label="Send message"] {
-    color: #D9A441 !important;
-    background: color-mix(in srgb, #D9A441 20%, transparent) !important;
+  .dark .savanna-app [aria-label="Send message"],
+  .dark .savanna-app [aria-label="Record a voice message"],
+  .dark .savanna-app [aria-label="Stop and send voice note"] {
+    color: #ffffff !important;
+    background: transparent !important;
     border: 0 !important;
     box-shadow: none !important;
   }
@@ -1059,7 +1074,7 @@ button:not(:disabled), a {
 }
 
 :root:not(.dark) .savanna-app .savanna-desktop-message-tabs button[data-active="true"] {
-  border-color: #D9A441 !important;
+  border-color: transparent !important;
   background: color-mix(in srgb, #D9A441 20%, transparent) !important;
   color: #D9A441 !important;
 }
@@ -1084,6 +1099,15 @@ button:not(:disabled), a {
 
 .dark .savanna-app .savanna-brand-token * {
   color: var(--chat-gold) !important;
+}
+
+.dark .savanna-app:has(.savanna-route-admin) {
+  background: var(--chat-bg) !important;
+  color: var(--chat-text-primary) !important;
+}
+
+.dark .savanna-app .savanna-route-admin {
+  color: var(--chat-text-primary) !important;
 }
 
 :root:not(.dark) .savanna-app nav[aria-label="Mobile navigation"],
@@ -1197,16 +1221,55 @@ button:not(:disabled), a {
   }
 }
 
-:root:not(.dark) .savanna-app .savanna-send-button {
-  background: color-mix(in srgb, #D9A441 20%, transparent) !important;
-  color: #D9A441 !important;
-  border: 0 !important;
-  box-shadow: none !important;
+/* Single source of truth for the composer mic + send icons (web and mobile,
+   both themes): plain ink glyphs on the glass pill - black in light, white in
+   dark. Both buttons now render as neutral `ghost` buttons that only carry the
+   .savanna-composer-action class (no .savanna-brand-token, no .savanna-send-button),
+   so nothing else repaints them. The icons are framer-motion m.div>m.svg trees;
+   forcing the color on the SVG itself beats any inherited currentColor chain,
+   and mirroring it onto the button keeps Loader2/StopCircle (plain lucide svgs,
+   covered by the descendant match) on the same ink. Targeting by aria-label
+   covers send + the two mic states. The paperclip is deliberately NOT here:
+   web keeps its muted icon-grey, and a mobile-only dark override below makes
+   the glyph white. */
+:root:not(.dark) .savanna-app [aria-label="Send message"] svg,
+:root:not(.dark) .savanna-app [aria-label="Record a voice message"] svg,
+:root:not(.dark) .savanna-app [aria-label="Stop and send voice note"] svg {
+  color: #000000 !important;
+  stroke: currentColor !important;
 }
 
-:root:not(.dark) .savanna-app .savanna-send-button svg {
-  color: #D9A441 !important;
+.dark .savanna-app [aria-label="Send message"] svg,
+.dark .savanna-app [aria-label="Record a voice message"] svg,
+.dark .savanna-app [aria-label="Stop and send voice note"] svg {
+  color: #ffffff !important;
+  stroke: currentColor !important;
 }
+
+:root:not(.dark) .savanna-app [aria-label="Send message"],
+:root:not(.dark) .savanna-app [aria-label="Record a voice message"],
+:root:not(.dark) .savanna-app [aria-label="Stop and send voice note"] {
+  color: #000000 !important;
+}
+
+.dark .savanna-app [aria-label="Send message"],
+.dark .savanna-app [aria-label="Record a voice message"],
+.dark .savanna-app [aria-label="Stop and send voice note"] {
+  color: #ffffff !important;
+}
+
+/* Paperclip: web (>=1024px) keeps its muted icon-grey in both themes (the
+   rules around L715 do that). On mobile dark the mic/send sit on the glass
+   pill and the clip must read with them, so it goes full white there. Light
+   mobile keeps the existing utility-grey clip, which reads fine on the
+   white/cream pill. Written after the mobile muted rules so it wins. */
+@media (max-width: 1023px) {
+  .dark .savanna-app [aria-label="Attach private media"],
+  .dark .savanna-app [aria-label="Attach private media"] svg {
+    color: #ffffff !important;
+  }
+}
+
 
 /* Lucide's send-horizontal glyph points right. Savanna presents it nose-up,
    so the glyph is rotated a quarter turn anticlockwise (90°).
@@ -1258,14 +1321,199 @@ button:not(:disabled), a {
   background-color: transparent !important;
 }
 
-/* Composer actions (mic and send) sit on the 20% gold / gold-icon / no-border
-   token and brighten to 30% on hover - the same step the route CTAs use. */
+/* Draft text must be plain ink: black on light, white on dark - some dark
+   themes inherit the dimmed secondary color while typing. Specificity is
+   raised past every token remap above, and the caret follows the text. */
+.savanna-app .savanna-composer-field input[aria-label="Message draft"] {
+  color: #151a17 !important;
+  caret-color: #151a17 !important;
+  -webkit-text-fill-color: #151a17 !important;
+}
+
+.dark .savanna-app .savanna-composer-field input[aria-label="Message draft"] {
+  color: #ffffff !important;
+  caret-color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+/* Composer actions (mic and send) are icon-only on the glass pill; the hover
+   step is a barely-there neutral tint, never gold. */
+.savanna-app .savanna-composer-action {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
 .savanna-app .savanna-composer-action:hover {
-  background: color-mix(in srgb, var(--gold) 30%, transparent) !important;
+  background: rgba(0, 0, 0, 0.04) !important;
 }
 
 .dark .savanna-app .savanna-composer-action:hover {
-  background: color-mix(in srgb, var(--chat-gold) 30%, transparent) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Chat media tray (emoji / GIF / stickers) - theme canvas above the composer. */
+.savanna-app .savanna-media-tray {
+  -webkit-backdrop-filter: saturate(180%) blur(22px);
+  backdrop-filter: saturate(180%) blur(22px);
+}
+
+/* Emoji picker inside the tray: transparent canvas so the tray surface shows
+   through, gold accents instead of the library's default blue, and no focus
+   ring on the search input. Vars are set on .epr-main (not the wrapper) so
+   they beat the library's emotion defaults on the same element. */
+.savanna-app .savanna-emoji-picker .epr-main {
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+  --epr-bg-color: transparent;
+  --epr-dark-bg-color: transparent;
+  --epr-picker-border-color: transparent;
+  --epr-dark-picker-border-color: transparent;
+  --epr-highlight-color: #a87820;
+  --epr-dark-highlight-color: #d9a441;
+  --epr-category-icon-active-color: #a87820;
+  --epr-dark-category-icon-active-color: #d9a441;
+  --epr-category-label-text-color: #a87820;
+  --epr-dark-category-label-text-color: #d9a441;
+  --epr-text-color: #3d2d1a;
+  --epr-dark-text-color: #f0f2f5;
+  --epr-search-input-bg-color: rgba(217, 164, 65, 0.2);
+  --epr-dark-search-input-bg-color: rgba(217, 164, 65, 0.2);
+  --epr-search-input-bg-color-active: rgba(217, 164, 65, 0.2);
+  --epr-dark-search-input-bg-color-active: rgba(217, 164, 65, 0.2);
+  --epr-search-border-color: transparent;
+  --epr-dark-search-border-color: transparent;
+  --epr-search-border-color-active: transparent;
+  --epr-search-input-placeholder-color: rgba(168, 120, 32, 0.7);
+  --epr-hover-bg-color: rgba(217, 164, 65, 0.2);
+  --epr-dark-hover-bg-color: rgba(217, 164, 65, 0.2);
+  --epr-focus-bg-color: rgba(217, 164, 65, 0.2);
+  --epr-dark-focus-bg-color: rgba(217, 164, 65, 0.2);
+  /* Fully-rounded search pill for the emoji tray. */
+  --epr-search-input-border-radius: 9999px;
+  --epr-search-input-text-color: #3d2d1a;
+  --epr-dark-search-input-text-color: #f0f2f5;
+  /* Tighten the gap between the search bar and the category nav row. */
+  --epr-header-padding: 10px var(--epr-horizontal-padding) 4px;
+}
+
+/* The picker root (.EmojiPickerReact === .epr-main) falls back to the
+   library's dark --epr-dark-bg-color (#222222) when its theme variable isn't
+   fully overridden. Force the whole picker subtree transparent with
+   !important so the dark tray surface shows through identically on web and
+   mobile — without this the modal can render #222222 on one breakpoint and
+   the canvas shade on the other. */
+.savanna-app .savanna-emoji-picker .EmojiPickerReact,
+.savanna-app .savanna-emoji-picker .epr-main,
+.savanna-app .savanna-emoji-picker .epr-body {
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  --epr-bg-color: transparent !important;
+  --epr-dark-bg-color: transparent !important;
+}
+
+/* Pin the tray (the modal surface) to the app canvas in dark mode so the
+   emoji modal background is identical on web and mobile. The Tailwind
+   dark:bg utility is the primary source; this guards against any cascade
+   edge case that would otherwise leave the modal a different shade. */
+.dark .savanna-app .savanna-media-tray {
+  background-color: var(--chat-bg) !important;
+}
+
+/* Kill the gold/blue outline the picker paints on a focused search input. */
+.savanna-app .savanna-emoji-picker .epr-search-container input:focus,
+.savanna-app .savanna-emoji-picker .epr-search-container input:focus-visible {
+  outline: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Tray bottom tabs: pill-shaped text tablets. aria-pressed buttons (not
+   role=tab) so the page-wide [role="tab"] rules cannot repaint them with
+   chat-bg fills and borders. Active = 20% gold surface, 100% gold text;
+   inactive = theme background, no border. */
+.savanna-app .savanna-media-tray-tabs button[aria-pressed="false"] {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: #5F6861 !important;
+}
+
+.savanna-app .savanna-media-tray-tabs button[aria-pressed="true"] {
+  background: rgba(217, 164, 65, 0.2) !important;
+  background-color: rgba(217, 164, 65, 0.2) !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: #D9A441 !important;
+}
+
+.dark .savanna-app .savanna-media-tray-tabs button[aria-pressed="false"] {
+  color: var(--chat-text-secondary) !important;
+}
+
+.dark .savanna-app .savanna-media-tray-tabs button[aria-pressed="true"] {
+  color: var(--chat-gold) !important;
+}
+
+/* The picker's search magnifier is a sprite; recolor it brand gold and center
+   it inside the pill. */
+.savanna-app .savanna-emoji-picker .epr-icn-search {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23D9A441' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.3-4.3'/%3E%3C/svg%3E") !important;
+}
+
+/* Category nav inside the picker: center the lucide replacement icons in
+   their buttons (the sprite layout left-aligned them) and tint them with
+   the theme text color, full gold when active.
+
+   The CategoryButton atom renders with role="tab" inside the picker's own
+   [role="tablist"], so the page-wide [role="tab"] rules
+   (L720/L854 dark, L1470/L1477 light — all !important, up to (0,6,0))
+   silently repaint them as dark pills on mobile and white pills on light.
+   Re-route through the picker wrapper + role path so the selector reaches
+   (0,6,1) and beats every page-wide tab rule. */
+:root body .savanna-app .savanna-emoji-picker [role="tablist"] [role="tab"].epr-cat-btn:not(.epr-active) {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.savanna-app .savanna-emoji-picker .epr-cat-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background-image: none !important;
+  background-color: transparent !important;
+  color: var(--epr-text-color);
+  opacity: 0.45;
+}
+
+.savanna-app .savanna-emoji-picker .epr-cat-btn.epr-active {
+  color: #A87820;
+  opacity: 1;
+}
+
+.dark .savanna-app .savanna-emoji-picker .epr-cat-btn.epr-active {
+  color: #D9A441;
+}
+
+/* In the dark tray the library keeps --epr-text-color at the light ink
+   (#3d2d1a) because it only swaps to the dark variant under its own
+   .epr-dark-theme scope. Pin the inactive category icons to the theme
+   secondary (#9AA1A6) — the tray is a single component, so this covers web
+   and mobile. Active stays gold (above). */
+.dark .savanna-app .savanna-emoji-picker .epr-cat-btn:not(.epr-active) {
+  color: #9AA1A6 !important;
+  opacity: 1 !important;
+}
+
+.savanna-app .savanna-emoji-picker .epr-cat-btn svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2;
 }
 
 .savanna-app .savanna-message-bubble.savanna-outgoing-message [aria-label="Sent"],
@@ -1320,9 +1568,11 @@ button:not(:disabled), a {
   color: #5F6861 !important;
 }
 
+/* Selected filter/message tab in light mode: gold fill + gold text, but no
+   border. The hairline border belongs to unselected tabs only. */
 :root:not(.dark) .savanna-app .savanna-desktop-message-tabs button[data-active="true"],
 :root:not(.dark) .savanna-app [role="tablist"] [role="tab"][aria-selected="true"] {
-  border-color: #D9A441 !important;
+  border-color: transparent !important;
   background: color-mix(in srgb, #D9A441 18%, transparent) !important;
   color: #D9A441 !important;
 }
@@ -1657,7 +1907,7 @@ button:not(:disabled), a {
   }
 
   .dark .savanna-app .savanna-desktop-message-tabs button {
-    border: 0.5px solid var(--chat-border);
+    border: none;
     background: var(--chat-bg);
     color: var(--chat-text-secondary);
   }
@@ -1731,9 +1981,10 @@ button:not(:disabled), a {
   }
 
   .dark .savanna-app .savanna-desktop-chat-search svg,
+  .dark .savanna-app .savanna-mobile-chat-search svg,
   .dark .savanna-app .savanna-desktop-chat-search input::placeholder,
   .dark .savanna-app .savanna-desktop-composer input::placeholder {
-    color: var(--chat-text-secondary) !important;
+    color: var(--chat-gold) !important;
     opacity: 1;
   }
 
@@ -1756,7 +2007,7 @@ button:not(:disabled), a {
   }
 
   .dark .savanna-app .savanna-desktop-message-tabs button {
-    border: 0.5px solid var(--chat-border) !important;
+    border: none !important;
     background: var(--chat-bg) !important;
     color: var(--chat-text-secondary) !important;
   }
@@ -2910,4 +3161,112 @@ button:not(:disabled), a {
 .dark body .savanna-app .savanna-message-bubble.savanna-outgoing-message,
 .dark body .savanna-app .savanna-message-bubble.savanna-outgoing-message :is(p, span) {
   color: #FDFBF5 !important;
+}
+
+/* Final message search and filter guards. Older broad dark-mode rules target
+   `[aria-label]` and `[role=tab]`, so the chat list controls keep explicit
+   classes for their intended treatment. */
+body .savanna-app .savanna-chat-search-with-gold-icon .savanna-chat-search-icon,
+body .savanna-app .savanna-chat-search-with-gold-icon .savanna-chat-search-icon * {
+  color: #D9A441 !important;
+  stroke: currentColor !important;
+}
+
+body .savanna-app .savanna-chat-search-with-gold-icon input {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: #151A17 !important;
+}
+
+.dark body .savanna-app .savanna-chat-search-with-gold-icon input {
+  color: #F0F2F5 !important;
+}
+
+/* Mobile filter tabs live inside .savanna-mobile-messages-canvas, so the
+   page-wide [role="tab"] rules (L854 inactive / L2173 active, both !important)
+   out-specify the shared desktop rules below and silently repaint them on
+   phones. Re-scoping the mobile selector through the canvas + [role="tab"]
+   path raises it past those, so phones now match the web treatment: inactive
+   #172127 / #AEBAC1, active 20% gold / #D9A441. */
+.dark body .savanna-app .savanna-mobile-messages-canvas [role="tablist"] [role="tab"].savanna-mobile-message-filter-tab[aria-selected="false"] {
+  background: #172127 !important;
+  background-color: #172127 !important;
+  border: 0 !important;
+  color: #AEBAC1 !important;
+}
+
+.dark body .savanna-app .savanna-mobile-messages-canvas [role="tablist"] [role="tab"].savanna-mobile-message-filter-tab[aria-selected="true"] {
+  background: color-mix(in srgb, #D9A441 20%, transparent) !important;
+  background-color: color-mix(in srgb, #D9A441 20%, transparent) !important;
+  border: 0 !important;
+  color: #D9A441 !important;
+}
+
+.dark body .savanna-app .savanna-desktop-message-tabs button[data-active="false"] {
+  background: #172127 !important;
+  background-color: #172127 !important;
+  border: 0 !important;
+  color: #AEBAC1 !important;
+}
+
+.dark body .savanna-app .savanna-desktop-message-tabs button[data-active="true"] {
+  background: color-mix(in srgb, #D9A441 20%, transparent) !important;
+  background-color: color-mix(in srgb, #D9A441 20%, transparent) !important;
+  color: #D9A441 !important;
+}
+
+body .savanna-app .savanna-emoji-picker .epr-header {
+  padding-right: 54px !important;
+}
+
+body .savanna-app .savanna-emoji-picker .epr-search-container {
+  margin-right: 0 !important;
+  position: relative !important;
+}
+
+body .savanna-app .savanna-emoji-picker .epr-search-container input,
+.dark body .savanna-app .savanna-emoji-picker .epr-search-container input {
+  --epr-search-input-padding: 0 16px 0 44px;
+  background-color: rgba(217, 164, 65, 0.2) !important;
+  color: #151A17 !important;
+  padding-left: 44px !important;
+  padding-right: 16px !important;
+}
+
+.dark body .savanna-app .savanna-emoji-picker .epr-search-container input {
+  color: #F0F2F5 !important;
+}
+
+body .savanna-app .savanna-emoji-picker .epr-search-container input::placeholder {
+  color: rgba(168, 120, 32, 0.76) !important;
+  opacity: 1 !important;
+}
+
+.dark body .savanna-app .savanna-emoji-picker .epr-search-container input::placeholder {
+  color: rgba(217, 164, 65, 0.76) !important;
+}
+
+body .savanna-app .savanna-emoji-picker .epr-search-container::before {
+  content: "";
+  position: absolute;
+  left: 18px;
+  top: 50%;
+  z-index: 2;
+  width: 18px;
+  height: 18px;
+  pointer-events: none;
+  transform: translateY(-50%);
+  background-color: #D9A441;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.3-4.3'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.3-4.3'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+body .savanna-app .savanna-emoji-picker .epr-icn-search {
+  display: none !important;
+}
+
+body .savanna-app .savanna-media-tray-close {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: #D9A441 !important;
 }

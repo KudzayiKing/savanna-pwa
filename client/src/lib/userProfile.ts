@@ -15,7 +15,7 @@ import {
   endAt,
   type FieldValue,
 } from "firebase/firestore";
-import type { User } from "firebase/auth";
+import { getIdTokenResult, type User } from "firebase/auth";
 import { useQuery } from "@tanstack/react-query";
 import { getFirestoreDb } from "./firebase";
 import { listFirebaseBlockedUserIds } from "./firebaseSafety";
@@ -49,6 +49,8 @@ export type AppUser = {
   readReceiptsEnabled: boolean;
   lastSeenVisibility: "nobody" | "connections";
   courseProgressOptIn: boolean;
+  adminRole: "super_admin" | "support_admin" | "moderator" | "merchant_admin" | "community_admin" | "analyst" | null;
+  accountStatus: "active" | "suspended" | "banned";
   createdAt: Date | null;
   updatedAt: Date | null;
 };
@@ -111,6 +113,10 @@ type UserDoc = {
   readReceiptsEnabled?: boolean;
   lastSeenVisibility?: AppUser["lastSeenVisibility"];
   courseProgressOptIn?: boolean;
+  adminRole?: AppUser["adminRole"];
+  role?: string | null;
+  isAdmin?: boolean;
+  accountStatus?: AppUser["accountStatus"];
   createdAt?: Timestamp | Date | FieldValue | null;
   updatedAt?: Timestamp | Date | FieldValue | null;
 };
@@ -148,6 +154,25 @@ function toDate(value: unknown): Date | null {
   if (value instanceof Timestamp) return value.toDate();
   if (value instanceof Date) return value;
   return null;
+}
+
+function normalizeAdminRole(value: unknown): AppUser["adminRole"] {
+  if (
+    value === "super_admin"
+    || value === "support_admin"
+    || value === "moderator"
+    || value === "merchant_admin"
+    || value === "community_admin"
+    || value === "analyst"
+  ) {
+    return value;
+  }
+  if (value === "admin") return "super_admin";
+  return null;
+}
+
+function normalizeAccountStatus(value: unknown): AppUser["accountStatus"] {
+  return value === "suspended" || value === "banned" ? value : "active";
 }
 
 function usersCollection(uid: string) {
@@ -204,6 +229,8 @@ function mapPublicProfile(uid: string, data: PublicProfileDoc): AppUser {
     readReceiptsEnabled: true,
     lastSeenVisibility: "connections",
     courseProgressOptIn: false,
+    adminRole: null,
+    accountStatus: "active",
     createdAt: null,
     updatedAt: toDate(data.updatedAt),
   };
@@ -219,7 +246,12 @@ function mapPublicProfile(uid: string, data: PublicProfileDoc): AppUser {
  */
 export async function ensureUserProfile(firebaseUser: User): Promise<AppUser> {
   const ref = usersCollection(firebaseUser.uid);
-  const snapshot = await getDoc(ref);
+  const [snapshot, tokenResult] = await Promise.all([
+    getDoc(ref),
+    getIdTokenResult(firebaseUser).catch(() => null),
+  ]);
+  const claimRole = normalizeAdminRole(tokenResult?.claims.adminRole ?? tokenResult?.claims.role);
+  const claimAdminRole = tokenResult?.claims.admin === true ? "super_admin" : claimRole;
 
   const now = new Date();
 
@@ -271,12 +303,15 @@ export async function ensureUserProfile(firebaseUser: User): Promise<AppUser> {
       readReceiptsEnabled: created.readReceiptsEnabled ?? true,
       lastSeenVisibility: created.lastSeenVisibility ?? "connections",
       courseProgressOptIn: created.courseProgressOptIn ?? false,
+      adminRole: claimAdminRole,
+      accountStatus: "active",
       createdAt: now,
       updatedAt: now,
     };
   }
 
   const data = snapshot.data() as UserDoc;
+  const adminRole = claimAdminRole ?? normalizeAdminRole(data.adminRole ?? data.role ?? (data.isAdmin ? "admin" : null));
 
   // Fire-and-forget: a stale lastSeenAt must never block or fail a sign-in.
   // The catch matters — an unhandled rejection here would surface as an
@@ -313,6 +348,8 @@ export async function ensureUserProfile(firebaseUser: User): Promise<AppUser> {
     readReceiptsEnabled: data.readReceiptsEnabled ?? true,
     lastSeenVisibility: data.lastSeenVisibility ?? "connections",
     courseProgressOptIn: data.courseProgressOptIn ?? false,
+    adminRole,
+    accountStatus: normalizeAccountStatus(data.accountStatus),
     createdAt: toDate(data.createdAt),
     updatedAt: toDate(data.updatedAt),
   };

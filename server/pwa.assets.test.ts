@@ -82,6 +82,219 @@ describe("Savanna PWA assets", () => {
     expect(login).toContain("bg-[#D9A441]/20 text-[#D9A441]");
   });
 
+  it("ships a claim-gated Firebase admin console with reason-required data actions", async () => {
+    const [app, adminPage, firebaseAdmin, userProfile, firestoreRules, styles, shell] = await Promise.all([
+      readFile(resolve(projectRoot, "client/src/App.tsx"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/pages/AdminPage.tsx"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/lib/firebaseAdmin.ts"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/lib/userProfile.ts"), "utf8"),
+      readFile(resolve(projectRoot, "firestore.rules"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/index.css"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/components/SavannaShell.tsx"), "utf8"),
+    ]);
+
+    expect(app).toContain('const AdminPage = lazy(() => import("./pages/AdminPage"));');
+    expect(app).toContain('<Route path="/admin" component={AdminPage} />');
+    expect(adminPage).toContain("savanna-route-admin");
+    expect(adminPage).toContain("Savanna control room.");
+    expect(adminPage).toContain("AdminCountryMap");
+    expect(adminPage).toContain("adminCountryMarkers");
+    expect(adminPage).toContain("Country activity");
+    expect(adminPage).toContain("Users across the map.");
+    expect(adminPage).toContain('const africaMapAsset = "/admin/blank-map-africa.png";');
+    expect(adminPage).toContain("WebkitMaskImage");
+    expect(adminPage).toContain("Africa country activity map");
+    expect(adminPage).toContain("bg-[#D9A441]/20");
+    expect(adminPage).toContain("bg-[#D9A441] text-[#151A17]");
+    expect(adminPage).toContain('{ code: "MA", name: "Morocco"');
+    expect(adminPage).toContain('{ code: "DZ", name: "Algeria"');
+    expect(adminPage).toContain('{ code: "CG", name: "Congo"');
+    expect(adminPage).toContain('{ code: "CD", name: "DR Congo"');
+    expect(adminPage).not.toContain("M41 6 55 7 71 12");
+    expect(adminPage).toContain("Show users in ${marker.name}");
+    expect(adminPage.indexOf("<AdminCountryMap users={data.users} />")).toBeLessThan(adminPage.indexOf('aria-label="Admin sections"'));
+    await expect(access(resolve(projectRoot, "client/public/admin/blank-map-africa.png"))).resolves.toBeUndefined();
+    expect(adminPage).toContain('type AdminTab = "overview" | "users" | "reports" | "content" | "shops" | "communities" | "audit" | "errors" | "analytics";');
+    expect(adminPage).toContain("useAdminDashboard(user)");
+    expect(adminPage).toContain("useAdminUsers(user, userSearch)");
+    expect(adminPage).toContain("useAdminMutations(user)");
+    expect(adminPage).toContain("Preview mode");
+    // The console used to render in full for every signed-in user with a
+    // "layout testing" banner. It is now gated: without an admin claim the
+    // page shows a lock screen and never issues the dashboard queries.
+    expect(adminPage).toContain("Admin access required.");
+    expect(adminPage).not.toContain("Admin is open for layout testing");
+    expect(adminPage).toContain("LockedScreen");
+    expect(adminPage).toContain("reloadAdminClaim()");
+    expect(adminPage).toContain("updateUserStatus");
+    expect(adminPage).toContain("updateReportStatus");
+    expect(adminPage).toContain("updateStorefrontReview");
+    expect(adminPage).toContain("updateCommunityReview");
+    expect(firebaseAdmin).toContain("export function canAccessAdmin");
+    expect(firebaseAdmin).toContain("export function canWriteAdmin");
+    expect(firebaseAdmin).toContain("Admin access required.");
+    expect(firebaseAdmin).toContain('collection(getFirestoreDb(), "adminAuditLogs")');
+    expect(firebaseAdmin).toContain('collection(getFirestoreDb(), "safetyReports")');
+    expect(firebaseAdmin).toContain('collection(getFirestoreDb(), "storefronts")');
+    expect(firebaseAdmin).toContain('collection(getFirestoreDb(), "communities")');
+    expect(firebaseAdmin).toContain("VITE_GEMMA_LITERTLM_MODEL_URL");
+    expect(firebaseAdmin).toContain("VITE_EMBEDDING_GEMMA_MODEL_URL");
+    expect(firebaseAdmin).toContain("VITE_TRANSLATE_GEMMA_MODEL_URL");
+    expect(userProfile).toContain("getIdTokenResult(firebaseUser)");
+    expect(userProfile).toContain("adminRole:");
+    expect(userProfile).toContain("accountStatus:");
+    expect(firestoreRules).toContain("function isAdmin()");
+    expect(firestoreRules).toContain("function canWriteAdmin()");
+    expect(firestoreRules).toContain("allow read: if isSelf(uid) || isAdmin();");
+    expect(firestoreRules).toContain("request.resource.data.diff(resource.data).affectedKeys().hasOnly(");
+    expect(firestoreRules).toContain("match /adminAuditLogs/{logId}");
+    expect(firestoreRules).toContain("allow read: if isAdmin();");
+    expect(firestoreRules).toContain("'reviewStatus', 'verificationState', 'reviewedBy', 'reviewedAt'");
+    expect(firestoreRules).toContain("'reviewStatus', 'reviewedBy', 'reviewedAt', 'visibility', 'updatedAt'");
+    expect(styles).toContain(".savanna-admin-tabs");
+    expect(styles).toContain(".savanna-admin-country-strip");
+    expect(styles).toContain(".dark .savanna-app:has(.savanna-route-admin)");
+    expect(shell).toContain('"/admin"');
+  });
+
+  // Regression guard: the audit write and the rule that permits it lived in
+  // two files with nothing tying them together. The rule's hasOnly() list was
+  // missing ten fields the client actually sent, so every admin mutation —
+  // which is a transaction containing that write — failed with
+  // permission-denied and silently rolled back. Nothing crashed; admin just
+  // did nothing. This asserts the two lists still agree.
+  it("keeps the audit log field whitelist in step with what the mutation writes", async () => {
+    const [firebaseAdmin, firestoreRules] = await Promise.all([
+      readFile(resolve(projectRoot, "client/src/lib/firebaseAdmin.ts"), "utf8"),
+      readFile(resolve(projectRoot, "firestore.rules"), "utf8"),
+    ]);
+
+    const written = new Set<string>();
+
+    // Fields set directly in transaction.set(auditRef, { ... }).
+    const setStart = firebaseAdmin.indexOf("transaction.set(auditRef");
+    expect(setStart).toBeGreaterThan(-1);
+    const setBlock = firebaseAdmin.slice(setStart, firebaseAdmin.indexOf("});", setStart));
+    // Matches both `key: value` and ES6 shorthand `key,`. The shorthand case
+    // matters: `reason`, `before` and `after` are written that way, and
+    // `reason` is the single most important field in the trail — a regex that
+    // only looked for colons skipped it and let the real bug through.
+    for (const match of setBlock.matchAll(/^\s*([A-Za-z]\w*)\s*[:,]/gm)) written.add(match[1]);
+
+    // Fields pulled in by the device fingerprint spread.
+    const contextStart = firebaseAdmin.indexOf("cachedActorContext = {");
+    expect(contextStart).toBeGreaterThan(-1);
+    const contextBlock = firebaseAdmin.slice(contextStart, firebaseAdmin.indexOf("};", contextStart));
+    for (const match of contextBlock.matchAll(/^\s*([A-Za-z]\w*)\s*[:,]/gm)) written.add(match[1]);
+
+    expect(written.size).toBeGreaterThan(10);
+
+    const auditMatch = firestoreRules.slice(firestoreRules.indexOf("match /adminAuditLogs"));
+    const hasOnly = /keys\(\)\.hasOnly\(\[([\s\S]*?)\]\)/.exec(auditMatch);
+    expect(hasOnly).not.toBeNull();
+    const allowed = new Set((hasOnly![1].match(/'([^']+)'/g) ?? []).map(value => value.replace(/'/g, "")));
+
+    for (const field of written) {
+      expect(allowed.has(field), `audit rule whitelist is missing '${field}'`).toBe(true);
+    }
+  });
+
+  // Same failure mode as the guard above, for the error log. observability.ts
+  // writes the entry and firestore.rules whitelists it; they are separate
+  // files, and an unlisted field means every reported error is silently
+  // rejected at the server. That would be worse than the audit case, because
+  // the whole point of the collection is to hear about failures — a broken
+  // whitelist produces no errors about the errors.
+  it("keeps the error log field whitelist in step with what the client writes", async () => {
+    const [observability, firestoreRules] = await Promise.all([
+      readFile(resolve(projectRoot, "client/src/lib/observability.ts"), "utf8"),
+      readFile(resolve(projectRoot, "firestore.rules"), "utf8"),
+    ]);
+
+    const writeStart = observability.indexOf('addDoc(collection(getFirestoreDb(), "errorLogs")');
+    expect(writeStart).toBeGreaterThan(-1);
+    const writeBlock = observability.slice(writeStart, observability.indexOf("});", writeStart));
+
+    const written = new Set<string>();
+    for (const match of writeBlock.matchAll(/^\s*([A-Za-z]\w*)\s*:/gm)) written.add(match[1]);
+    // Guards against the regex quietly matching nothing and the test passing
+    // vacuously, which is how the original audit-log bug survived.
+    expect(written.size).toBeGreaterThan(10);
+
+    const errorMatch = firestoreRules.slice(firestoreRules.indexOf("match /errorLogs"));
+    const hasOnly = /keys\(\)\.hasOnly\(\[([\s\S]*?)\]\)/.exec(errorMatch);
+    expect(hasOnly).not.toBeNull();
+    const allowed = new Set((hasOnly![1].match(/'([^']+)'/g) ?? []).map(value => value.replace(/'/g, "")));
+
+    for (const field of written) {
+      expect(allowed.has(field), `errorLogs rule whitelist is missing '${field}'`).toBe(true);
+    }
+  });
+
+  // Requirement 13. Capture is only useful if it is actually installed: a
+  // module that is never imported, or imported but never initialised, looks
+  // exactly like a healthy app with no errors.
+  it("wires client error capture into the app entry points", async () => {
+    const [main, useAuth, firebaseAdmin, errorBoundary] = await Promise.all([
+      readFile(resolve(projectRoot, "client/src/main.tsx"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/_core/hooks/useAuth.ts"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/lib/firebaseAdmin.ts"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/components/ErrorBoundary.tsx"), "utf8"),
+    ]);
+
+    // installErrorCapture() must run before the app renders, or boot-time
+    // failures — the ones most worth knowing about — are missed entirely.
+    expect(main).toContain("installErrorCapture()");
+    expect(main.indexOf("installErrorCapture()")).toBeLessThan(main.indexOf("createRoot("));
+    // Attribute errors to the signed-in user, and clear it on sign-out.
+    expect(useAuth).toContain("setErrorIdentity(");
+    // Failed admin actions are the highest-signal failures in the product.
+    expect(firebaseAdmin).toContain('captureError("admin.mutation"');
+    expect(firebaseAdmin).toContain("isPermissionError(error)");
+    // Render crashes carry the user-visible digest so support can correlate.
+    expect(errorBoundary).toContain("captureError(");
+    expect(errorBoundary).toContain('"react.render"');
+  });
+
+  // Regression guard on requirement 12: the client permission matrix decides
+  // which buttons are enabled, and the rules decide what actually succeeds.
+  // They are separate hand-maintained tables in separate languages. If they
+  // drift, either a role silently loses abilities or the UI offers an action
+  // the server rejects.
+  it("keeps the Firestore permission matrix in step with the client matrix", async () => {
+    const [firebaseAdmin, firestoreRules] = await Promise.all([
+      readFile(resolve(projectRoot, "client/src/lib/firebaseAdmin.ts"), "utf8"),
+      readFile(resolve(projectRoot, "firestore.rules"), "utf8"),
+    ]);
+
+    const start = firebaseAdmin.indexOf("ADMIN_ROLE_PERMISSIONS");
+    const clientBlock = firebaseAdmin.slice(start, firebaseAdmin.indexOf("REASON_MIN_LENGTH"));
+
+    // super_admin short-circuits in the rules; analyst is excluded by
+    // canWriteAdmin() rather than by a permission branch, so neither has a
+    // line to compare against.
+    for (const role of ["support_admin", "moderator", "merchant_admin", "community_admin"]) {
+      const clientMatch = new RegExp(`${role}:\\s*\\[([^\\]]*)\\]`).exec(clientBlock);
+      expect(clientMatch, `client matrix has no entry for ${role}`).not.toBeNull();
+
+      const permissions = (clientMatch![1].match(/["'][^"']+["']/g) ?? []).map(value => value.replace(/["']/g, ""));
+      expect(permissions.length, `${role} should not have an empty permission list`).toBeGreaterThan(0);
+
+      const ruleBranch = new RegExp(`adminClaimRole\\(\\) == '${role}'[^|]*`).exec(firestoreRules);
+      expect(ruleBranch, `rules have no canPerform branch for ${role}`).not.toBeNull();
+
+      for (const permission of permissions) {
+        expect(ruleBranch![0], `rules do not grant ${role} the '${permission}' permission`).toContain(permission);
+      }
+    }
+
+    // A read-only role must never acquire a permission branch.
+    const analystMatch = new RegExp(`analyst:\\s*\\[([^\\]]*)\\]`).exec(clientBlock);
+    expect(analystMatch).not.toBeNull();
+    expect((analystMatch![1].match(/["'][^"']+["']/g) ?? []).length).toBe(0);
+    expect(firestoreRules).not.toContain("adminClaimRole() == 'analyst' && permission");
+  });
+
   it("keeps phone numbers out of public username lookup while starting chats by @username", async () => {
     const [userProfile, firebaseChat, messages, profile, publicProfile, firestoreRules] = await Promise.all([
       readFile(resolve(projectRoot, "client/src/lib/userProfile.ts"), "utf8"),
@@ -262,7 +475,7 @@ describe("Savanna PWA assets", () => {
     ]);
 
     expect(html).toContain('content="width=device-width, initial-scale=1.0, viewport-fit=cover"');
-    expect(html).toContain('name="apple-mobile-web-app-status-bar-style" content="black-translucent"');
+    expect(html).toMatch(/name="apple-mobile-web-app-status-bar-style"[\s\S]*?content="black-translucent"/);
     expect(html).toContain('content="rgba(255, 255, 255, 0.72)"');
     expect(html).toContain('dark ? "rgba(17, 27, 33, 0.72)" : "rgba(255, 255, 255, 0.72)"');
     expect(themeContext).toContain('const pageColor = theme === "dark" ? "#111B21" : "#FFFFFF";');
@@ -429,20 +642,26 @@ describe("Savanna PWA assets", () => {
 
     expect(shell).toContain("<MobileStoriesHeader />");
     expect(shell).toContain("const mobileNavigation = navigation;");
-    expect(shell).toContain("navigation.map((item) =>");
-    expect(shell).toContain("mobileNavigation.map((item) =>");
+    expect(shell).toContain("navigation.map(item =>");
+    expect(shell).toContain("mobileNavigation.map(item =>");
     expect(shell).toContain('{ href: "/stories", label: "Stories" }');
     expect(shell).toContain('{ href: "/communities", label: "Communities" }');
-    expect(shell).toContain('isMessagesWorkspace ? "lg:h-screen lg:min-h-0 lg:max-h-screen lg:overflow-hidden"');
-    expect(shell).toContain('isMessagesWorkspace ? "min-h-screen p-0 lg:h-screen lg:min-h-0 lg:overflow-hidden"');
-    expect(shell).toContain('isMessagesWorkspace ? "w-full lg:h-full lg:min-h-0 lg:overflow-hidden"');
+    expect(shell).toContain('"lg:h-screen lg:min-h-0 lg:max-h-screen lg:overflow-hidden"');
+    expect(shell).toContain('"min-h-screen p-0 lg:h-screen lg:min-h-0 lg:overflow-hidden"');
+    expect(shell).toContain('"w-full lg:h-full lg:min-h-0 lg:overflow-hidden"');
     expect(shell).not.toContain('{ href: "/profile", label: "Profile" }');
     expect(shell).not.toContain('{ href: "/orders", label: "Orders" }');
-    expect(shell).toContain('import { AnimatedPlusIcon, MobileNavIcon, type MobileNavIconName } from "@/components/AnimatedNavIcons";');
-    expect(shell).toContain('<MobileNavIcon name={item.label as MobileNavIconName} active={active} size={22} />');
-    expect(shell).toContain('<MobileNavIcon name={item.label as MobileNavIconName} active={active} size={21} />');
+    expect(shell).toContain("AnimatedPlusIcon");
+    expect(shell).toContain("MobileNavIcon");
+    expect(shell).toContain("type MobileNavIconName");
+    expect(shell).toContain("name={item.label as MobileNavIconName}");
+    expect(shell).toContain("size={22}");
+    expect(shell).toContain("size={21}");
     expect(shell).not.toContain('{ href: "/", label: "Home", icon: Home }');
-    expect(stories).toContain("const scrollTop = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop");
+    expect(stories).toContain("const scrollTop =");
+    expect(stories).toContain("window.scrollY");
+    expect(stories).toContain("document.documentElement.scrollTop");
+    expect(stories).toContain("document.body.scrollTop");
     expect(stories).toContain("setCompact(previewCompact || scrollTop > 12)");
     expect(stories).toContain("window.requestAnimationFrame");
     expect(stories).toContain("const collapsedStoriesCluster = compact ?");
@@ -452,14 +671,17 @@ describe("Savanna PWA assets", () => {
     expect(stories).toContain("filterStoriesForFollowingHeader");
     expect(stories).toContain("useFollowedUserIds");
     expect(stories).toContain("type StoryTarget");
-    expect(stories).toContain('useState<StoryTarget>(hasBusinessContext ? "shop" : hasCommunityContext ? "community" : "story")');
+    expect(stories).toContain("useState<StoryTarget>");
+    expect(stories).toContain('hasBusinessContext ? "shop"');
+    expect(stories).toContain('hasCommunityContext ? "community" : "story"');
     expect(stories).toContain("useMyFirebaseStorefront");
     expect(stories).toContain("useFirebaseCommunities");
     expect(stories).toContain("Choose a community");
     expect(stories).toContain("Product name");
     expect(stories).toContain("communityId: isCommunityStory ? selectedCommunity?.id : undefined");
     expect(stories).toContain("storefrontId: isShopStory ? targetStorefrontId : undefined");
-    expect(stories).toContain("This will stay in Memories");
+    expect(stories).toContain("This will stay in");
+    expect(stories).toContain("Memories");
     expect(stories).toContain("story.communityId");
     expect(stories).toContain("usePublishFirebaseStory");
     expect(stories).toContain("useReactToFirebaseStory");
@@ -469,7 +691,8 @@ describe("Savanna PWA assets", () => {
     expect(stories).not.toContain("trpc.account.profile.useQuery");
     expect(stories).toContain("const ownStoryAvatarUrl = user?.photoURL ?? null;");
     expect(stories).toContain('aria-label="Add to your Story"');
-    expect(stories).toContain('<img src={ownStoryAvatarUrl} alt="" className="size-full rounded-full object-cover" />');
+    expect(stories).toContain("src={ownStoryAvatarUrl}");
+    expect(stories).toContain('className="size-full rounded-full object-cover"');
     expect(stories).toContain('absolute -bottom-0.5 -right-0.5 grid size-5');
     expect(stories).not.toContain("Preview Stories — development only");
     expect(styles).not.toContain("border: 1px dashed");
@@ -488,7 +711,8 @@ describe("Savanna PWA assets", () => {
     expect(stories).toContain("savanna-mobile-header-spacer lg:hidden");
     expect(stories).toContain('href={isAuthenticated ? "/profile" : "/login"}');
     expect(stories).toContain('aria-label="Open profile"');
-    expect(stories).toContain("{ownStoryAvatarUrl ? <img src={ownStoryAvatarUrl}");
+    expect(stories).toContain("{ownStoryAvatarUrl ? (");
+    expect(stories).toContain("src={ownStoryAvatarUrl}");
     expect(stories).not.toContain("<UserIcon size={21} />");
     expect(stories).not.toContain('const [menuPulse, setMenuPulse] = useState(0);');
     expect(stories).not.toContain('const [searchPulse, setSearchPulse] = useState(0);');
@@ -504,9 +728,10 @@ describe("Savanna PWA assets", () => {
     expect(stories).toContain("Around you Stories");
     expect(stories).toContain('aria-label="Collapsed Stories cluster"');
     expect(stories).toContain('className="savanna-collapsed-story-cluster flex shrink-0 items-center"');
-    expect(stories).toContain('text-[#5f6861] dark:text-[#9AA1A6]">Your Story</span>');
+    expect(stories).toContain("text-[#5f6861] dark:text-[#9AA1A6]");
+    expect(stories).toContain("Your Story");
     expect(stories).not.toContain("const discoveryLabel = group.items[0]?.discovery?.label");
-    expect(stories).toContain('{group.authorName.split(" ")[0]}</span>');
+    expect(stories).toContain('group.authorName.split(" ")[0]');
     expect(stories).toContain("groupedStories.slice(0, 3).map");
     expect(stories).toContain("grid size-8 shrink-0 place-items-center rounded-full");
     expect(stories).toContain('groupIndex ? "-ml-1.5" : ""');
@@ -515,7 +740,19 @@ describe("Savanna PWA assets", () => {
     expect(stories).toContain("aria-label={`Story ${(index ?? 0) + 1} of ${total}`}");
     expect(stories).toContain("Share a Story");
     expect(stories).not.toContain("from the desktop panel for now");
-    expect(animatedIcons).toContain('MobileNavIconName = "Home" | "Messages" | "Shops" | "Learn" | "Stories" | "Communities" | "Orders" | "Profile"');
+    expect(animatedIcons).toContain("export type MobileNavIconName =");
+    for (const item of [
+      '"Home"',
+      '"Messages"',
+      '"Shops"',
+      '"Learn"',
+      '"Stories"',
+      '"Communities"',
+      '"Orders"',
+      '"Profile"',
+    ]) {
+      expect(animatedIcons).toContain(item);
+    }
     expect(animatedIcons).toContain('if (name === "Stories")');
     expect(animatedIcons).toContain('if (name === "Communities")');
     // The Communities glyph is lucide's `users`, the same set as every other
@@ -534,7 +771,8 @@ describe("Savanna PWA assets", () => {
     expect(animatedIcons).toContain("bodyArcVariants");
     expect(animatedIcons).toContain('x: [-3, 0]');
     expect(animatedIcons).toContain('x: [3, 0]');
-    expect(animatedIcons).toContain('fill="none" stroke="currentColor"');
+    expect(animatedIcons).toContain('fill="none"');
+    expect(animatedIcons).toContain('stroke="currentColor"');
     expect(animatedIcons).toContain("const movingLineVariants: Variants");
     expect(animatedIcons).toContain('y: [0, -4.5, 0, -4.5, 0]');
     expect(animatedIcons).toContain("variants={movingLineVariants}");
@@ -542,7 +780,8 @@ describe("Savanna PWA assets", () => {
     expect(app).toContain('const CommunitiesPage = lazy(() => import("./pages/CommunitiesPage"));');
     expect(app).toContain('const CommunityDetailPage = lazy(() => import("./pages/CommunityDetailPage"));');
     expect(app).toContain('<Route path="/stories" component={StoriesPage} />');
-    expect(app).toContain('<Route path="/communities/:communityId" component={CommunityDetailPage} />');
+    expect(app).toContain('path="/communities/:communityId"');
+    expect(app).toContain("component={CommunityDetailPage}");
     expect(app).toContain('<Route path="/communities" component={CommunitiesPage} />');
     expect(communitiesPage).toContain("savanna-route-communities");
     expect(communitiesPage).toContain('MobileNavIcon name="Communities" active size={16}');
@@ -733,7 +972,7 @@ describe("Savanna PWA assets", () => {
     expect(messages).toContain("savanna-desktop-chat-list flex h-screen min-h-0 flex-col overflow-hidden");
     expect(messages).toContain("savanna-desktop-conversation-panel flex h-screen min-h-0 flex-col overflow-hidden");
     expect(messages).toContain("savanna-desktop-message-thread min-h-0 flex-1 space-y-3 overflow-y-auto");
-    expect(messages).toContain('dark:bg-[#23282C] dark:text-[#D9A441]');
+    expect(messages).toContain('savanna-mobile-message-filter-tab shrink-0 rounded-full px-3 py-2 text-xs font-semibold');
     expect(messages).toContain('savanna-mobile-messages-canvas -mx-4');
     expect(messages).not.toContain(">Chats</h1>");
     expect(messages).toContain("const previewConversations: ConversationListItem[] = [];");
@@ -999,7 +1238,8 @@ describe("Savanna PWA assets", () => {
     expect(animatedIcons).toContain("PlusIcon.displayName = \"PlusIcon\"");
     expect(animatedIcons).toContain("export { PlusIcon }");
     expect(animatedIcons).toContain("animate: { rotate: 180 }");
-    expect(animatedIcons).toContain("onTouchStart={(event) =>");
+    expect(animatedIcons).toContain("onTouchStart={event =>");
+    expect(animatedIcons).toContain("onTouchStart?.(event)");
     expect(animatedIcons).toContain("export function AnimatedSearchIcon");
     expect(animatedIcons).toContain("export function AnimatedMenuIcon");
     expect(animatedIcons).toContain("export function AnimatedStoreIcon");
@@ -1023,12 +1263,15 @@ describe("Savanna PWA assets", () => {
     expect(animatedIcons).toContain("}, 760);");
     expect(animatedIcons).toContain('const state = !reducedMotion && (hovered || pressed) ? "active" : "idle";');
     expect(animatedIcons).toContain('window.matchMedia("(hover: hover) and (pointer: fine)")');
-    expect(animatedIcons).toContain('onPointerEnter: () => { if (canHover) setHovered(true); }');
-    expect(animatedIcons).toContain('onPointerDown: () => { if (!canHover) playPressAnimation(); }');
-    expect(animatedIcons).toContain('onTouchStart: () => { if (!canHover) playPressAnimation(); }');
+    expect(animatedIcons).toContain("onPointerEnter: () =>");
+    expect(animatedIcons).toContain("if (canHover) setHovered(true);");
+    expect(animatedIcons).toContain("onPointerDown: () =>");
+    expect(animatedIcons).toContain("if (!canHover) playPressAnimation();");
+    expect(animatedIcons).toContain("onTouchStart: () =>");
     expect(animatedIcons).toContain("data-active={active}");
     expect(animatedIcons).toContain('controls.start("active").then(() => controls.start("idle"));');
-    expect(animatedIcons).toContain('initial="idle" animate={state}');
+    expect(animatedIcons).toContain('initial="idle"');
+    expect(animatedIcons).toContain("animate={state}");
     expect(profile).toContain("Choose how Savanna looks on this device.");
     expect(profile).toContain("Use {theme === \"light\" ? \"dark\" : \"light\"} mode");
     expect(profile).toContain("<SavannaShell hideMobileHeader>");
@@ -1080,8 +1323,9 @@ describe("Savanna PWA assets", () => {
     expect(styles).toContain("background-color: color-mix(in srgb, var(--chat-gold-dark) 20%, transparent) !important;");
     expect(styles).toContain("border: 0.5px solid color-mix(in srgb, var(--chat-gold) 50%, transparent) !important;");
     expect(styles).toContain("border: 0.5px solid var(--chat-border) !important;");
-    expect(shell).toContain('active ? "bg-[#D9A441]/20 text-[#A87820] dark:text-[#D9A441]"');
-    expect(shell).toContain('active ? "inline-flex w-max min-w-max items-center gap-2 rounded-[28px] bg-[#D9A441]/20 px-3 text-[#D9A441] dark:text-[#D9A441]"');
+    expect(shell).toContain("bg-[#D9A441]/20 text-[#A87820] dark:text-[#D9A441]");
+    expect(shell).toContain("inline-flex w-max min-w-max items-center gap-2 rounded-[28px]");
+    expect(shell).toContain("px-3 text-[#D9A441] dark:text-[#D9A441]");
     // `justify-between` anchors the end tabs, and every tab is `flex-none`: the
     // active one grows to fit its label, and a `flex-1` slot would hoard the
     // leftover space on one side.
@@ -1215,8 +1459,9 @@ describe("Savanna PWA assets", () => {
     // `/home` used to render the Home page directly; it now redirects to
     // /messages, which is the app's landing route. Assert the redirect rather
     // than the old component form so this fails if the route is dropped.
-    expect(app).toContain('<Route path="/home"><Redirect to="/messages" /></Route>');
-    expect(app).toContain('<Route path="/"><Redirect to="/messages" /></Route>');
+    expect(app).toContain('path="/home"');
+    expect(app).toContain('path="/"');
+    expect(app).toContain('to="/messages"');
     expect(messages).toContain("const desktopPreviewMessages: never[] = [];");
     expect(messages).toContain('const isPreviewConversation = Boolean(selectedConversationId && isPreviewConversationId(selectedConversationId));');
     expect(messages).toContain('chatPreviewMode === "detail" && previewConversations[0]');
@@ -1282,9 +1527,10 @@ describe("Savanna PWA assets", () => {
   // web layout in light mode — white list surface, cream search pill, warm
   // bottom-nav tint, and a glass bottom nav that actually reads as colored.
   it("renders mobile /messages surfaces the same way as the desktop web version", async () => {
-    const [styles, messages] = await Promise.all([
+    const [styles, messages, mediaTray] = await Promise.all([
       readFile(resolve(projectRoot, "client/src/index.css"), "utf8"),
       readFile(resolve(projectRoot, "client/src/pages/MessagesPage.tsx"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/components/ChatMediaTray.tsx"), "utf8"),
     ]);
 
     // Both list surfaces are white in light mode (desktop chat-list panel
@@ -1310,6 +1556,22 @@ describe("Savanna PWA assets", () => {
     expect(mobileSearch).not.toBeNull();
     expect(mobileSearch?.[1]).not.toContain("bg-white");
     expect(mobileSearch?.[1]).toContain("bg-transparent");
+    expect(mobileSearch?.[1]).toContain("text-[#151A17]");
+    expect(mobileSearch?.[1]).toContain("dark:text-[#F0F2F5]");
+    expect(messages).toContain("savanna-chat-search-with-gold-icon");
+    expect(messages).toContain("savanna-chat-search-icon");
+    expect(messages).toContain("savanna-mobile-message-filter-tab");
+    for (const match of messages.matchAll(/savanna-mobile-message-filter-tab[^"`}]+/g)) {
+      expect(match[0]).not.toContain("dark:bg-[#0A1014]");
+    }
+    expect(styles).toContain(".savanna-chat-search-with-gold-icon .savanna-chat-search-icon");
+    expect(styles).toContain(".savanna-mobile-message-filter-tab[aria-selected=\"false\"]");
+    expect(styles).toContain("background: #172127 !important;");
+    expect(styles).toContain(".savanna-emoji-picker .epr-header");
+    expect(styles).toContain("padding-right: 54px !important;");
+    expect(styles).toContain(".savanna-emoji-picker .epr-search-container::before");
+    expect(styles).toContain("--epr-search-input-padding: 0 16px 0 44px;");
+    expect(mediaTray).toContain("savanna-media-tray-close");
     // No inline style either.
     const mobileLabel = messages.match(
       /<label className="savanna-mobile-chat-search[^"]*" style=\{\{[^}]*\}\}>/
@@ -1483,9 +1745,30 @@ describe("Savanna PWA assets", () => {
       ).toBe(false);
     }
 
-    // Mic and send are circles so they nest flush in the pill.
-    expect(messages).toContain("savanna-send-button savanna-composer-action savanna-brand-token shrink-0 rounded-full");
-    expect(messages).toContain("savanna-composer-action savanna-brand-token shrink-0 rounded-full");
+    // Mic and send are circles so they nest flush in the pill. They are
+    // token-free neutral buttons: flat CSS rules own their ink color.
+    expect(messages).toContain('variant="ghost" disabled={sending} size="icon" className={cn("savanna-composer-action shrink-0 rounded-full"');
+    expect(messages).toContain('className={cn("savanna-composer-action shrink-0 rounded-full", actionSize, recording ? "ring-2 ring-[#22C55E]" : "")}');
+    // Mic and send glyphs: black in light, white in dark, at both breakpoints.
+    expect(css).toMatch(/:root:not\(\.dark\) \.savanna-app \[aria-label="Send message"\] svg[^}]*color: #000000 !important/);
+    expect(css).toMatch(/\.dark \.savanna-app \[aria-label="Send message"\] svg[^}]*color: #ffffff !important/);
+    expect(css).toMatch(/:root:not\(\.dark\) \.savanna-app \[aria-label="Send message"\],[^}]*color: #000000 !important/);
+    expect(css).toMatch(/\.dark \.savanna-app \[aria-label="Send message"\],[^}]*color: #ffffff !important/);
+    // The paperclip keeps its muted web look; only the mobile dark glyph goes white.
+    expect(css).not.toMatch(/aria-label="Send message"\] svg,[^{]*Attach private media/);
+    const clipMobile = css.indexOf('@media (max-width: 1023px) {\n  .dark .savanna-app [aria-label="Attach private media"],');
+    expect(clipMobile).toBeGreaterThan(css.indexOf('.dark .savanna-app [aria-label="Attach private media"] svg {\n    color: var(--chat-icon-muted)'));
+    expect(css.slice(clipMobile, clipMobile + 300)).toMatch(/color: #ffffff !important/);
+  });
+
+  // Regression guard: the light-theme selected filter tab on /messages is a
+  // filled gold chip - the hairline border belongs to unselected tabs only.
+  it("keeps the light-theme selected filter tab border-free", async () => {
+    const styles = await readFile(resolve(projectRoot, "client/src/index.css"), "utf8");
+    const css = styles.replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(css).not.toMatch(/:root:not\(\.dark\)[^{]*aria-selected="true"[^{]*\{[^}]*border-color: #D9A441/);
+    expect(css).not.toMatch(/:root:not\(\.dark\) \.savanna-app \.savanna-desktop-message-tabs button\[data-active="true"\] \{[^}]*border-color: #D9A441/);
+    expect(css).toMatch(/:root:not\(\.dark\) \.savanna-app \[role="tablist"\] \[role="tab"\]\[aria-selected="true"\] \{\s*border-color: transparent !important/);
   });
 
   // Regression guard: two product-wide a11y rules paint a gold outline on

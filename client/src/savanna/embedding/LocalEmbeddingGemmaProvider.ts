@@ -1,3 +1,4 @@
+import { captureError } from "@/lib/observability";
 import { SAVANNA_EMBEDDING_GEMMA_MODEL_ID, SAVANNA_EMBEDDING_GEMMA_WEB_MODEL_ID } from "../inference/InferenceProvider";
 import type { EmbeddingProvider, EmbeddingRequest, EmbeddingResponse } from "./EmbeddingProvider";
 
@@ -98,6 +99,12 @@ export class LocalEmbeddingGemmaProvider implements EmbeddingProvider {
       }
     } catch (error) {
       console.warn("[Savanna] Local EmbeddingGemma unavailable; using local hash fallback", error);
+      // Recorded because this failure is invisible by design: the caller gets a
+      // working hash embedding and the user never sees an error, so without
+      // this the only sign that local retrieval is degrading is that recall
+      // slowly gets worse. Tagged as a warning — it is a degradation, and the
+      // product is still functioning.
+      captureError("model.load", error, { model: "embedding-gemma", degraded: true });
     }
 
     const embedding = localHashEmbedding(semanticSummary);

@@ -12,6 +12,7 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "test:rules": "firebase emulators:exec --only firestore,auth --project demo-savanna \"node scripts/firestore-rules-smoke.mjs\"",
+    "admin:roles": "node scripts/admin-roles.mjs",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"
   },
@@ -62,6 +63,7 @@
     "dotenv": "^17.2.2",
     "drizzle-orm": "^0.44.5",
     "embla-carousel-react": "^8.6.0",
+    "emoji-picker-react": "^4.19.4",
     "express": "^4.21.2",
     "firebase": "^12.18.0",
     "framer-motion": "^12.23.22",

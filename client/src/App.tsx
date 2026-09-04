@@ -22,6 +22,7 @@ import { Redirect, Route, Switch } from "wouter";
  *    round trip before first paint.
  *  - `NotFound`, because it is tiny and can be needed by any bad URL.
  */
+const AdminPage = lazy(() => import("./pages/AdminPage"));
 const CheckoutPage = lazy(() => import("./pages/CheckoutPage"));
 const CommunityDetailPage = lazy(() => import("./pages/CommunityDetailPage"));
 const CommunitiesPage = lazy(() => import("./pages/CommunitiesPage"));
@@ -62,25 +63,48 @@ function Router() {
   return (
     <Suspense fallback={<RouteFallback />}>
       <Switch>
-        <Route path="/home"><Redirect to="/messages" /></Route>
+        <Route path="/home">
+          <Redirect to="/messages" />
+        </Route>
         <Route path="/login" component={LoginPage} />
-        <Route path="/"><Redirect to="/messages" /></Route>
+        <Route path="/">
+          <Redirect to="/messages" />
+        </Route>
         <Route path="/messages" component={MessagesPage} />
         <Route path="/shops/manage" component={MerchantStudioPage} />
-        <Route path="/shops/:slug/products/:productId" component={ProductDetailPage} />
+        <Route
+          path="/shops/:slug/products/:productId"
+          component={ProductDetailPage}
+        />
         <Route path="/shops/:slug" component={StorefrontPage} />
         <Route path="/shops" component={ShopsPage} />
         <Route path="/stories" component={StoriesPage} />
-        <Route path="/communities/:communityId" component={CommunityDetailPage} />
+        <Route
+          path="/communities/:communityId"
+          component={CommunityDetailPage}
+        />
         <Route path="/communities" component={CommunitiesPage} />
-        <Route path="/learn/manage"><Redirect to="/shops/manage" /></Route>
-        <Route path="/learn/:slug"><Redirect to="/shops" /></Route>
-        <Route path="/learn"><Redirect to="/shops" /></Route>
-        <Route path="/checkout/:subjectType/:subjectId" component={CheckoutPage} />
+        <Route path="/learn/manage">
+          <Redirect to="/shops/manage" />
+        </Route>
+        <Route path="/learn/:slug">
+          <Redirect to="/shops" />
+        </Route>
+        <Route path="/learn">
+          <Redirect to="/shops" />
+        </Route>
+        <Route
+          path="/checkout/:subjectType/:subjectId"
+          component={CheckoutPage}
+        />
         <Route path="/orders" component={OrdersPage} />
-        <Route path="/payments/:paymentIntentId" component={PaymentDetailPage} />
+        <Route
+          path="/payments/:paymentIntentId"
+          component={PaymentDetailPage}
+        />
         <Route path="/payments" component={PaymentsPage} />
         <Route path="/recall" component={RecallPage} />
+        <Route path="/admin" component={AdminPage} />
         <Route path="/profile" component={ProfilePage} />
         <Route path="/people/:userId" component={PublicProfilePage} />
         <Route path="/404" component={NotFound} />

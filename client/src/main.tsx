@@ -7,7 +7,18 @@ import { toast } from "sonner";
 import superjson from "superjson";
 import App from "./App";
 import { startLogin } from "./const";
+import { captureError, installErrorCapture } from "./lib/observability";
 import "./index.css";
+
+/**
+ * Goes first, before anything else in this module runs.
+ *
+ * Errors thrown during app boot are the ones most worth capturing and the ones
+ * a late-registered handler would miss entirely — a component that throws
+ * during the initial render takes the tree down before any effect has had a
+ * chance to install a listener.
+ */
+installErrorCapture();
 
 /**
  * Fades out the pre-React splash overlay declared in index.html.
@@ -161,6 +172,10 @@ const reportedQueryFailures = new WeakMap<Query, number>();
 
 function reportQueryError(query: Query, error: unknown) {
   console.error("[API Query Error]", error);
+  // Mirrored to Firestore so an admin can see a broken endpoint without having
+  // to be the user who hit it. Keyed on the serialised query key, which is the
+  // only stable identity a query has across renders.
+  captureError("admin.query", error, { queryKey: JSON.stringify(query.queryKey).slice(0, 200) });
 
   // `fetchStatus === "idle"` means no fetch and no retry are still in flight,
   // i.e. this is the final failure rather than an intermediate attempt.
@@ -176,6 +191,7 @@ function reportQueryError(query: Query, error: unknown) {
 
 function reportMutationError(error: unknown) {
   console.error("[API Mutation Error]", error);
+  captureError("firestore.write", error, {});
 
   // Mutations do not retry by default, so every error is terminal.
   if (redirectToLoginIfUnauthorized(error)) return;

@@ -25,6 +25,91 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == uid;
     }
 
+    function validAdminRole(value) {
+      return value in [
+        'super_admin', 'support_admin', 'moderator', 'merchant_admin',
+        'community_admin', 'analyst'
+      ];
+    }
+
+    /**
+     * The role carried in the Firebase custom claim.
+     *
+     * This is the authoritative role. Claims are minted by the Admin SDK on a
+     * trusted machine and ride inside the ID token, so a user cannot influence
+     * their own value — unlike a field in a document they can write to.
+     *
+     * The two legacy boolean/string markers are folded into `super_admin` so
+     * that accounts provisioned before the role system existed keep working.
+     * Returns null for everyone else.
+     *
+     * CRITICAL: `request.auth.token` is a *claims* object, not a permissive
+     * Map. Reading a claim key that is absent THROWS ("Property X is undefined
+     * on object") instead of returning null. Every claim access below must go
+     * through `.get(key, null)`, which returns the default for absent keys
+     * without throwing. A bare `request.auth.token.adminRole` works while the
+     * claim is present but throws for ordinary users (who have no such claim),
+     * which cascades into a deny on every rule that calls this function.
+     */
+    function adminClaimRole() {
+      return signedIn() ? (
+        validAdminRole(request.auth.token.get('adminRole', null))
+          ? request.auth.token.get('adminRole', null)
+          : (
+            request.auth.token.get('admin', null) == true
+            || request.auth.token.get('role', null) == 'admin'
+          ) ? 'super_admin' : null
+      ) : null;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && (
+          adminClaimRole() != null
+          || (
+            // Read-only fallback. Roles used to live in the user document; this
+            // keeps those accounts able to *see* the console after a claim has
+            // been issued but before the cached ID token has refreshed. It is
+            // deliberately NOT used for writes — see canPerform().
+            exists(/databases/$(database)/documents/users/$(request.auth.uid))
+            && validAdminRole(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.adminRole)
+          )
+        );
+    }
+
+    /**
+     * Server-side mirror of ADMIN_ROLE_PERMISSIONS in
+     * client/src/lib/firebaseAdmin.ts.
+     *
+     * The client copy decides which buttons are enabled; this copy decides
+     * whether the write actually lands. They must be kept in step — if a role
+     * gains a permission here but not there, the button stays disabled; if it
+     * gains one there but not here, the action fails with permission-denied.
+     *
+     * Only the claim is consulted. A role written into the user document is
+     * not enough to act, because that field is reachable from code the user
+     * controls.
+     */
+    function canPerform(permission) {
+      return adminClaimRole() == 'super_admin'
+        || (adminClaimRole() == 'support_admin' && permission in ['user.moderate', 'report.triage', 'content.remove'])
+        || (adminClaimRole() == 'moderator' && permission in ['report.triage', 'community.review', 'content.remove'])
+        || (adminClaimRole() == 'merchant_admin' && permission in ['shop.review'])
+        || (adminClaimRole() == 'community_admin' && permission in ['community.review']);
+    }
+
+    /**
+     * Whether this account can write at all — i.e. it holds a real claim and
+     * that claim is not the read-only `analyst` role.
+     *
+     * This is only the coarse gate. Every write branch below additionally
+     * calls canPerform() with the specific permission that action needs, so
+     * passing this function is never on its own sufficient to change anything.
+     */
+    function canWriteAdmin() {
+      return isAdmin() && adminClaimRole() != null && adminClaimRole() != 'analyst';
+    }
+
     function validUsername(value) {
       return value == null || (value is string && value.matches('^[a-z0-9_]{3,24}$'));
     }
@@ -126,12 +211,19 @@ service cloud.firestore {
     match /users/{uid} {
       // Private account profile. This may contain auth-derived contact details,
       // so only the owner can read it. Public lookup lives in publicProfiles.
-      allow read: if isSelf(uid);
+      allow read: if isSelf(uid) || isAdmin();
 
       // The field whitelist matters. Without it a user could write any
       // attribute onto their own profile — including anything the app later
       // learns to trust, such as a role or a verification flag. Adding a field
       // to the app means adding it here.
+      // `adminRole` and `accountStatus` are tolerated on create only because
+      // ensureUserProfile() seeds them when an admin signs in for the first
+      // time. Left unconstrained that would be a privilege escalation — anyone
+      // could mint themselves an admin — so each is pinned: adminRole may only
+      // be null or the role already present in the caller's own token claim,
+      // and a new account always starts active. Neither field is writable via
+      // update, so this is the one and only moment they can be set.
       allow create: if isSelf(uid)
         && request.resource.data.keys().hasOnly(
                [
@@ -140,21 +232,59 @@ service cloud.firestore {
                'phoneVisibility',
                'handleDiscoverability', 'storyAudienceDefault',
                'readReceiptsEnabled', 'lastSeenVisibility',
-               'courseProgressOptIn', 'createdAt', 'updatedAt'
+               'courseProgressOptIn', 'adminRole', 'accountStatus',
+               'createdAt', 'updatedAt'
              ])
-        && validUsername(request.resource.data.get('usernameLower', null));
+        && validUsername(request.resource.data.get('usernameLower', null))
+        && (
+          request.resource.data.get('adminRole', null) == null
+          || request.resource.data.adminRole == adminClaimRole()
+        )
+        && request.resource.data.get('accountStatus', 'active') == 'active';
 
-      allow update: if isSelf(uid)
-        && request.resource.data.keys().hasOnly(
-             [
-               'name', 'username', 'usernameLower', 'email', 'phoneNumber',
-               'photoURL', 'bio', 'city', 'countryCode', 'profileVisibility',
-               'phoneVisibility',
-               'handleDiscoverability', 'storyAudienceDefault',
-               'readReceiptsEnabled', 'lastSeenVisibility',
-               'courseProgressOptIn', 'createdAt', 'updatedAt'
-             ])
-        && validUsername(request.resource.data.get('usernameLower', null));
+      allow update: if (
+          isSelf(uid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+               [
+                 'name', 'username', 'usernameLower', 'email', 'phoneNumber',
+                 'photoURL', 'bio', 'city', 'countryCode', 'profileVisibility',
+                 'phoneVisibility',
+                 'handleDiscoverability', 'storyAudienceDefault',
+                 'readReceiptsEnabled', 'lastSeenVisibility',
+                 'courseProgressOptIn', 'createdAt', 'updatedAt'
+               ])
+          && validUsername(request.resource.data.get('usernameLower', null))
+        )
+        || (
+          canWriteAdmin()
+          && canPerform('user.moderate')
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'accountStatus', 'messagingRestricted', 'postingRestricted',
+            'verified', 'moderationUpdatedAt', 'updatedAt',
+            // Appeal handling. Recorded on the account itself rather than in a
+            // separate collection so the decision sits next to the suspension
+            // it belongs to, and so a moderator reviewing the account sees the
+            // appeal without a second query.
+            'banAppealStatus', 'banAppealNote', 'banAppealAt',
+            'banAppealReviewedBy', 'banAppealReviewedAt'
+          ])
+          && request.resource.data.accountStatus in ['active', 'suspended', 'banned']
+          && request.resource.data.get('messagingRestricted', false) is bool
+          && request.resource.data.get('postingRestricted', false) is bool
+          && request.resource.data.get('verified', false) is bool
+          && request.resource.data.get('banAppealStatus', 'none') in ['none', 'pending', 'upheld', 'overturned']
+          && (request.resource.data.get('banAppealNote', null) == null
+              || (request.resource.data.banAppealNote is string
+                  && request.resource.data.banAppealNote.size() <= 1000))
+          // The reviewer is always the caller; an admin cannot attribute an
+          // appeal decision to a colleague.
+          && request.resource.data.get('banAppealReviewedBy', request.auth.uid) == request.auth.uid
+          // Nobody may moderate themselves. Without this an admin could lock
+          // out or un-restrict their own account with no other admin involved,
+          // which is exactly the kind of action the audit trail exists to
+          // attribute to someone else.
+          && uid != request.auth.uid
+        );
 
       // Deleting an account has to fan out to Firebase Auth, the user's
       // messages and their storage objects. That needs a trusted environment,
@@ -404,7 +534,8 @@ service cloud.firestore {
 
     match /communities/{communityId} {
       allow read: if resource.data.visibility == 'public'
-        || isCommunityMember(communityId);
+        || isCommunityMember(communityId)
+        || isAdmin();
 
       allow create: if signedIn()
         && request.resource.data.ownerUserId == request.auth.uid
@@ -428,6 +559,15 @@ service cloud.firestore {
               'countryCode', 'visibility', 'memberCount', 'linkedStorefrontIds',
               'createdAt', 'updatedAt', 'inviteCode'
             ])
+          )
+          || (
+            canWriteAdmin()
+            && canPerform('community.review')
+            && request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['reviewStatus', 'reviewedBy', 'reviewedAt', 'visibility', 'updatedAt'])
+            && request.resource.data.reviewStatus in ['pending', 'approved', 'paused', 'rejected']
+            && request.resource.data.visibility in ['public', 'private', 'unlisted']
+            && request.resource.data.reviewedBy == request.auth.uid
           )
           || (
             !exists(communityMemberPath(communityId, request.auth.uid))
@@ -503,7 +643,8 @@ service cloud.firestore {
 
       match /posts/{postId} {
         allow read: if get(communityPath(communityId)).data.visibility == 'public'
-          || isCommunityMember(communityId);
+          || isCommunityMember(communityId)
+          || isAdmin();
 
         allow create: if isCommunityMember(communityId)
           && request.resource.data.authorUserId == request.auth.uid
@@ -519,7 +660,7 @@ service cloud.firestore {
             'createdAt', 'updatedAt'
           ]);
 
-        allow update: if isCommunityMember(communityId)
+        allow update: if (isCommunityMember(communityId)
           && resource.data.authorUserId == request.auth.uid
           && request.resource.data.authorUserId == request.auth.uid
           && validCommunityPostCommerce()
@@ -529,7 +670,16 @@ service cloud.firestore {
             'productId', 'productName', 'productDescription',
             'productPriceMinor', 'productCurrencyCode', 'productPrimaryImageUrl',
             'createdAt', 'updatedAt'
-          ]);
+          ]))
+          // Admin takedown. Same shape as the stories branch above, and for
+          // the same reason: flag, never delete.
+          || (canWriteAdmin()
+            && canPerform('content.remove')
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'moderationState', 'removedAt', 'removedBy', 'removedReason', 'updatedAt'
+            ])
+            && request.resource.data.moderationState in ['visible', 'removed']
+            && request.resource.data.removedBy == request.auth.uid);
 
         allow delete: if isCommunityMember(communityId)
           && resource.data.authorUserId == request.auth.uid;
@@ -586,7 +736,13 @@ service cloud.firestore {
         || (signedIn() && resource.data.authorUserId == request.auth.uid)
         || (signedIn()
           && resource.data.audience == 'custom'
-          && request.auth.uid in resource.data.customAudienceUserIds);
+          && request.auth.uid in resource.data.customAudienceUserIds)
+        // Moderation cannot be done blind: an admin has to see the story a
+        // report points at, and private/custom audiences are exactly the ones
+        // a report is most likely to be about. The read is audited by the
+        // takedown it enables, not by itself — Firebase does not log reads to
+        // rules, so treat this as "may view", not "viewing is recorded".
+        || isAdmin();
 
       allow create: if signedIn()
         && request.resource.data.authorUserId == request.auth.uid
@@ -602,9 +758,25 @@ service cloud.firestore {
           'createdAt', 'publishedAt', 'expiresAt', 'deletedAt'
         ]);
 
-      allow update: if signedIn()
+      allow update: if (signedIn()
         && resource.data.authorUserId == request.auth.uid
-        && request.resource.data.authorUserId == request.auth.uid;
+        && request.resource.data.authorUserId == request.auth.uid)
+        /**
+         * Takedown, not deletion.
+         *
+         * `allow delete: if false` stays in force, so a removed story is never
+         * destroyed — it is flagged `removed` and stops being served by the
+         * client. That matters for two reasons: an appeal needs the content to
+         * still exist to be reviewed against, and a hard delete would quietly
+         * erase the evidence a report was filed about.
+         */
+        || (canWriteAdmin()
+          && canPerform('content.remove')
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'moderationState', 'removedAt', 'removedBy', 'removedReason', 'updatedAt'
+          ])
+          && request.resource.data.moderationState in ['visible', 'removed']
+          && request.resource.data.removedBy == request.auth.uid);
 
       allow delete: if false;
 
@@ -683,7 +855,8 @@ service cloud.firestore {
 
     match /storefronts/{storefrontId} {
       allow read: if resource.data.visibility == 'public'
-        || (signedIn() && resource.data.ownerUserId == request.auth.uid);
+        || (signedIn() && resource.data.ownerUserId == request.auth.uid)
+        || isAdmin();
 
       allow create: if signedIn()
         && request.resource.data.ownerUserId == request.auth.uid
@@ -693,9 +866,39 @@ service cloud.firestore {
           'coverPath', 'ownerCity', 'ownerCountryCode', 'createdAt', 'updatedAt'
         ]);
 
-      allow update: if signedIn()
-        && resource.data.ownerUserId == request.auth.uid
-        && request.resource.data.ownerUserId == request.auth.uid;
+      allow update: if (
+          signedIn()
+          && resource.data.ownerUserId == request.auth.uid
+          && request.resource.data.ownerUserId == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'name', 'slug', 'bio', 'category', 'contactPhone', 'contactEmail',
+            'visibility', 'ownerCity', 'ownerCountryCode', 'coverUrl',
+            'coverPath', 'verificationState', 'updatedAt'
+          ])
+          && (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['verificationState'])
+            || request.resource.data.verificationState in ['unverified', 'pending']
+          )
+        )
+        || (
+          canWriteAdmin()
+          && canPerform('shop.review')
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'reviewStatus', 'verificationState', 'reviewedBy', 'reviewedAt',
+            'riskFlag', 'riskFlaggedBy', 'riskFlaggedAt', 'updatedAt'
+          ])
+          && request.resource.data.reviewStatus in ['pending', 'approved', 'paused', 'rejected']
+          && request.resource.data.verificationState in ['unverified', 'pending', 'verified', 'rejected']
+          && request.resource.data.reviewedBy == request.auth.uid
+          // A risk flag is an internal suspicion marker, not a state the shop
+          // is put into: it must never change what buyers see. It is separate
+          // from reviewStatus because "approved" and "suspicious" are not
+          // mutually exclusive — a shop can pass review and still warrant a
+          // second look by another admin.
+          && (request.resource.data.get('riskFlag', null) == null
+              || request.resource.data.riskFlag == 'suspicious')
+          && request.resource.data.riskFlaggedBy == request.auth.uid
+        );
 
       allow delete: if false;
 
@@ -707,7 +910,8 @@ service cloud.firestore {
 
     match /products/{productId} {
       allow read: if resource.data.status == 'active'
-        || (signedIn() && resource.data.storefrontOwnerUserId == request.auth.uid);
+        || (signedIn() && resource.data.storefrontOwnerUserId == request.auth.uid)
+        || isAdmin();
 
       allow create: if signedIn()
         && request.resource.data.storefrontOwnerUserId == request.auth.uid
@@ -720,9 +924,21 @@ service cloud.firestore {
           'primaryImageUrl', 'media', 'createdAt', 'updatedAt'
         ]);
 
-      allow update: if signedIn()
+      allow update: if (signedIn()
         && resource.data.storefrontOwnerUserId == request.auth.uid
-        && request.resource.data.storefrontOwnerUserId == request.auth.uid;
+        && request.resource.data.storefrontOwnerUserId == request.auth.uid)
+        // Admin takedown of a listing. `status` is deliberately NOT writable
+        // here: it is the seller's own stock/visibility control, and letting a
+        // moderator flip it would let them re-publish or de-list stock on a
+        // seller's behalf. Moderation is a separate axis (`moderationState`)
+        // so the two never fight over one field.
+        || (canWriteAdmin()
+          && canPerform('content.remove')
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'moderationState', 'removedAt', 'removedBy', 'removedReason', 'updatedAt'
+          ])
+          && request.resource.data.moderationState in ['visible', 'removed']
+          && request.resource.data.removedBy == request.auth.uid);
 
       allow delete: if false;
     }
@@ -759,7 +975,164 @@ service cloud.firestore {
     match /safetyReports/{reportId} {
       allow create: if signedIn()
         && request.resource.data.reporterUserId == request.auth.uid;
-      allow read, update, delete: if false;
+      allow read: if isAdmin();
+      allow update: if canWriteAdmin()
+        && canPerform('report.triage')
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'reviewedBy', 'reviewedAt', 'resolution', 'updatedAt'
+        ])
+        && request.resource.data.status in ['new', 'reviewing', 'resolved', 'dismissed']
+        && request.resource.data.reviewedBy == request.auth.uid
+        && (
+          request.resource.data.get('resolution', null) == null
+          || request.resource.data.resolution.size() < 500
+        );
+      allow delete: if false;
+    }
+
+    // Append-only admin action trail.
+    //
+    // Every admin mutation in the app writes its document change and this
+    // audit entry inside one Firestore transaction, so a rejected audit write
+    // rolls the change back with it. That is what makes "admins leave a trail"
+    // a property of the database rather than a promise from the client — and
+    // it means the field list below is load-bearing. If runAdminMutation()
+    // starts writing a field that is not listed here, every admin action in
+    // the product starts failing with permission-denied until the two agree.
+    //
+    // update/delete are denied outright: an editable audit log records nothing.
+    match /adminAuditLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if canWriteAdmin()
+        && request.resource.data.adminUserId == request.auth.uid
+        && request.resource.data.adminRole == adminClaimRole()
+        && request.resource.data.adminRole is string
+        && request.resource.data.action is string
+        && request.resource.data.action.size() > 0
+        && request.resource.data.targetType is string
+        && request.resource.data.targetId is string
+        // The reason is the whole point of the trail. Mirrors REASON_MIN_LENGTH
+        // in firebaseAdmin.ts — change one, change the other.
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() >= 8
+        && request.resource.data.reason.size() <= 500
+        && request.resource.data.before is map
+        && request.resource.data.after is map
+        && request.resource.data.keys().hasOnly([
+          'adminUserId', 'adminName', 'adminRole', 'action', 'targetType',
+          'targetId', 'reason', 'before', 'after', 'detail',
+          'actorUserAgent', 'actorPlatform', 'actorLanguage', 'actorTimezone',
+          'actorScreen', 'ipAddress', 'createdAt'
+        ]);
+      allow update, delete: if false;
+    }
+
+    /**
+     * Client-reported failures. Written by `lib/observability.ts`.
+     *
+     * Unlike the audit log, any signed-in user may write here — an error that
+     * only admins could report is an error we never hear about, since almost
+     * every failure a user hits happens on a normal account. That openness is
+     * the risk, so the constraints below are what make it acceptable:
+     *
+     *  - `userId` must be null or the caller's own uid, so nobody can file an
+     *    error under someone else's name.
+     *  - Every string is length-capped, and the document as a whole is capped
+     *    at 10 KB via `data.size()`. That last one is the real guard: the
+     *    `context` map is free-form, and Rules cannot walk its values, so
+     *    bounding the entire document is the only way to stop someone
+     *    submitting a multi-megabyte blob.
+     *  - The field set is closed, so this cannot be used as a general-purpose
+     *    key/value store.
+     *
+     * Update is limited to acknowledging: an admin marking an entry as seen.
+     * Editing the message, scope or stack would make the log untrustworthy in
+     * exactly the way that matters — an admin could rewrite what failed.
+     */
+    match /errorLogs/{logId} {
+      allow read: if isAdmin();
+
+      allow create: if signedIn()
+        && request.resource.data.scope is string
+        && request.resource.data.scope.size() > 0
+        && request.resource.data.scope.size() <= 64
+        && request.resource.data.severity in ['error', 'warning', 'info']
+        && request.resource.data.message is string
+        && request.resource.data.message.size() > 0
+        && request.resource.data.message.size() <= 500
+        && (request.resource.data.stack == null
+            || (request.resource.data.stack is string && request.resource.data.stack.size() <= 2000))
+        && request.resource.data.context is map
+        && request.resource.data.context.size() <= 20
+        && request.resource.data.sessionId is string
+        && request.resource.data.sessionId.size() <= 64
+        && (request.resource.data.route == null
+            || (request.resource.data.route is string && request.resource.data.route.size() <= 200))
+        && (request.resource.data.userId == null
+            || request.resource.data.userId == request.auth.uid)
+        && (request.resource.data.userAgent == null
+            || (request.resource.data.userAgent is string && request.resource.data.userAgent.size() <= 300))
+        && (request.resource.data.appVersion == null
+            || (request.resource.data.appVersion is string && request.resource.data.appVersion.size() <= 40))
+        // Acknowledgement is admin-owned state; a client cannot pre-set it.
+        && request.resource.data.acknowledgedBy == null
+        && request.resource.data.acknowledgedAt == null
+        && request.resource.data.keys().hasOnly([
+          'scope', 'severity', 'message', 'stack', 'context', 'route',
+          'sessionId', 'userId', 'userAgent', 'appVersion',
+          'acknowledgedBy', 'acknowledgedAt', 'createdAt'
+        ])
+        // Whole-document size cap. See the note above on why this, rather than
+        // per-field limits, is what actually bounds a free-form map.
+        && request.resource.data.size() <= 10000;
+
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['acknowledgedBy', 'acknowledgedAt'])
+        && request.resource.data.acknowledgedBy == request.auth.uid;
+
+      allow delete: if false;
+    }
+
+    // --- Collection-group rules -------------------------------------------
+    //
+    // These two exist because the admin console needs to query *across*
+    // parents: every community's posts at once for the moderation queue, and
+    // every conversation's messages at once to count platform volume. A
+    // collection-group query only matches a rule declared with `{path=**}`,
+    // so the nested rules above — which are scoped to one parent — cannot
+    // serve them no matter how they are worded.
+    //
+    // A collection-group rule matches EVERY collection with that name, present
+    // and future. That is the risk being taken here, and it is the reason both
+    // are gated on a claim rather than on `isAdmin()`'s document fallback.
+    match /{path=**}/posts/{postId} {
+      allow read: if isAdmin();
+      allow update: if canWriteAdmin()
+        && canPerform('content.remove')
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'moderationState', 'removedAt', 'removedBy', 'removedReason', 'updatedAt'
+        ])
+        && request.resource.data.moderationState in ['visible', 'removed']
+        && request.resource.data.removedBy == request.auth.uid;
+    }
+
+    /**
+     * Direct messages, visible to the two roles that handle user disputes.
+     *
+     * This is the highest-power read in the file and is deliberately narrower
+     * than the others: `canPerform('user.moderate')` admits super_admin and
+     * support_admin only. A `moderator` — who can remove content and lock
+     * communities — cannot read private conversations, because nothing in
+     * content moderation requires it.
+     *
+     * Only the count path uses it today (see loadAnalytics in
+     * firebaseAdmin.ts). It grants more than a count needs, because Firestore
+     * cannot express "count but not read"; the mitigation is the role gate and
+     * the fact that every admin action is audited, not the query shape.
+     */
+    match /{path=**}/messages/{messageId} {
+      allow read: if adminClaimRole() != null && canPerform('user.moderate');
     }
 
     // Everything not matched above is denied by default. Do not add a

@@ -25,19 +25,30 @@ export function PwaStatusBanner() {
   if (isOnline) return null;
 
   return (
-    <div role="status" aria-live="polite" className="sticky top-0 z-[60] border-b border-[#e5c79c] bg-[#fff5e2] px-4 py-2.5 text-[#6f491d]">
+    <div
+      role="status"
+      aria-live="polite"
+      className="sticky top-0 z-[60] border-b border-[#e5c79c] bg-[#fff5e2] px-4 py-2.5 text-[#6f491d]"
+    >
       <div className="mx-auto flex max-w-[1720px] items-center gap-2 text-sm font-medium">
         <WifiOff className="size-4 shrink-0" />
-        <span>You’re offline. Savanna can keep approved cached pages and local drafts available, but payments and live updates are paused until you reconnect.</span>
+        <span>
+          You’re offline. Savanna can keep approved cached pages and local
+          drafts available, but payments and live updates are paused until you
+          reconnect.
+        </span>
       </div>
     </div>
   );
 }
 
 export function InstallSavannaButton({ className }: { className?: string }) {
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [deferredPrompt, setDeferredPrompt] =
+    useState<BeforeInstallPromptEvent | null>(null);
   const [showGuidance, setShowGuidance] = useState(false);
-  const [isInstalled, setIsInstalled] = useState(() => window.matchMedia("(display-mode: standalone)").matches);
+  const [isInstalled, setIsInstalled] = useState(
+    () => window.matchMedia("(display-mode: standalone)").matches
+  );
 
   useEffect(() => {
     const captureInstall = (event: Event) => {
@@ -72,17 +83,38 @@ export function InstallSavannaButton({ className }: { className?: string }) {
 
   return (
     <div className={cn("relative", className)}>
-      <Button variant="outline" onClick={handleInstall} className="w-full rounded-xl border-[#ead2a4] bg-white/55 text-[#7b4a0d] hover:bg-white">
+      <Button
+        variant="outline"
+        onClick={handleInstall}
+        className="w-full rounded-xl border-[#ead2a4] bg-white/55 text-[#7b4a0d] hover:bg-white"
+      >
         <Download className="mr-2 size-4" /> Install Savanna
       </Button>
       {showGuidance ? (
-        <div role="dialog" aria-label="Install Savanna guidance" className="absolute bottom-[calc(100%+0.75rem)] left-0 z-50 w-[270px] rounded-2xl border border-[#eadbc0] bg-white p-4 text-left shadow-[0_18px_45px_rgba(84,55,15,0.16)]">
+        <div
+          role="dialog"
+          aria-label="Install Savanna guidance"
+          className="absolute bottom-[calc(100%+0.75rem)] left-0 z-50 w-[270px] rounded-2xl border border-[#eadbc0] bg-white p-4 text-left shadow-[0_18px_45px_rgba(84,55,15,0.16)]"
+        >
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-[#3d2d1a]">Install from your browser</p>
-              <p className="mt-1.5 text-xs leading-5 text-[#796b56]">Choose <strong>Install Savanna</strong> from your browser menu. On Apple devices, use Share then <strong>Add to Home Screen</strong>.</p>
+              <p className="text-sm font-semibold text-[#3d2d1a]">
+                Install from your browser
+              </p>
+              <p className="mt-1.5 text-xs leading-5 text-[#796b56]">
+                Choose <strong>Install Savanna</strong> from your browser menu.
+                On Apple devices, use Share then{" "}
+                <strong>Add to Home Screen</strong>.
+              </p>
             </div>
-            <button type="button" onClick={() => setShowGuidance(false)} className="rounded-lg p-1 text-[#687462] hover:bg-[#eef2e9]" aria-label="Close installation guidance"><X className="size-4" /></button>
+            <button
+              type="button"
+              onClick={() => setShowGuidance(false)}
+              className="rounded-lg p-1 text-[#687462] hover:bg-[#eef2e9]"
+              aria-label="Close installation guidance"
+            >
+              <X className="size-4" />
+            </button>
           </div>
         </div>
       ) : null}
@@ -102,5 +134,14 @@ export function ConnectionPill() {
     };
   }, []);
 
-  return <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[#8a765d]">{isOnline ? <Wifi className="size-3.5 text-[#b36c10]" /> : <WifiOff className="size-3.5 text-[#a56d30]" />}{isOnline ? "Connected" : "Offline"}</span>;
+  return (
+    <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[#8a765d]">
+      {isOnline ? (
+        <Wifi className="size-3.5 text-[#b36c10]" />
+      ) : (
+        <WifiOff className="size-3.5 text-[#a56d30]" />
+      )}
+      {isOnline ? "Connected" : "Offline"}
+    </span>
+  );
 }
