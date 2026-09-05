@@ -1490,7 +1490,7 @@ export default function MessagesPage() {
           )}
         >
           <span>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-          {outgoing ? <DeliveryIcon status={message.status} className="text-[#3d2d1a]/80 dark:text-white/90" /> : null}
+          {outgoing ? <DeliveryIcon status={message.status} className="text-current" /> : null}
         </div>
         {renderReactionSummary(message)}
         {renderMessageActions(message)}
@@ -1811,7 +1811,7 @@ export default function MessagesPage() {
                       {message.payload ? <p className="whitespace-pre-wrap">{message.payload}</p> : null}
                       {messageTranslations[message.id] ? <p className="mt-2 rounded-xl bg-white/55 px-3 py-2 text-xs leading-5 text-[#3d2d1a] dark:bg-white/10 dark:text-[#F0F2F5]">{messageTranslations[message.id]}</p> : null}
                       {message.attachments.map(item => <PrivateAttachment key={item.id} url={item.url} fileName={item.fileName} mimeType={item.mimeType} />)}
-                      <p className={`mt-1 flex items-center justify-end gap-1 text-[10px] ${isSameUser(message.senderUserId, user?.id) ? "text-[#3d2d1a] dark:text-[#FDFBF5]" : "text-[#5f6861]"}`}>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}{isSameUser(message.senderUserId, user?.id) ? <DeliveryIcon status={message.status} className="text-white/90" /> : null}</p>
+                      <p className={`mt-1 flex items-center justify-end gap-1 text-[10px] ${isSameUser(message.senderUserId, user?.id) ? "text-[#3d2d1a] dark:text-[#FDFBF5]" : "text-[#5f6861]"}`}>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}{isSameUser(message.senderUserId, user?.id) ? <DeliveryIcon status={message.status} className="text-current" /> : null}</p>
                       {renderReactionSummary(message)}
                       {renderMessageActions(message)}
                     </article>
@@ -1906,7 +1906,7 @@ export default function MessagesPage() {
                           {message.payload ? <p className="whitespace-pre-wrap text-sm leading-5">{message.payload}</p> : null}
                           {messageTranslations[message.id] ? <p className="mt-2 rounded-xl bg-white/55 px-3 py-2 text-xs leading-5 text-[#3d2d1a] dark:bg-white/10 dark:text-[#F0F2F5]">{messageTranslations[message.id]}</p> : null}
                           {message.attachments.map(item => <PrivateAttachment key={item.id} url={item.url} fileName={item.fileName} mimeType={item.mimeType} />)}
-                          <div className="mt-1 flex items-center justify-end gap-1 text-[10px] opacity-80"><span>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>{isSameUser(message.senderUserId, user?.id) ? <DeliveryIcon status={message.status} className="text-white/90" /> : null}</div>
+                          <div className="mt-1 flex items-center justify-end gap-1 text-[10px] opacity-80"><span>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>{isSameUser(message.senderUserId, user?.id) ? <DeliveryIcon status={message.status} className="text-current" /> : null}</div>
                           {renderReactionSummary(message)}
                           {renderMessageActions(message)}
                         </div>

@@ -1534,10 +1534,10 @@ body:has(.savanna-login-screen) {
   --epr-dark-category-label-text-color: #d9a441;
   --epr-text-color: #3d2d1a;
   --epr-dark-text-color: #f0f2f5;
-  --epr-search-input-bg-color: rgba(217, 164, 65, 0.2);
-  --epr-dark-search-input-bg-color: rgba(217, 164, 65, 0.2);
-  --epr-search-input-bg-color-active: rgba(217, 164, 65, 0.2);
-  --epr-dark-search-input-bg-color-active: rgba(217, 164, 65, 0.2);
+  --epr-search-input-bg-color: #F6F5F5;
+  --epr-dark-search-input-bg-color: var(--chat-search);
+  --epr-search-input-bg-color-active: #F6F5F5;
+  --epr-dark-search-input-bg-color-active: var(--chat-search);
   --epr-search-border-color: transparent;
   --epr-dark-search-border-color: transparent;
   --epr-search-border-color-active: transparent;
@@ -1619,6 +1619,16 @@ body:has(.savanna-login-screen) {
   outline: none !important;
   border-color: transparent !important;
   box-shadow: none !important;
+}
+
+.savanna-app .savanna-media-tray-search {
+  background: #F6F5F5 !important;
+  background-color: #F6F5F5 !important;
+}
+
+.dark .savanna-app .savanna-media-tray-search {
+  background: var(--chat-search) !important;
+  background-color: var(--chat-search) !important;
 }
 
 .savanna-app .savanna-sticker-pill-tabs button[aria-pressed="false"] {
@@ -1705,8 +1715,10 @@ body:has(.savanna-login-screen) {
 }
 
 .savanna-app .savanna-message-bubble.savanna-outgoing-message [aria-label="Sent"],
-.savanna-app .savanna-message-bubble.savanna-outgoing-message [aria-label="Delivered"] {
-  color: rgba(255, 255, 255, 0.92) !important;
+.savanna-app .savanna-message-bubble.savanna-outgoing-message [aria-label="Delivered"],
+.savanna-app .savanna-sticker-meta [aria-label="Sent"],
+.savanna-app .savanna-sticker-meta [aria-label="Delivered"] {
+  color: currentColor !important;
 }
 
 /* Focused search and message fields keep their own surface treatment.
@@ -3480,13 +3492,14 @@ body .savanna-app .savanna-emoji-picker .epr-search-container {
 body .savanna-app .savanna-emoji-picker .epr-search-container input,
 .dark body .savanna-app .savanna-emoji-picker .epr-search-container input {
   --epr-search-input-padding: 0 16px 0 44px;
-  background-color: rgba(217, 164, 65, 0.2) !important;
+  background-color: #F6F5F5 !important;
   color: #151A17 !important;
   padding-left: 44px !important;
   padding-right: 16px !important;
 }
 
 .dark body .savanna-app .savanna-emoji-picker .epr-search-container input {
+  background-color: var(--chat-search) !important;
   color: #F0F2F5 !important;
 }
 

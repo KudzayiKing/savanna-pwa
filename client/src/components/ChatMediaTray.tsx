@@ -749,7 +749,7 @@ export function ChatMediaTray({
           {tab === "gifs" || tab === "stickers" ? (
             <div className="flex items-center gap-2 px-3 pt-3">
               {tab === "gifs" ? (
-                <label className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-full bg-[#D9A441]/20 px-4 text-sm text-[#A87820] dark:text-[#D9A441]">
+                <label className="savanna-media-tray-search flex h-10 min-w-0 flex-1 items-center gap-2 rounded-full bg-[#F6F5F5] px-4 text-sm text-[#A87820] dark:bg-[var(--chat-search)] dark:text-[#D9A441]">
                   <Search className="size-4 shrink-0" />
                   <input
                     value={gifSearch}
@@ -770,7 +770,7 @@ export function ChatMediaTray({
                   ) : null}
                 </label>
               ) : (
-                <label className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-full bg-[#D9A441]/20 px-4 text-sm text-[#A87820] dark:text-[#D9A441]">
+                <label className="savanna-media-tray-search flex h-10 min-w-0 flex-1 items-center gap-2 rounded-full bg-[#F6F5F5] px-4 text-sm text-[#A87820] dark:bg-[var(--chat-search)] dark:text-[#D9A441]">
                   <Search className="size-4 shrink-0" />
                   <input
                     value={stickerSearch}
