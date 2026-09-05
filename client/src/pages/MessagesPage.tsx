@@ -1483,7 +1483,7 @@ export default function MessagesPage() {
         />
         <div
           className={cn(
-            "savanna-sticker-meta mt-1 inline-flex items-center gap-1 rounded-full px-2 py-[3px] text-[10px] font-medium leading-none shadow-sm",
+            "savanna-sticker-meta -mt-1 inline-flex items-center gap-1 rounded-full px-2 py-[3px] text-[10px] font-medium leading-none shadow-sm",
             outgoing
               ? "bg-[#D9A441] text-[#3d2d1a]"
               : "bg-white text-[#5f6861] dark:bg-[var(--chat-surface)] dark:text-[#AEBAC1]",
