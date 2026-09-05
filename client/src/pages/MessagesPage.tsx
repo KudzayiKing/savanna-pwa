@@ -1454,7 +1454,7 @@ export default function MessagesPage() {
     const sticker = message.attachments[0];
     if (!sticker?.url) return null;
     const replyContext = renderReplyContext(message);
-    const edge = variant === "desktop" ? 168 : 140;
+    const edge = variant === "desktop" ? 208 : 168;
     return (
       <div
         {...messageActionTriggerProps(message.id)}
