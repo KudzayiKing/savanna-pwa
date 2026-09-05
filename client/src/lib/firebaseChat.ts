@@ -65,6 +65,14 @@ export type FirebaseMessageAttachment = {
   path: string | null;
 };
 
+export type FirebaseStickerAttachmentInput = {
+  id: string;
+  name: string;
+  url: string;
+  path: string;
+  bytes?: number;
+};
+
 export type FirebaseMessage = {
   id: string;
   senderUserId: string;
@@ -715,6 +723,75 @@ export async function sendFirebaseAttachment(input: {
   await batch.commit();
 }
 
+export async function sendFirebaseSticker(input: {
+  conversationId: string;
+  sender: AppUser;
+  memberIds?: string[];
+  sticker: FirebaseStickerAttachmentInput;
+  replyTo?: FirebaseMessage["replyTo"];
+}) {
+  const db = getFirestoreDb();
+  const conversationSnapshot = await getDoc(conversationRef(input.conversationId));
+  const conversationData = conversationSnapshot.data() as DocumentData | undefined;
+  const memberIds = uniqueMembers(input.memberIds?.length ? input.memberIds : (Array.isArray(conversationData?.memberIds) ? conversationData.memberIds.map(String) : [input.sender.id]));
+  const kind = (conversationData?.kind as FirebaseConversationKind | undefined) ?? "direct";
+  const title = typeof conversationData?.title === "string" ? conversationData.title : null;
+  const timestamp = serverTimestamp();
+  const messageRef = doc(collection(db, "conversations", input.conversationId, "messages"));
+  const batch = writeBatch(db);
+  const stickerName = input.sticker.name || "Sticker";
+  const fileName = `sticker-${input.sticker.id.split("/").pop() ?? Date.now()}.webp`;
+
+  batch.set(messageRef, {
+    senderId: input.sender.id,
+    memberIds,
+    body: "",
+    attachmentPath: null,
+    attachmentUrl: input.sticker.url,
+    attachmentName: fileName,
+    attachmentMimeType: "image/webp",
+    attachmentSize: input.sticker.bytes ?? 0,
+    status: "sent",
+    deliveredTo: [input.sender.id],
+    readBy: [input.sender.id],
+    replyToMessageId: input.replyTo?.messageId ?? null,
+    replyToSenderId: input.replyTo?.senderUserId ?? null,
+    replyToSnippet: input.replyTo?.snippet ? messageSnippet(input.replyTo.snippet) : null,
+    reactions: {},
+    savedBy: [],
+    pinnedBy: [],
+    memoryPrompt: null,
+    createdAt: timestamp,
+  });
+
+  batch.update(conversationRef(input.conversationId), {
+    updatedAt: timestamp,
+    lastMessageAt: timestamp,
+    lastMessageId: messageRef.id,
+    lastMessageSenderId: input.sender.id,
+    lastMessagePreview: stickerName,
+    lastMessageStatus: "sent",
+  });
+  for (const memberId of memberIds) {
+    batch.set(conversationInboxRef(memberId, input.conversationId), inboxPayload({
+      conversationId: input.conversationId,
+      kind,
+      title,
+      memberIds,
+      lastMessageAt: timestamp,
+      lastMessageId: messageRef.id,
+      lastMessageSenderId: input.sender.id,
+      lastMessagePreview: stickerName,
+      lastMessageStatus: "sent",
+      unreadCount: memberId === input.sender.id ? 0 : increment(1),
+      storefrontId: typeof conversationData?.storefrontId === "string" ? conversationData.storefrontId : null,
+      storefrontSlug: typeof conversationData?.storefrontSlug === "string" ? conversationData.storefrontSlug : null,
+      inviteCode: typeof conversationData?.inviteCode === "string" ? conversationData.inviteCode : null,
+    }), { merge: true });
+  }
+  await batch.commit();
+}
+
 export async function joinFirebaseConversationInvite(user: AppUser, code: string) {
   const normalizedCode = code.trim();
   if (!normalizedCode) throw new Error("Invite link is missing a code.");
@@ -1125,6 +1202,13 @@ export function useFirebaseChatMutations(user?: AppUser | null) {
       mutationFn: async (input: { conversationId: string; memberIds: string[]; file: File; replyTo?: FirebaseMessage["replyTo"] }) => {
         if (!user) throw new Error("Sign in to send an attachment");
         await sendFirebaseAttachment({ conversationId: input.conversationId, sender: user, memberIds: input.memberIds, file: input.file, replyTo: input.replyTo });
+      },
+      onSuccess: (_result, input) => invalidateConversation(input.conversationId),
+    }),
+    sendSticker: useMutation({
+      mutationFn: async (input: { conversationId: string; memberIds: string[]; sticker: FirebaseStickerAttachmentInput; replyTo?: FirebaseMessage["replyTo"] }) => {
+        if (!user) throw new Error("Sign in to send a sticker");
+        await sendFirebaseSticker({ conversationId: input.conversationId, sender: user, memberIds: input.memberIds, sticker: input.sticker, replyTo: input.replyTo });
       },
       onSuccess: (_result, input) => invalidateConversation(input.conversationId),
     }),

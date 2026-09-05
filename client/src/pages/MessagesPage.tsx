@@ -1,6 +1,6 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { AnimatedCheckCheckIcon, AnimatedCheckIcon, AnimatedSearchIcon, AnimatedSendIcon, MobileNavIcon, PlusIcon } from "@/components/AnimatedNavIcons";
-import { ChatMediaTray, type MediaTrayTab } from "@/components/ChatMediaTray";
+import { ChatMediaTray, type MediaTrayTab, type StickerSelection } from "@/components/ChatMediaTray";
 import { KeyboardIcon, MicIcon, StickerIcon, type ChatIconHandle } from "@/components/AnimatedChatIcons";
 import { CommunityVisibilitySelect } from "@/components/CommunityVisibilitySelect";
 import { ConversationHeader } from "@/components/ConversationHeader";
@@ -52,6 +52,7 @@ const reactionGlyphs: Record<FirebaseMessageReactionKey, string> = {
 
 type ConversationListItem = FirebaseConversationListItem;
 type CreationMode = FirebaseConversationKind | "community";
+type PrivateAttachmentItem = FirebaseMessage["attachments"][number];
 
 const previewConversations: ConversationListItem[] = [];
 const desktopPreviewMessages: never[] = [];
@@ -114,12 +115,34 @@ function getConversationPresence(conversation: Pick<ConversationListItem, "id" |
   return snapshots[Math.abs(hashId(conversation.id) + index) % snapshots.length];
 }
 
+function isStickerAttachment({ url, fileName, mimeType }: { url: string | null; fileName: string; mimeType: string }) {
+  return Boolean(url && mimeType === "image/webp" && (fileName.startsWith("sticker-") || url.includes("/stickers/")));
+}
+
+function stickerMessageAttachment(message: FirebaseMessage): PrivateAttachmentItem | null {
+  const sticker = message.attachments.find(isStickerAttachment) ?? null;
+  if (!sticker || message.payload.trim() || message.attachments.length !== 1) return null;
+  return sticker;
+}
+
+/** `sticker-01_Reactions-grin.webp` -> `01 Reactions grin`, for the alt text. */
+function stickerLabel(fileName: string) {
+  return (
+    fileName
+      .replace(/^sticker-/i, "")
+      .replace(/\.(webp|png|gif|jpe?g)$/i, "")
+      .replace(/[_-]+/g, " ")
+      .trim() || "Sticker"
+  );
+}
+
 function PrivateAttachment({ url, fileName, mimeType }: { url: string | null; fileName: string; mimeType: string }) {
   if (!url) return <span className="mt-2 inline-flex items-center gap-2 rounded-xl bg-[#fff2e9] px-3 py-2 text-xs text-[#8a5b39]">Attachment unavailable</span>;
   if (mimeType.startsWith("image/")) {
+    const sticker = isStickerAttachment({ url, fileName, mimeType });
     return (
-      <a href={url} target="_blank" rel="noreferrer" className="mt-2 block overflow-hidden rounded-xl bg-black/5 dark:bg-white/10">
-        <img src={url} alt={fileName} className="max-h-72 w-full object-cover" loading="lazy" />
+      <a href={url} target="_blank" rel="noreferrer" className={cn("mt-2 block overflow-hidden rounded-xl", sticker ? "w-32 bg-transparent" : "bg-black/5 dark:bg-white/10")}>
+        <img src={url} alt={fileName} className={sticker ? "aspect-square w-32 object-contain" : "max-h-72 w-full object-cover"} loading="lazy" />
       </a>
     );
   }
@@ -240,7 +263,9 @@ export default function MessagesPage() {
   const recordingStream = useRef<MediaStream | null>(null);
   const messageRefs = useRef<Record<string, HTMLElement | null>>({});
   const mobileThreadRef = useRef<HTMLDivElement | null>(null);
+  const desktopThreadRef = useRef<HTMLDivElement | null>(null);
   const mobileComposerRef = useRef<HTMLFormElement | null>(null);
+  const desktopComposerRef = useRef<HTMLFormElement | null>(null);
   const actionHideTimer = useRef<number | null>(null);
   const longPressTimer = useRef<number | null>(null);
   const pendingOpenMessageId = useRef<string | null>(null);
@@ -262,17 +287,18 @@ export default function MessagesPage() {
     enabled: Boolean(user && newChatOpen && creationMode !== "community" && isInviteeSearch),
   });
   const communityMutations = useFirebaseCommunityMutations(user);
-  const scrollMobileThreadToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
-    const thread = mobileThreadRef.current;
-    if (!thread) return;
+  const scrollCurrentThreadToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    const thread = isMobile ? mobileThreadRef.current : desktopThreadRef.current;
+    if (!thread) return false;
     thread.scrollTo({ top: thread.scrollHeight, behavior });
-  }, []);
+    return true;
+  }, [isMobile]);
   const scrollThreadToMessage = useCallback((messageId: string, behavior: ScrollBehavior = "smooth") => {
     const message = messageRefs.current[messageId];
     if (!message) return false;
     const thread = (
       message.closest(".savanna-mobile-message-thread, .savanna-desktop-message-thread")
-      ?? mobileThreadRef.current
+      ?? (isMobile ? mobileThreadRef.current : desktopThreadRef.current)
     ) as HTMLElement | null;
     if (!thread) return false;
     const messageRect = message.getBoundingClientRect();
@@ -280,7 +306,7 @@ export default function MessagesPage() {
     const centeredTop = thread.scrollTop + messageRect.top - threadRect.top - Math.max(16, (thread.clientHeight - messageRect.height) / 2);
     thread.scrollTo({ top: Math.max(0, centeredTop), behavior });
     return true;
-  }, []);
+  }, [isMobile]);
 
   useEffect(() => {
     if (!selectedConversationId || !conversations.data?.length) return;
@@ -484,11 +510,42 @@ export default function MessagesPage() {
     );
     return unreadIncoming[unreadIncoming.length - 1]?.id ?? "";
   }, [messages.data, user?.id]);
+  /**
+   * Web: the composer is absolutely positioned over the thread, so the thread
+   * has to reserve its height as bottom padding. That height is not a constant
+   * - opening the emoji/GIF/sticker tray grows the form by up to 340px - so it
+   * is measured here and published as a CSS variable. Without this the tray
+   * covers the newest messages and "scroll to bottom" cannot reach them.
+   *
+   * Keyed on `selected?.id` rather than the id held in state: the composer only
+   * mounts once the conversation resolves from the list, so an effect that ran
+   * earlier would find no element and never re-arm itself.
+   */
+  useEffect(() => {
+    if (isMobile) return;
+    const composer = desktopComposerRef.current;
+    if (!composer) return;
+    const root = document.documentElement;
+    const syncComposerHeight = () => {
+      root.style.setProperty("--savanna-desktop-composer-height", `${Math.ceil(composer.getBoundingClientRect().height)}px`);
+    };
+    syncComposerHeight();
+    const observer = new ResizeObserver(syncComposerHeight);
+    observer.observe(composer);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty("--savanna-desktop-composer-height");
+    };
+  }, [isMobile, selected?.id]);
   const targetAutoScrollMessageId = latestUnreadIncomingMessageId || latestMessageId;
   const autoScrollToCurrentTarget = useCallback((behavior: ScrollBehavior = "smooth") => {
     if ((isMobile && !mobileDetail) || !selectedConversationId || !targetAutoScrollMessageId || !latestMessageId) return false;
-    const scrollKey = `${selectedConversationId}:${targetAutoScrollMessageId}:${latestMessageId}`;
+    const scrollKey = `${selectedConversationId}:${targetAutoScrollMessageId}:${latestMessageId}:${mediaTrayOpen ? "tray" : "full"}`;
     if (lastAutoScrolledMessageId.current === scrollKey) return true;
+    if (targetAutoScrollMessageId === latestMessageId && scrollCurrentThreadToBottom(behavior)) {
+      lastAutoScrolledMessageId.current = scrollKey;
+      return true;
+    }
     if (scrollThreadToMessage(targetAutoScrollMessageId, behavior)) {
       lastAutoScrolledMessageId.current = scrollKey;
       return true;
@@ -497,7 +554,9 @@ export default function MessagesPage() {
   }, [
     isMobile,
     latestMessageId,
+    mediaTrayOpen,
     mobileDetail,
+    scrollCurrentThreadToBottom,
     scrollThreadToMessage,
     selectedConversationId,
     targetAutoScrollMessageId,
@@ -528,9 +587,7 @@ export default function MessagesPage() {
         autoScrollRetryTimer.current = window.setTimeout(scrollToThreadEntry, 80);
         return;
       }
-      if (isMobile) {
-        scrollMobileThreadToBottom("smooth");
-      }
+      scrollCurrentThreadToBottom("smooth");
     };
     const frame = window.requestAnimationFrame(scrollToThreadEntry);
     return () => {
@@ -545,12 +602,39 @@ export default function MessagesPage() {
     attachment?.name,
     autoScrollToCurrentTarget,
     isMobile,
+    mediaTrayOpen,
     messages.isLoading,
     mobileDetail,
     replyTo?.id,
-    scrollMobileThreadToBottom,
+    scrollCurrentThreadToBottom,
     selectedConversationId,
     selectedSavannaAnswers.length,
+    targetAutoScrollMessageId,
+  ]);
+  useEffect(() => {
+    if (isMobile || !mediaTrayOpen || targetAutoScrollMessageId !== latestMessageId || !selectedConversationId) return;
+    // The thread's bottom padding is driven by a CSS variable that the
+    // composer ResizeObserver publishes one frame after the tray grows, so the
+    // later ticks are the ones that land on the settled layout.
+    const delays = [0, 80, 180, 300, 460];
+    let frame = 0;
+    const timers = delays.map(delay => window.setTimeout(() => {
+      if (frame) window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        scrollCurrentThreadToBottom("auto");
+        frame = 0;
+      });
+    }, delay));
+    return () => {
+      timers.forEach(timer => window.clearTimeout(timer));
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, [
+    isMobile,
+    latestMessageId,
+    mediaTrayOpen,
+    scrollCurrentThreadToBottom,
+    selectedConversationId,
     targetAutoScrollMessageId,
   ]);
   const dueFollowUps = useMemo(() => (
@@ -733,6 +817,37 @@ export default function MessagesPage() {
     } catch {
       toast.error("Could not fetch that GIF - try another one.");
     }
+  };
+
+  const sendSticker = (sticker: StickerSelection) => {
+    if (!selectedConversationId) return;
+    if (isPreviewConversation) {
+      toast.info("Development preview - messages are not sent or saved.");
+      return;
+    }
+    setMediaTrayOpen(false);
+    stickerIcon.current?.stopAnimation();
+    chatMutations.sendSticker.mutate(
+      {
+        conversationId: selectedConversationId,
+        memberIds: selected?.memberIds ?? [],
+        sticker: {
+          id: sticker.id,
+          name: sticker.name,
+          url: sticker.url,
+          path: sticker.path,
+          bytes: sticker.bytes,
+        },
+        replyTo: replyTo ? { messageId: replyTo.id, senderUserId: replyTo.senderUserId, snippet: messageSnippet(replyTo) } : null,
+      },
+      {
+        onSuccess: () => {
+          setReplyTo(null);
+          toast.success("Sticker sent");
+        },
+        onError: error => toast.error(error.message),
+      },
+    );
   };
 
   const messageSnippet = (message: FirebaseMessage) => {
@@ -1328,19 +1443,75 @@ export default function MessagesPage() {
   );
 
   /**
+   * Stickers deliberately skip the chat bubble - the artwork *is* the message,
+   * so a tinted container would just frame it in a box. Direction is still
+   * readable because the little capsule underneath carries the bubble surface
+   * colour (gold outgoing, canvas incoming) with the time and receipt ticks.
+   * Reply context, reactions and the long-press action row still apply.
+   */
+  const renderStickerMessage = (message: FirebaseMessage, variant: "mobile" | "desktop") => {
+    const outgoing = isSameUser(message.senderUserId, user?.id);
+    const sticker = message.attachments[0];
+    if (!sticker?.url) return null;
+    const replyContext = renderReplyContext(message);
+    const edge = variant === "desktop" ? 168 : 140;
+    return (
+      <div
+        {...messageActionTriggerProps(message.id)}
+        className={cn(
+          "savanna-sticker-message flex flex-col",
+          variant === "desktop" ? "max-w-[58%]" : "max-w-[82%]",
+          outgoing ? "items-end" : "items-start",
+        )}
+      >
+        {replyContext ? (
+          <div
+            className={cn(
+              "mb-1 w-full max-w-[16rem] rounded-2xl px-2.5 py-1.5 shadow-sm",
+              outgoing ? "bg-[#D9A441] text-[#3d2d1a]" : "bg-white text-[#3d2d1a] dark:bg-[var(--chat-surface)] dark:text-[#F0F2F5]",
+            )}
+          >
+            {replyContext}
+          </div>
+        ) : null}
+        <img
+          src={sticker.url}
+          alt={stickerLabel(sticker.fileName)}
+          loading="lazy"
+          className="savanna-sticker-image object-contain"
+          style={{ width: edge, height: edge }}
+        />
+        <div
+          className={cn(
+            "savanna-sticker-meta mt-1 inline-flex items-center gap-1 rounded-full px-2 py-[3px] text-[10px] font-medium leading-none shadow-sm",
+            outgoing
+              ? "bg-[#D9A441] text-[#3d2d1a]"
+              : "bg-white text-[#5f6861] dark:bg-[var(--chat-surface)] dark:text-[#AEBAC1]",
+          )}
+        >
+          <span>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+          {outgoing ? <DeliveryIcon status={message.status} className="text-[#3d2d1a]/80 dark:text-white/90" /> : null}
+        </div>
+        {renderReactionSummary(message)}
+        {renderMessageActions(message)}
+      </div>
+    );
+  };
+
+  /**
    * One composer for every thread - mobile and desktop, direct, group and
    * merchant support. It shows the mic until there is something to send,
    * then swaps in the animated send button.
    */
   const renderComposer = (variant: "mobile" | "desktop") => {
     const isDesktop = variant === "desktop";
-    const sending = chatMutations.send.isPending || chatMutations.sendAttachment.isPending;
+    const sending = chatMutations.send.isPending || chatMutations.sendAttachment.isPending || chatMutations.sendSticker.isPending;
     const showSend = Boolean(draft.trim() || attachment) || sending;
     const actionSize = isDesktop ? "size-10" : "size-9";
 
     return (
       <form
-        ref={isDesktop ? undefined : mobileComposerRef}
+        ref={isDesktop ? desktopComposerRef : mobileComposerRef}
         className={cn(
           "shrink-0 p-3",
           isDesktop ? "savanna-desktop-composer p-4" : "savanna-mobile-composer",
@@ -1397,6 +1568,7 @@ export default function MessagesPage() {
             onTabChange={setMediaTrayTab}
             onEmojiSelect={appendEmoji}
             onGifSelect={sendGif}
+            onStickerSelect={sendSticker}
             onClose={() => setMediaTrayOpen(false)}
           />
         </div>
@@ -1588,15 +1760,17 @@ export default function MessagesPage() {
   if (!isAuthenticated) {
     return (
       <SavannaShell>
-        <section className="grid min-h-[62vh] place-items-center rounded-[30px] border border-[#DDE3DC] bg-white p-8 text-center">
-          <div className="max-w-md">
-            <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-[#D9A441]/20 text-[#D9A441]"><MessageCircle className="size-6" /></span>
-            <p className="mt-7 text-xs font-semibold uppercase tracking-[0.18em] text-[#5F6861]">Private conversations</p>
-            <h1 className="mt-2 font-display text-4xl font-semibold tracking-[-0.06em] text-[#151A17]">A more considered place to talk.</h1>
-            <p className="mt-4 text-[15px] leading-7 text-[#5F6861]">Sign in to begin a direct conversation or keep up with the groups that matter to you.</p>
-            <Button className="savanna-brand-token mt-7 rounded-xl px-5 shadow-none" onClick={() => startLogin()}><MessageCircle className="mr-2 size-4" />Sign in to messages</Button>
-          </div>
-        </section>
+        <div className="savanna-messages-auth-shell">
+          <section className="savanna-messages-auth-card grid place-items-center text-center">
+            <div className="max-w-md">
+              <span className="savanna-messages-auth-icon mx-auto grid size-14 place-items-center rounded-2xl text-[#D9A441]"><MessageCircle className="size-6" /></span>
+              <p className="savanna-messages-auth-kicker mt-7 text-xs font-semibold uppercase tracking-[0.18em]">Private conversations</p>
+              <h1 className="savanna-messages-auth-title mt-2 font-display text-4xl font-semibold tracking-[-0.06em]">A more considered place to talk.</h1>
+              <p className="savanna-messages-auth-copy mt-4 text-[15px] leading-7">Sign in to begin a direct conversation or keep up with the groups that matter to you.</p>
+              <Button className="savanna-brand-token mt-7 rounded-xl px-5 shadow-none" onClick={() => startLogin()}><MessageCircle className="mr-2 size-4" />Sign in to messages</Button>
+            </div>
+          </section>
+        </div>
       </SavannaShell>
     );
   }
@@ -1622,7 +1796,15 @@ export default function MessagesPage() {
           <div ref={mobileThreadRef} className="savanna-mobile-message-thread flex-1 space-y-3 overflow-y-auto p-4">
             {messages.isLoading ? <Loader2 className="mx-auto mt-10 size-5 animate-spin text-[#9a6410]" /> : (messages.data?.length || selectedSavannaAnswers.length) ? (
               <>
-                {messages.data?.map(message => (
+                {messages.data?.map(message => {
+                  if (stickerMessageAttachment(message)) {
+                    return (
+                      <div key={message.id} ref={registerMessageElement(message.id)} className={`flex ${isSameUser(message.senderUserId, user?.id) ? "justify-end" : "justify-start"}`}>
+                        {renderStickerMessage(message, "mobile")}
+                      </div>
+                    );
+                  }
+                  return (
                   <div key={message.id} ref={registerMessageElement(message.id)} className={`flex ${isSameUser(message.senderUserId, user?.id) ? "justify-end" : "justify-start"}`}>
                     <article {...messageActionTriggerProps(message.id)} className={`savanna-message-bubble max-w-[82%] rounded-2xl px-3 py-2.5 text-sm shadow-sm ${activeThreadSearchMessageId === message.id ? "ring-2 ring-[#D9A441]" : ""} ${isSameUser(message.senderUserId, user?.id) ? "savanna-outgoing-message rounded-tr-none bg-[#D9A441] text-[#3d2d1a] dark:text-[#F0F2F5]" : "savanna-incoming-message rounded-tl-none bg-white text-[#3d2d1a] dark:text-[#fff8ed]"}`}>
                       {renderReplyContext(message)}
@@ -1634,7 +1816,8 @@ export default function MessagesPage() {
                       {renderMessageActions(message)}
                     </article>
                   </div>
-                ))}
+                  );
+                })}
                 {selectedSavannaAnswers.map(renderSavannaAnswer)}
               </>
             ) : <div className="grid h-full place-items-center text-center"><div><MessageCircle className="mx-auto size-8 text-[#d2a34f]" /><p className="mt-3 text-sm font-semibold text-[#5b4934] dark:text-[#f2e7d5]">No messages yet</p></div></div>}
@@ -1712,11 +1895,12 @@ export default function MessagesPage() {
               />
               {renderThreadSearchBar()}
               {renderPinnedMessages()}
-              <div className="savanna-desktop-message-thread min-h-0 flex-1 space-y-3 overflow-y-auto p-6">
+              <div ref={desktopThreadRef} className="savanna-desktop-message-thread min-h-0 flex-1 space-y-3 overflow-y-auto p-6">
                 {messages.isLoading ? <Loader2 className="size-5 animate-spin text-[#A87820]" /> : (messages.data?.length || selectedSavannaAnswers.length) ? (
                   <>
                     {messages.data?.map(message => (
                       <article key={message.id} ref={registerMessageElement(message.id)} className={`group flex ${isSameUser(message.senderUserId, user?.id) ? "justify-end" : "justify-start"}`}>
+                        {stickerMessageAttachment(message) ? renderStickerMessage(message, "desktop") : (
                         <div {...messageActionTriggerProps(message.id)} className={`savanna-message-bubble savanna-desktop-message-bubble max-w-[58%] cursor-pointer rounded-2xl px-3 py-2 text-sm shadow-sm ${activeThreadSearchMessageId === message.id ? "ring-2 ring-[#D9A441]" : ""} ${isSameUser(message.senderUserId, user?.id) ? "savanna-outgoing-message rounded-tr-none bg-[#D9A441] text-[#3d2d1a] dark:text-[#F0F2F5]" : "savanna-incoming-message rounded-tl-none"}`}>
                           {renderReplyContext(message)}
                           {message.payload ? <p className="whitespace-pre-wrap text-sm leading-5">{message.payload}</p> : null}
@@ -1726,6 +1910,7 @@ export default function MessagesPage() {
                           {renderReactionSummary(message)}
                           {renderMessageActions(message)}
                         </div>
+                        )}
                       </article>
                     ))}
                     {selectedSavannaAnswers.map(renderSavannaAnswer)}

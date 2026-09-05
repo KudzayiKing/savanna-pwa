@@ -1030,7 +1030,30 @@ describe("Savanna PWA assets", () => {
     expect(messages).toContain("const mobileComposerRef = useRef<HTMLFormElement | null>(null);");
     expect(messages).toContain('root.style.setProperty("--savanna-visual-viewport-height"');
     expect(messages).toContain('root.style.setProperty("--savanna-mobile-composer-height"');
-    expect(messages).toContain('scrollMobileThreadToBottom("smooth")');
+    expect(messages).toContain('scrollCurrentThreadToBottom("smooth")');
+
+    // Regression guard: the desktop thread MUST be wired to its ref. When it is
+    // not, every scroll-to-bottom silently no-ops on web and the newest message
+    // stays hidden behind the open media tray.
+    expect(messages).toContain('<div ref={desktopThreadRef} className="savanna-desktop-message-thread');
+    expect(messages).toContain("const desktopThreadRef = useRef<HTMLDivElement | null>(null);");
+
+    // The web composer is absolutely positioned, so the thread reserves its
+    // measured height (which grows when the tray opens) as bottom padding.
+    expect(messages).toContain("const desktopComposerRef = useRef<HTMLFormElement | null>(null);");
+    expect(messages).toContain("ref={isDesktop ? desktopComposerRef : mobileComposerRef}");
+    expect(messages).toContain('root.style.setProperty("--savanna-desktop-composer-height"');
+    expect(styles).toContain("--savanna-desktop-composer-height");
+
+    // Stickers render bare (no bubble) with a capsule carrying time + ticks.
+    expect(messages).toContain("savanna-sticker-message");
+    expect(messages).toContain("savanna-sticker-meta");
+    expect(messages).toContain("function stickerMessageAttachment");
+
+    // Frequently used stickers stay reachable from every country pack.
+    const tray = await readFile(resolve(projectRoot, "client/src/components/ChatMediaTray.tsx"), "utf8");
+    expect(tray).toContain("FrequentlyUsedIcon");
+    expect(tray).toContain("const pool = debouncedSearch ? visibleStickers : (stickers.data ?? []);");
     expect(messages).toContain("parseSavannaInvocation");
     expect(messages).toContain("generateAnswer");
     expect(messages).toContain("openRecallSource");
@@ -1498,7 +1521,10 @@ describe("Savanna PWA assets", () => {
     expect(styles).toContain('border-radius: 0 !important;');
     expect(styles).toContain('padding: calc(env(safe-area-inset-top) + 0.625rem) 0.75rem 0.625rem !important;');
     expect(styles).toContain('padding-top: 6.25rem !important;');
-    expect(styles).toContain('scroll-padding-bottom: 7rem !important;');
+    // Web bottom padding follows the measured composer height so an open
+    // emoji/GIF/sticker tray cannot hide the newest message.
+    expect(styles).toContain('scroll-padding-bottom: calc(var(--savanna-desktop-composer-height, 7rem) + 1.5rem) !important;');
+    expect(styles).toContain('padding-bottom: calc(var(--savanna-desktop-composer-height, 7rem) + 1.5rem) !important;');
     expect(styles).toContain('padding-top: calc(4.75rem + env(safe-area-inset-top)) !important;');
     expect(styles).toContain('padding-bottom: calc(var(--savanna-mobile-composer-height, 76px) + max(1rem, env(safe-area-inset-bottom)) + 1rem) !important;');
     expect(styles).toContain('.savanna-app .savanna-desktop-composer {\n    position: absolute;');

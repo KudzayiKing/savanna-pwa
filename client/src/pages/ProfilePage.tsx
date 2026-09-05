@@ -14,7 +14,7 @@ import { useFirebaseStories, useFirebaseStoryAnalytics, type FirebaseStory } fro
 import { SAVANNA_MEMORY_TAG_LABELS, type SavannaMemoryTag } from "@/lib/savannaRecall";
 import { normalizeUsername, updateUserProfile } from "@/lib/userProfile";
 import { cn } from "@/lib/utils";
-import { AtSign, Ban, BarChart3, Bookmark, CalendarClock, Check, Clock3, Eye, EyeOff, Heart, KeyRound, Loader2, MessageCircle, Moon, Search, Send, ShieldCheck, Smartphone, Store, Sun, Trash2, UserRound } from "lucide-react";
+import { AtSign, Ban, BarChart3, Bookmark, CalendarClock, Check, Clock3, Eye, EyeOff, Heart, KeyRound, Loader2, LogOut, MessageCircle, Moon, Search, Send, ShieldCheck, Smartphone, Store, Sun, Trash2, UserRound } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { toast } from "sonner";
 import { Link } from "wouter";
@@ -79,7 +79,7 @@ function StoryPerformanceRow({ story }: { story: FirebaseStory }) {
 }
 
 export default function ProfilePage() {
-  const { user, isAuthenticated, loading, refresh } = useAuth();
+  const { user, isAuthenticated, loading, refresh, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [profileForm, setProfileForm] = useState<ProfileForm>(blankProfile);
   const [privacyForm, setPrivacyForm] = useState<PrivacyForm>(blankPrivacy);
@@ -88,6 +88,7 @@ export default function ProfilePage() {
   const [reportReason, setReportReason] = useState<"spam" | "impersonation" | "scam" | "harassment" | "unsafe_content" | "other">("spam");
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPrivacy, setSavingPrivacy] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const [blockingAccount, setBlockingAccount] = useState(false);
   const [sendingReport, setSendingReport] = useState(false);
   const [memorySearch, setMemorySearch] = useState("");
@@ -238,6 +239,18 @@ export default function ProfilePage() {
     }
   };
 
+  const signOut = async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      await logout();
+      toast.success("Signed out");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not sign out");
+      setLoggingOut(false);
+    }
+  };
+
   const prepareMemoryConversation = (memory: FirebaseMessageMemory) => {
     if (memory.sourceType === "story") return;
     sessionStorage.setItem("savanna-open-conversation", memory.conversationId);
@@ -277,7 +290,13 @@ export default function ProfilePage() {
             <h1 className="mt-1 font-display text-4xl font-semibold tracking-[-0.06em] text-[#151A17]">Your page, your presence.</h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-[#5F6861]">Profiles, Stories, Groups, and business pages stay connected from here.</p>
           </div>
-          <span className="inline-flex w-fit items-center gap-2 rounded-full bg-[#D9A441]/20 px-3 py-1.5 text-xs font-semibold text-[#D9A441]"><ShieldCheck className="size-4" /> Privacy settings are yours</span>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <span className="inline-flex w-fit items-center gap-2 rounded-full bg-[#D9A441]/20 px-3 py-1.5 text-xs font-semibold text-[#D9A441]"><ShieldCheck className="size-4" /> Privacy settings are yours</span>
+            <Button type="button" variant="outline" onClick={signOut} disabled={loggingOut} className="savanna-profile-logout-button rounded-full border-0 bg-[#D9A441]/20 px-3 py-1.5 text-xs font-semibold text-[#D9A441] shadow-none hover:bg-[#D9A441]/30">
+              {loggingOut ? <Loader2 className="size-3.5 animate-spin" /> : <LogOut className="size-3.5" />}
+              Sign out
+            </Button>
+          </div>
         </section>
 
         <nav className="savanna-profile-switch grid grid-cols-2 gap-3 rounded-[24px] bg-white p-2 shadow-[0_10px_28px_rgba(21,26,23,0.045)] dark:bg-[#202C33]" aria-label="Profile sections">

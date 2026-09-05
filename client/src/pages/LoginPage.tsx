@@ -174,7 +174,7 @@ export default function LoginPage() {
             type="button"
             disabled={googleBusy || loading}
             onClick={continueWithGoogle}
-            className="h-12 w-full rounded-xl border border-[#eadfca] bg-white px-4 text-[#151A17] shadow-none hover:bg-[#fffaf0] dark:border-[#2C3336] dark:bg-[#0A1014]/40 dark:text-[#E9EDEF] dark:hover:bg-[#202C33]"
+            className="savanna-login-secondary-action h-12 w-full rounded-xl px-4 shadow-none"
           >
             <span className="mr-3 grid size-8 place-items-center rounded-xl bg-[#D9A441]/20 text-[#D9A441]">
               {googleBusy ? <Loader2 className="size-4 animate-spin" /> : <Mail className="size-4" />}
@@ -199,7 +199,7 @@ export default function LoginPage() {
                   id="phone"
                   value={phone}
                   onChange={event => setPhone(event.target.value)}
-                  className="border-[#DDE3DC] bg-white pl-9 shadow-none dark:border-[#2C3336] dark:bg-[#0A1014]/40"
+                  className="savanna-login-input border-[#DDE3DC] bg-white pl-9 shadow-none dark:border-[#2C3336] dark:bg-[#0A1014]/40"
                   type="tel"
                   inputMode="tel"
                   autoComplete="tel"
@@ -216,7 +216,7 @@ export default function LoginPage() {
             <Button
               type="submit"
               disabled={busy || loading || !phone.trim()}
-              className="savanna-brand-token h-11 w-full rounded-xl shadow-none"
+              className="savanna-login-primary-action h-11 w-full rounded-xl shadow-none"
             >
               {busy ? <Loader2 className="mr-2 size-4 animate-spin" /> : <ArrowRight className="mr-2 size-4" />}
               Send code
@@ -249,7 +249,7 @@ export default function LoginPage() {
           <Button
             type="submit"
             disabled={busy || code.length !== OTP_LENGTH}
-            className="savanna-brand-token h-11 w-full rounded-xl shadow-none"
+            className="savanna-login-primary-action h-11 w-full rounded-xl shadow-none"
           >
             {busy ? <Loader2 className="mr-2 size-4 animate-spin" /> : <ArrowRight className="mr-2 size-4" />}
             Verify and continue
@@ -307,15 +307,15 @@ function Shell({
   children: React.ReactNode;
 }) {
   return (
-    <main className="grid min-h-screen place-items-center bg-white px-5 py-10 text-[#151A17] dark:bg-[#0A1014] dark:text-[#E9EDEF]">
-      <section className="w-full max-w-[420px] rounded-[28px] border border-[#DDE3DC] bg-[#F6F5F5] px-6 py-6 shadow-[0_14px_32px_rgba(21,26,23,0.06)] dark:border-[#2C3336] dark:bg-[#131A1E] sm:px-10 sm:py-8">
+    <main className="savanna-login-screen grid min-h-screen place-items-center px-5 py-10">
+      <section className="savanna-login-card w-full max-w-[420px] rounded-[28px] px-6 py-6 sm:px-10 sm:py-8">
         <div className="mb-7 flex items-center gap-3">
-          <span className="grid size-11 place-items-center rounded-2xl bg-[#D9A441]/20 text-[#D9A441]">
+          <span className="savanna-login-icon grid size-11 place-items-center rounded-2xl">
             {icon}
           </span>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#D9A441]">{eyebrow}</p>
-            <h1 className="font-display text-3xl font-semibold tracking-[-0.055em]">{title}</h1>
+            <p className="savanna-login-eyebrow text-xs font-semibold uppercase tracking-[0.16em]">{eyebrow}</p>
+            <h1 className="savanna-login-title font-display text-3xl font-semibold tracking-[-0.055em]">{title}</h1>
           </div>
         </div>
         {children}

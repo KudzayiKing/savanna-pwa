@@ -52,6 +52,10 @@ interface ImportMetaEnv {
   /** Stamped onto every error log so a spike can be tied to a release. */
   readonly VITE_APP_VERSION?: string;
 
-  /** Tenor API key for the chat GIF tray. Free key: https://developers.google.com/tenor */
-  readonly VITE_TENOR_API_KEY?: string;
+  /** GIPHY API key for the chat GIF tray (Tenor was shut down 2026-06-30). Free key: https://developers.giphy.com */
+  readonly VITE_GIPHY_API_KEY?: string;
+  /** Public CDN/R2 URL for the uploaded sticker folder that contains stickers-manifest.json. */
+  readonly VITE_SAVANNA_STICKERS_BASE_URL?: string;
+  /** Optional explicit public URL for stickers-manifest.json. */
+  readonly VITE_SAVANNA_STICKERS_MANIFEST_URL?: string;
 }

@@ -1101,6 +1101,139 @@ button:not(:disabled), a {
   color: var(--chat-gold) !important;
 }
 
+html:has(.savanna-login-screen),
+body:has(.savanna-login-screen) {
+  background: var(--background) !important;
+}
+
+.savanna-login-screen {
+  background: var(--background) !important;
+  color: var(--foreground) !important;
+}
+
+.savanna-login-card {
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--card-foreground);
+  box-shadow: 0 14px 32px rgba(21, 26, 23, 0.06);
+}
+
+.savanna-login-icon {
+  background: color-mix(in srgb, var(--gold) 20%, transparent);
+  color: var(--gold);
+}
+
+.savanna-login-eyebrow {
+  color: var(--gold);
+}
+
+.savanna-login-title {
+  color: var(--foreground);
+}
+
+.savanna-login-secondary-action {
+  border: 1px solid color-mix(in srgb, var(--gold) 72%, transparent) !important;
+  background: transparent !important;
+  color: var(--foreground) !important;
+}
+
+.savanna-login-secondary-action:hover {
+  background: color-mix(in srgb, var(--gold) 10%, transparent) !important;
+}
+
+.savanna-login-secondary-action span {
+  background: color-mix(in srgb, var(--gold) 20%, transparent) !important;
+  color: var(--gold) !important;
+}
+
+.savanna-login-secondary-action svg {
+  color: var(--gold) !important;
+}
+
+.savanna-login-input {
+  background: var(--card) !important;
+  color: var(--foreground) !important;
+}
+
+.savanna-login-input::placeholder {
+  color: var(--muted-foreground) !important;
+  opacity: 1;
+}
+
+.savanna-login-primary-action {
+  border: 0 !important;
+  background: color-mix(in srgb, var(--gold) 20%, transparent) !important;
+  color: var(--gold) !important;
+  box-shadow: none !important;
+}
+
+.savanna-login-primary-action:hover {
+  background: color-mix(in srgb, var(--gold) 28%, transparent) !important;
+  color: var(--gold) !important;
+}
+
+.savanna-login-primary-action * {
+  color: var(--gold) !important;
+}
+
+.dark .savanna-login-screen {
+  background: var(--chat-bg) !important;
+  color: var(--chat-text-primary) !important;
+}
+
+.dark .savanna-login-card {
+  border-color: var(--chat-border) !important;
+  background: var(--chat-bg) !important;
+  color: var(--chat-text-primary) !important;
+  box-shadow: none;
+}
+
+.dark .savanna-login-icon {
+  background: color-mix(in srgb, var(--chat-gold) 20%, transparent) !important;
+  color: var(--chat-gold) !important;
+}
+
+.dark .savanna-login-eyebrow,
+.dark .savanna-login-primary-action,
+.dark .savanna-login-primary-action *,
+.dark .savanna-login-secondary-action svg,
+.dark .savanna-login-secondary-action span {
+  color: var(--chat-gold) !important;
+}
+
+.dark .savanna-login-title {
+  color: var(--chat-text-primary) !important;
+}
+
+.dark .savanna-login-secondary-action {
+  border-color: color-mix(in srgb, var(--chat-gold) 72%, transparent) !important;
+  background: transparent !important;
+  color: var(--chat-text-primary) !important;
+}
+
+.dark .savanna-login-secondary-action:hover {
+  background: color-mix(in srgb, var(--chat-gold) 10%, transparent) !important;
+}
+
+.dark .savanna-login-secondary-action span,
+.dark .savanna-login-primary-action {
+  background: color-mix(in srgb, var(--chat-gold) 20%, transparent) !important;
+}
+
+.dark .savanna-login-primary-action:hover {
+  background: color-mix(in srgb, var(--chat-gold) 28%, transparent) !important;
+}
+
+.dark .savanna-login-input {
+  border-color: var(--chat-border) !important;
+  background: var(--chat-bg) !important;
+  color: var(--chat-text-primary) !important;
+}
+
+.dark .savanna-login-input::placeholder {
+  color: var(--chat-text-secondary) !important;
+}
+
 .dark .savanna-app:has(.savanna-route-admin) {
   background: var(--chat-bg) !important;
   color: var(--chat-text-primary) !important;
@@ -1139,6 +1272,30 @@ button:not(:disabled), a {
 :root:not(.dark) .savanna-app .savanna-desktop-messages {
   background: #FFFFFF !important;
   color: #151A17 !important;
+}
+
+:root:not(.dark) .savanna-app .savanna-messages-auth-shell {
+  background: var(--background) !important;
+  color: var(--foreground) !important;
+}
+
+:root:not(.dark) .savanna-app .savanna-messages-auth-card {
+  border: 1px solid #DDE3DC;
+  background: var(--card);
+  color: var(--card-foreground);
+}
+
+:root:not(.dark) .savanna-app .savanna-messages-auth-icon {
+  background: color-mix(in srgb, var(--gold) 20%, transparent);
+}
+
+:root:not(.dark) .savanna-app .savanna-messages-auth-kicker,
+:root:not(.dark) .savanna-app .savanna-messages-auth-copy {
+  color: var(--muted-dark);
+}
+
+:root:not(.dark) .savanna-app .savanna-messages-auth-title {
+  color: var(--foreground);
 }
 
 :root:not(.dark) .savanna-app .savanna-desktop-chat-list,
@@ -1457,6 +1614,37 @@ button:not(:disabled), a {
   color: var(--chat-gold) !important;
 }
 
+.savanna-app .savanna-media-tray input:focus,
+.savanna-app .savanna-media-tray input:focus-visible {
+  outline: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+.savanna-app .savanna-sticker-pill-tabs button[aria-pressed="false"] {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: #5F6861 !important;
+}
+
+.savanna-app .savanna-sticker-pill-tabs button[aria-pressed="true"] {
+  background: rgba(217, 164, 65, 0.2) !important;
+  background-color: rgba(217, 164, 65, 0.2) !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: #D9A441 !important;
+}
+
+.dark .savanna-app .savanna-sticker-pill-tabs button[aria-pressed="false"] {
+  color: var(--chat-text-secondary) !important;
+}
+
+.dark .savanna-app .savanna-sticker-pill-tabs button[aria-pressed="true"] {
+  color: var(--chat-gold) !important;
+}
+
 /* The picker's search magnifier is a sprite; recolor it brand gold and center
    it inside the pill. */
 .savanna-app .savanna-emoji-picker .epr-icn-search {
@@ -1668,6 +1856,68 @@ button:not(:disabled), a {
     min-height: 100dvh;
     overflow: hidden;
   }
+}
+
+.savanna-app .savanna-messages-auth-shell {
+  min-height: calc(100dvh - 156px);
+  padding: 1rem 1rem calc(6.75rem + env(safe-area-inset-bottom));
+  background: var(--background);
+}
+
+.savanna-app .savanna-messages-auth-card {
+  min-height: min(620px, 62dvh);
+  border-radius: 30px;
+  padding: clamp(2.25rem, 10vw, 4.5rem) 1.5rem;
+}
+
+@media (min-width: 640px) {
+  .savanna-app .savanna-messages-auth-shell {
+    padding-right: 1.5rem;
+    padding-left: 1.5rem;
+  }
+
+  .savanna-app .savanna-messages-auth-card {
+    padding-right: 2rem;
+    padding-left: 2rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .savanna-app .savanna-messages-auth-shell {
+    min-height: 100dvh;
+    padding: 1.5rem;
+  }
+
+  .savanna-app .savanna-messages-auth-card {
+    min-height: calc(100dvh - 3rem);
+    border-radius: 28px;
+    padding: 3rem;
+  }
+}
+
+.dark .savanna-app .savanna-messages-auth-shell {
+  background: var(--background) !important;
+  color: var(--foreground) !important;
+}
+
+.dark .savanna-app .savanna-messages-auth-card {
+  border: 1px solid var(--chat-border);
+  background: var(--chat-bg) !important;
+  color: var(--card-foreground) !important;
+}
+
+.dark .savanna-app .savanna-messages-auth-icon {
+  background: color-mix(in srgb, var(--chat-gold) 20%, transparent) !important;
+  color: var(--chat-gold) !important;
+}
+
+.dark .savanna-app .savanna-messages-auth-kicker,
+.dark .savanna-app .savanna-messages-auth-copy {
+  color: var(--chat-text-secondary) !important;
+}
+
+.dark .savanna-app .savanna-messages-auth-title {
+  color: var(--chat-text-primary) !important;
 }
 
 @media (max-width: 1023px) {
@@ -2111,12 +2361,15 @@ button:not(:disabled), a {
     background-color: color-mix(in srgb, var(--chat-surface) 40%, transparent) !important;
   }
 
+  /* Bottom padding tracks the measured composer height (published as
+     --savanna-desktop-composer-height) instead of a fixed value, so opening the
+     emoji/GIF/sticker tray does not cover the newest messages. */
   .savanna-app .savanna-desktop-message-thread {
     height: 100%;
     padding-top: 6.25rem !important;
-    padding-bottom: 7rem !important;
+    padding-bottom: calc(var(--savanna-desktop-composer-height, 7rem) + 1.5rem) !important;
     scroll-padding-top: 6.25rem !important;
-    scroll-padding-bottom: 7rem !important;
+    scroll-padding-bottom: calc(var(--savanna-desktop-composer-height, 7rem) + 1.5rem) !important;
   }
 
   .savanna-app .savanna-desktop-composer {
