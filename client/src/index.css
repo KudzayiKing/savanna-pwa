@@ -2058,6 +2058,23 @@ body:has(.savanna-login-screen) {
   color: var(--chat-text-primary) !important;
 }
 
+.savanna-new-chat-drawer .savanna-brand-token,
+.savanna-new-chat-dialog .savanna-brand-token {
+  border: 0 !important;
+  background: color-mix(in srgb, #D9A441 20%, transparent) !important;
+  color: #D9A441 !important;
+  box-shadow: none !important;
+  opacity: 1 !important;
+}
+
+.savanna-new-chat-drawer .savanna-brand-token *,
+.savanna-new-chat-drawer .savanna-brand-token svg,
+.savanna-new-chat-dialog .savanna-brand-token *,
+.savanna-new-chat-dialog .savanna-brand-token svg {
+  color: #D9A441 !important;
+  stroke: currentColor !important;
+}
+
 /* The custom filter drawer/dialog is portal-rendered, so it needs the same
    Savanna tokens without relying on the .savanna-app ancestor. */
 .savanna-custom-tab-modal .savanna-brand-token {

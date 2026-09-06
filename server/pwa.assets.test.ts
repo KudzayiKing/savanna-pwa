@@ -1527,6 +1527,9 @@ describe("Savanna PWA assets", () => {
     expect(orders).toContain('cancelled: "savanna-order-status bg-[#FFFDF7] text-[#FF5B6B]"');
     expect(messages).toContain('className="savanna-new-chat-drawer rounded-t-[28px]');
     expect(messages).toContain("savanna-new-chat-tabs");
+    expect(styles).toContain(".savanna-new-chat-drawer .savanna-brand-token");
+    expect(styles).toContain(".savanna-new-chat-dialog .savanna-brand-token");
+    expect(styles).toContain("background: color-mix(in srgb, #D9A441 20%, transparent) !important;");
     expect(messages).toContain("savanna-desktop-messages grid h-screen max-h-screen overflow-hidden lg:grid-cols-[470px_minmax(0,1fr)]");
     expect(messages).toContain("const active = selectedConversationId === conversation.id;");
     expect(messages).toContain("data-active={active}");
