@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en" data-page-node-id="SLyXeBJPzlYcC0XzFCv2yD">
+  <head data-page-node-id="6qcliZNIwIn76EJirdqDu6">
+    <meta charset="utf-8" data-page-node-id="qioYlDZBA02SZz8PFzmIsT" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" data-page-node-id="GLkIoFV0cKdwP379hc6Kts" />
+    <title>Savanna — mobile Stories collapse preview</title>
+    <style>
+      :root {
+        --cream: #f7f6f1;
+        --ink: #151a17;
+        --muted: #5f6861;
+        --gold: #d9a441;
+        --gold-soft: #f3e2bf;
+        --border: #e6e3d8;
+        --pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+        --out: cubic-bezier(0.4, 0, 1, 1);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: start center;
+        gap: 1.5rem;
+        padding: 2rem 1rem 4rem;
+        background: #101413;
+        color: #e9edef;
+        font-family:
+          ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      .hint {
+        max-width: 30rem;
+        text-align: center;
+        font-size: 0.8125rem;
+        line-height: 1.5;
+        color: #9aa1a6;
+      }
+      .hint code {
+        color: var(--gold);
+      }
+      .phone {
+        position: relative;
+        width: 390px;
+        height: 720px;
+        overflow: hidden;
+        border-radius: 2rem;
+        border: 1px solid #2a3a3f;
+        background: #fffdf7;
+        box-shadow: 0 40px 80px -30px rgba(0, 0, 0, 0.7);
+      }
+      .scroll {
+        height: 100%;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      header.bar {
+        position: absolute;
+        inset: 0 0 auto 0;
+        z-index: 10;
+        background: rgba(247, 246, 241, 0.92);
+        backdrop-filter: blur(18px);
+        overflow: hidden;
+      }
+      .title-row {
+        display: flex;
+        height: 68px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 0 1rem;
+      }
+      .title-row .left {
+        display: flex;
+        align-items: center;
+      }
+      .wordmark {
+        font-size: 26px;
+        font-weight: 600;
+        letter-spacing: -0.04em;
+        color: var(--ink);
+        white-space: nowrap;
+      }
+      .me {
+        display: grid;
+        place-items: center;
+        width: 2.75rem;
+        height: 2.75rem;
+        border-radius: 999px;
+        background: var(--gold-soft);
+        color: #7b6647;
+        font-size: 0.75rem;
+        font-weight: 600;
+      }
+      .stories {
+        overflow: hidden;
+        padding: 0 1rem;
+        height: 116px;
+        opacity: 1;
+        transition:
+          height 340ms var(--pop),
+          opacity 200ms var(--out);
+      }
+      .rail {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        height: 100%;
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      .rail::-webkit-scrollbar {
+        display: none;
+      }
+      .chip {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.25rem;
+        flex: 0 0 auto;
+        transition:
+          transform 220ms var(--out),
+          opacity 180ms var(--out);
+      }
+      .chip > span {
+        max-width: 4rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 10px;
+        font-weight: 500;
+        color: var(--muted);
+      }
+      .bubble {
+        position: relative;
+        display: grid;
+        place-items: center;
+        width: 3.5rem;
+        height: 3.5rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #3d2d1a;
+        background: var(--gold-soft);
+      }
+      .bubble.brand {
+        color: #3d2d1a;
+        background: linear-gradient(160deg, #f0d69a, var(--gold));
+      }
+      .plus {
+        position: absolute;
+        right: -2px;
+        bottom: -2px;
+        display: grid;
+        place-items: center;
+        width: 1.25rem;
+        height: 1.25rem;
+        border-radius: 999px;
+        background: var(--gold);
+        color: #151a17;
+        font-size: 0.875rem;
+        line-height: 1;
+      }
+      /* ---- collapsed state ---- */
+      header.bar.compact .stories {
+        height: 0;
+        opacity: 0;
+        pointer-events: none;
+      }
+      header.bar.compact .chip {
+        opacity: 0;
+        transform: translateY(-10px) scale(0.72);
+      }
+      .cluster {
+        display: flex;
+        align-items: center;
+        overflow: hidden;
+        width: 0;
+        opacity: 0;
+        transition:
+          width 340ms var(--pop),
+          opacity 180ms linear;
+      }
+      header.bar.compact .cluster {
+        opacity: 1;
+      }
+      .cluster-inner {
+        display: flex;
+        align-items: center;
+      }
+      .cluster button {
+        display: grid;
+        place-items: center;
+        width: 1.875rem;
+        height: 1.875rem;
+        border: 0;
+        border-radius: 999px;
+        background: linear-gradient(160deg, #f0d69a, var(--gold));
+        color: #3d2d1a;
+        font-size: 0.625rem;
+        font-weight: 600;
+        cursor: pointer;
+        transform: scale(0.2);
+        opacity: 0;
+        transition:
+          transform 260ms var(--pop),
+          opacity 160ms linear;
+      }
+      .cluster button + button {
+        margin-left: -0.375rem;
+      }
+      header.bar.compact .cluster button {
+        transform: scale(1);
+        opacity: 1;
+      }
+      .spacer {
+        transition: height 340ms var(--pop);
+      }
+      .feed {
+        padding: 1rem;
+      }
+      .row {
+        display: flex;
+        gap: 0.75rem;
+        align-items: center;
+        padding: 0.75rem 0.25rem;
+        border-bottom: 1px solid var(--border);
+      }
+      .row .bubble {
+        width: 3rem;
+        height: 3rem;
+      }
+      .row .meta {
+        min-width: 0;
+        flex: 1;
+      }
+      .row .meta b {
+        display: block;
+        font-size: 0.9375rem;
+        color: var(--ink);
+      }
+      .row .meta span {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 0.8125rem;
+        color: var(--muted);
+      }
+      .note {
+        margin-top: 1rem;
+        font-size: 0.75rem;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body data-page-node-id="n4jkbO5qO7XfBb0DCqA19o">
+    <p class="hint" data-page-node-id="Bq0HtMFhOoGr3uQ08uvIBi">
+      Faithful preview of the mobile header collapse implemented in
+      <code data-page-node-id="BCVBUuJd3av4OKJppoAusY">client/src/components/StoriesPanel.tsx</code>. Scroll inside the
+      phone frame — the Stories row springs up into the header and the avatar
+      cluster pops into the title row, while the spacer keeps the feed in sync.
+    </p>
+    <div class="phone" data-page-node-id="AsG8FbWTZR4F2sJ2e6IDx5">
+      <div class="scroll" id="scroll" data-page-node-id="zQ3tvg0wYtN16OUaZIAhnT">
+        <div class="spacer" id="spacer" style="height: 184px" data-page-node-id="hWwwYzVEDCCUkDK46NpvGn"></div>
+        <div class="feed" id="feed" data-page-node-id="LLsgIQGvKSDIKoh17yNgsr"></div>
+      </div>
+      <header class="bar" id="bar" data-page-node-id="DQTnwSJR9r4UK2vpHHaJjH">
+        <div class="title-row" data-page-node-id="70ieWabCWA4ECeXyxFxDl9">
+          <div class="left" data-page-node-id="r0diVJg07e8RGMuUDLugKy">
+            <div class="cluster" id="cluster" data-page-node-id="PVZbkAfW3eewoEBDVLpKoM">
+              <div class="cluster-inner" id="clusterInner" data-page-node-id="C9AV1NMXFfWskOdLX8RUQO">
+                <button style="z-index: 3" data-page-node-id="y0BlnILGIf2XrUVokOAAkL">A</button>
+                <button style="z-index: 2" data-page-node-id="5jYCG8IVKOGrBePKZqEGLa">E</button>
+                <button style="z-index: 1" data-page-node-id="d0YGTZeu5bq0qVviHvgUjb">Z</button>
+              </div>
+            </div>
+            <span class="wordmark" data-page-node-id="4eFnDqkK88W77F3C46wr3i">Savanna</span>
+          </div>
+          <div class="me" data-page-node-id="YwsFNBsb2ihLVnMVJN90LG">ME</div>
+        </div>
+        <section class="stories" data-page-node-id="KStVCEeDTcgmwPX1tXHqNG">
+          <div class="rail" id="rail" data-page-node-id="5bKqDrVVAJMDJIHs8VVHJP">
+            <div class="chip" style="transition-delay: 0ms" data-page-node-id="HYDXF7TBe4HcWhwKP5dq6Q">
+              <div class="bubble" data-page-node-id="kvrvaZWOEA5kBr5y8Ggah3">
+                S<span class="plus" data-page-node-id="mfoYli0aAV03plwPNZbduK">+</span>
+              </div>
+              <span data-page-node-id="3MZuqZWKxQpUl0Y8GJtcEu">Your Story</span>
+            </div>
+          </div>
+        </section>
+      </header>
+    </div>
+
+    <script>
+      const names = [
+        "Ayo",
+        "Esi",
+        "Zawadi",
+        "Amina",
+        "Kofi",
+        "Nia",
+        "Tumi",
+        "Sade",
+      ];
+      const rail = document.getElementById("rail");
+      const cluster = document.getElementById("cluster");
+      const clusterInner = document.getElementById("clusterInner");
+      const bar = document.getElementById("bar");
+      const spacer = document.getElementById("spacer");
+      const scroller = document.getElementById("scroll");
+      const feed = document.getElementById("feed");
+
+      names.forEach((name, index) => {
+        const chip = document.createElement("div");
+        chip.className = "chip";
+        chip.style.transitionDelay = index * 22 + "ms";
+        chip.innerHTML =
+          '<div class="bubble brand">' +
+          name[0] +
+          '</div><span>' +
+          name +
+          "</span>";
+        rail.appendChild(chip);
+      });
+
+      for (let i = 0; i < 14; i += 1) {
+        const row = document.createElement("div");
+        row.className = "row";
+        row.innerHTML =
+          '<div class="bubble">' +
+          names[i % names.length][0] +
+          '</div><div class="meta"><b>' +
+          names[i % names.length] +
+          " Mensah</b><span>Rows keep the feed scrollable — try scrolling up to expand again.</span></div>";
+        feed.appendChild(row);
+      }
+
+      let compact = false;
+      const sync = () => {
+        const next = scroller.scrollTop > 12;
+        if (next === compact) return;
+        compact = next;
+        bar.classList.toggle("compact", compact);
+        // Width is measured rather than animated to "auto" (no auto support).
+        cluster.style.width = compact ? clusterInner.offsetWidth + "px" : "0px";
+        spacer.style.height = compact ? "68px" : "184px";
+        document
+          .querySelectorAll(".cluster button")
+          .forEach((button, index) => {
+            button.style.transitionDelay = compact
+              ? 60 + index * 55 + "ms"
+              : (2 - index) * 30 + "ms";
+          });
+      };
+      scroller.addEventListener("scroll", sync, { passive: true });
+      sync();
+    </script>
+  </body>
+</html>

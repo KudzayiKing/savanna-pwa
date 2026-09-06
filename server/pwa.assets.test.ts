@@ -697,7 +697,9 @@ describe("Savanna PWA assets", () => {
     expect(stories).not.toContain("Preview Stories — development only");
     expect(styles).not.toContain("border: 1px dashed");
     expect(stories).toContain('const previewStoriesEnabled = import.meta.env.DEV && !followingStories.length');
-    expect(stories).toContain('compact ? "hidden" : "block"');
+    expect(stories).toContain('compact ? "pointer-events-none" : "block"');
+    expect(stories).toContain("animate={compact ? \"compact\" : \"expanded\"}");
+    expect(stories).toContain("<AnimatePresence initial={false}>");
     expect(stories).not.toContain('text-[10px] font-semibold uppercase tracking-[0.16em] text-[#9a6410]">Stories</p>');
     expect(stories).toContain("const expandedHeight = Math.min(116, 78 + pull)");
     expect(stories).toContain("<header className=\"savanna-mobile-header savanna-glass-header fixed inset-x-0 top-0 z-40");
@@ -744,7 +746,7 @@ describe("Savanna PWA assets", () => {
     for (const item of [
       '"Home"',
       '"Messages"',
-      '"Shops"',
+      '"Services"',
       '"Learn"',
       '"Stories"',
       '"Communities"',
@@ -773,9 +775,19 @@ describe("Savanna PWA assets", () => {
     expect(animatedIcons).toContain('x: [3, 0]');
     expect(animatedIcons).toContain('fill="none"');
     expect(animatedIcons).toContain('stroke="currentColor"');
-    expect(animatedIcons).toContain("const movingLineVariants: Variants");
-    expect(animatedIcons).toContain('y: [0, -4.5, 0, -4.5, 0]');
-    expect(animatedIcons).toContain("variants={movingLineVariants}");
+    // The Stories glyph is now the animated `SquarePlayIcon` (rounded square
+    // frame + play triangle) rather than the old film-reel mark. Pin its
+    // signature so it can't silently regress to a different icon.
+    expect(animatedIcons).toContain("const frameVariants: Variants");
+    expect(animatedIcons).toContain("const symbolVariants: Variants");
+    expect(animatedIcons).toContain('SquarePlayIcon.displayName = "SquarePlayIcon"');
+    expect(animatedIcons).toContain("<SquarePlayIcon");
+    expect(animatedIcons).toContain('LazyMotion features={domMin} strict');
+    expect(animatedIcons).toContain('d="M9 9.003a1 1 0 0 1 1.517');
+    expect(animatedIcons).toContain("times: [0, 0.6, 1]");
+    expect(animatedIcons).toContain("variants={frameVariants}");
+    expect(animatedIcons).toContain("variants={symbolVariants}");
+    expect(animatedIcons).toContain('if (name === "Stories")');
     expect(app).toContain('const StoriesPage = lazy(() => import("./pages/StoriesPage"));');
     expect(app).toContain('const CommunitiesPage = lazy(() => import("./pages/CommunitiesPage"));');
     expect(app).toContain('const CommunityDetailPage = lazy(() => import("./pages/CommunityDetailPage"));');
@@ -819,7 +831,8 @@ describe("Savanna PWA assets", () => {
     expect(storiesPage).not.toContain('return !story.storefrontId && (story.discovery.slot === "around_you" || story.audience === "public");');
     expect(storiesPage).toContain("adsEnabled = false");
     expect(storiesPage).toContain("savanna-story-filter-pill");
-    expect(storiesPage).toContain('activeTab === tab.value ? "border-[#D9A441]/30 bg-[#D9A441]/20 text-[#D9A441]"');
+    expect(storiesPage).toContain('layoutId="savanna-story-filter-active-pill"');
+    expect(storiesPage).toContain('activeTab === tab.value ? "border-transparent text-[#D9A441]"');
     expect(storiesPage).toContain("For You");
     expect(storiesPage).toContain("Near You");
     expect(storiesPage).toContain("Following");
@@ -972,7 +985,9 @@ describe("Savanna PWA assets", () => {
     expect(messages).toContain("savanna-desktop-chat-list flex h-screen min-h-0 flex-col overflow-hidden");
     expect(messages).toContain("savanna-desktop-conversation-panel flex h-screen min-h-0 flex-col overflow-hidden");
     expect(messages).toContain("savanna-desktop-message-thread min-h-0 flex-1 space-y-3 overflow-y-auto");
-    expect(messages).toContain('savanna-mobile-message-filter-tab shrink-0 rounded-full px-3 py-2 text-xs font-semibold');
+    expect(messages).toContain('savanna-mobile-message-filter-tab relative isolate shrink-0 overflow-hidden rounded-full border-0 px-3 py-2 text-xs font-semibold transition-colors');
+    expect(messages).toContain('layoutId="savanna-mobile-message-filter-active-pill"');
+    expect(messages).toContain('layoutId="savanna-desktop-message-filter-active-pill"');
     expect(messages).toContain('savanna-mobile-messages-canvas -mx-4');
     expect(messages).not.toContain(">Chats</h1>");
     expect(messages).toContain("const previewConversations: ConversationListItem[] = [];");
@@ -1271,6 +1286,11 @@ describe("Savanna PWA assets", () => {
     expect(animatedIcons).toContain("export function AnimatedStoreIcon");
     expect(animatedIcons).toContain("const UserIcon = forwardRef");
     expect(animatedIcons).toContain("const ShoppingBasketIcon = forwardRef");
+    expect(animatedIcons).toContain("const HandCoinsIcon = forwardRef");
+    expect(animatedIcons).toContain("HandCoinsIcon.displayName = \"HandCoinsIcon\"");
+    expect(animatedIcons).toContain("return <HandCoinsIcon size={size} {...props} />;");
+    expect(animatedIcons).toContain('d="M11 15h2a2 2 0 1 0 0-4h-3c-.6 0-1.1.2-1.4.6L3 17"');
+    expect(animatedIcons).toContain('d="m7 21 1.6-1.4c.3-.4.8-.6 1.4-.6h4c1.1 0 2.1-.4 2.8-1.2l4.6-4.4a2 2 0 0 0-2.75-2.91l-4.2 3.9"');
     expect(animatedIcons).toContain("const BookTextIcon = forwardRef");
     expect(animatedIcons).toContain("export function AnimatedBookOpenTextIcon");
     expect(animatedIcons).toContain("export function AnimatedShoppingBagIcon");
@@ -1282,18 +1302,28 @@ describe("Savanna PWA assets", () => {
     expect(animatedIcons).toContain('useAnimationControls');
     expect(animatedIcons).toContain('const [hovered, setHovered] = useState(false);');
     expect(animatedIcons).toContain('const [pressed, setPressed] = useState(false);');
-    expect(animatedIcons).toContain('const [canHover, setCanHover] = useState(false);');
+    expect(animatedIcons).toContain('const [canHover, setCanHover] = useState(() =>');
     expect(animatedIcons).toContain("const pressTimer = useRef<number | null>(null);");
+    expect(animatedIcons).toContain("const pressDelayTimer = useRef<number | null>(null);");
+    expect(animatedIcons).toContain("const previousActive = useRef(false);");
+    expect(animatedIcons).toContain("const MOBILE_NAV_ICON_ACTIVE_PILL_DELAY_MS = 520;");
+    expect(animatedIcons).toContain("const MOBILE_NAV_ICON_PRESS_ANIMATION_MS = 760;");
     expect(animatedIcons).toContain("const playPressAnimation = useCallback");
+    expect(animatedIcons).toContain("const scheduleMobilePressAnimation = useCallback");
     expect(animatedIcons).toContain("pressTimer.current = window.setTimeout");
-    expect(animatedIcons).toContain("}, 760);");
+    expect(animatedIcons).toContain("}, MOBILE_NAV_ICON_PRESS_ANIMATION_MS);");
+    expect(animatedIcons).toContain("}, MOBILE_NAV_ICON_ACTIVE_PILL_DELAY_MS);");
     expect(animatedIcons).toContain('const state = !reducedMotion && (hovered || pressed) ? "active" : "idle";');
     expect(animatedIcons).toContain('window.matchMedia("(hover: hover) and (pointer: fine)")');
+    expect(animatedIcons).toContain('const [canHover, setCanHover] = useState(() =>');
+    expect(animatedIcons).toContain("const becameActive = active && !previousActive.current;");
+    expect(animatedIcons).toContain("if (becameActive && !canHover) scheduleMobilePressAnimation();");
     expect(animatedIcons).toContain("onPointerEnter: () =>");
     expect(animatedIcons).toContain("if (canHover) setHovered(true);");
     expect(animatedIcons).toContain("onPointerDown: () =>");
-    expect(animatedIcons).toContain("if (!canHover) playPressAnimation();");
+    expect(animatedIcons).toContain("if (!canHover) scheduleMobilePressAnimation();");
     expect(animatedIcons).toContain("onTouchStart: () =>");
+    expect(animatedIcons).toContain("if (pressDelayTimer.current) window.clearTimeout(pressDelayTimer.current);");
     expect(animatedIcons).toContain("data-active={active}");
     expect(animatedIcons).toContain('controls.start("active").then(() => controls.start("idle"));');
     expect(animatedIcons).toContain('initial="idle"');
@@ -1374,7 +1404,9 @@ describe("Savanna PWA assets", () => {
     expect(bottomNavRule![0]).toContain('padding-left: 0.5rem !important');
     // Guard against reintroducing the 1rem inset that swallowed the utilities.
     expect(bottomNavRule![0]).not.toContain('1rem !important');
-    expect(shell).toContain('"grid h-11 place-items-center transition-[width,background-color] duration-200"');
+    expect(shell).toContain('"relative grid h-11 isolate place-items-center overflow-hidden transition-[width,color] duration-200"');
+    expect(shell).toContain('layoutId="savanna-mobile-bottom-nav-active-pill"');
+    expect(shell).toContain('className="absolute inset-0 -z-10 rounded-[28px] bg-[#D9A441]/20"');
     expect(styles).toContain(".savanna-app .savanna-mobile-header .savanna-wordmark");
     expect(styles).toContain("font-size: 26px;");
     expect(shell).toContain(': "w-11 rounded-[28px] text-[#8a765d]"');
@@ -1401,7 +1433,7 @@ describe("Savanna PWA assets", () => {
     expect(shops).toContain("savanna-route-shops");
     expect(shops).toContain("AnimatedStoreIcon");
     expect(shops).toContain("AnimatedSearchIcon size={17}");
-    expect(shops).toContain('const SHOPPING_BANNER_URL = "/shops_banner.png"');
+    expect(shops).toContain('const SHOPPING_BANNER_URL = "/shops_banner_african.webp"');
     expect(shops).toContain("Featured products");
     expect(shops).toContain('["around", "Around you"]');
     expect(shops).toContain('["memories", "Memories"]');
@@ -1601,6 +1633,9 @@ describe("Savanna PWA assets", () => {
     expect(styles).toContain(".savanna-emoji-picker .epr-search-container::before");
     expect(styles).toContain("--epr-search-input-padding: 0 16px 0 44px;");
     expect(mediaTray).toContain("savanna-media-tray-close");
+    expect(mediaTray).toContain('layoutId="savanna-media-tray-active-tab-pill"');
+    expect(mediaTray).toContain("savanna-media-tray-tab-active-pill");
+    expect(styles).toContain(".savanna-media-tray-tabs .savanna-media-tray-tab-active-pill");
     // No inline style either.
     const mobileLabel = messages.match(
       /<label className="savanna-mobile-chat-search[^"]*" style=\{\{[^}]*\}\}>/
@@ -1798,6 +1833,29 @@ describe("Savanna PWA assets", () => {
     expect(css).not.toMatch(/:root:not\(\.dark\)[^{]*aria-selected="true"[^{]*\{[^}]*border-color: #D9A441/);
     expect(css).not.toMatch(/:root:not\(\.dark\) \.savanna-app \.savanna-desktop-message-tabs button\[data-active="true"\] \{[^}]*border-color: #D9A441/);
     expect(css).toMatch(/:root:not\(\.dark\) \.savanna-app \[role="tablist"\] \[role="tab"\]\[aria-selected="true"\] \{\s*border-color: transparent !important/);
+  });
+
+  it("opens a themed people picker when creating message filter tabs", async () => {
+    const messages = await readFile(resolve(projectRoot, "client/src/pages/MessagesPage.tsx"), "utf8");
+    const styles = await readFile(resolve(projectRoot, "client/src/index.css"), "utf8");
+
+    expect(messages).not.toContain('window.prompt("Name this chat tab")');
+    expect(messages).toContain("const [customTabModalOpen, setCustomTabModalOpen] = useState(false);");
+    expect(messages).toContain("const customTabUserResults = useQuery({");
+    expect(messages).toContain("queryKey: [\"firebase\", \"custom-tab-user-search\", normalizedCustomTabUserSearch, user?.id ?? \"guest\"],");
+    expect(messages).toContain("savanna-custom-tab-form");
+    expect(messages).toContain("savanna-custom-tab-modal");
+    expect(messages).toContain("placeholder=\"Search people by username\"");
+    expect(messages).toContain("aria-label=\"People in your circle\"");
+    expect(messages).toContain(">Add filter</Button>");
+    expect(messages).toContain("conversation.memberIds.some(memberId => selectedUserIds.has(memberId))");
+    expect(messages).toContain("onClick={openCustomTabModal}");
+    expect(messages.match(/\{customTabModal\}/g)?.length).toBe(2);
+    expect(styles).toContain(".savanna-custom-tab-modal .savanna-brand-token");
+    expect(styles).toContain("background: color-mix(in srgb, #D9A441 20%, transparent) !important;");
+    expect(styles).toContain(".savanna-custom-tab-modal .savanna-new-chat-input:focus-visible");
+    expect(styles).toContain(".savanna-custom-tab-modal .savanna-mobile-chat-search input:focus-visible");
+    expect(styles).toContain("outline: 0 !important;");
   });
 
   // Regression guard: two product-wide a11y rules paint a gold outline on

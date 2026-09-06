@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useQuery } from "@tanstack/react-query";
+import { motion } from "framer-motion";
 import EmojiPicker, {
   Categories,
   EmojiStyle,
@@ -827,13 +828,14 @@ export function ChatMediaTray({
                   aria-pressed={active}
                   onClick={() => onTabChange(item.key)}
                   className={cn(
-                    "shrink-0 rounded-full px-4 py-1.5 text-xs font-semibold transition-colors",
+                    "relative isolate shrink-0 overflow-hidden rounded-full border-0 px-4 py-1.5 text-xs font-semibold transition-colors",
                     active
                       ? "savanna-media-tray-tab-active"
                       : "savanna-media-tray-tab-inactive"
                   )}
                 >
-                  {item.label}
+                  {active ? <motion.span layoutId="savanna-media-tray-active-tab-pill" className="savanna-media-tray-tab-active-pill absolute inset-0 -z-10 rounded-full bg-[#D9A441]/20" transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.75 }} /> : null}
+                  <span className="relative z-10">{item.label}</span>
                 </button>
               );
             })}

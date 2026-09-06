@@ -12,13 +12,14 @@ import {
   type MobileNavIconName,
 } from "@/components/AnimatedNavIcons";
 import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
 import { ChevronDown, Command, Search } from "lucide-react";
 import { type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 
 const navigation = [
   { href: "/messages", label: "Messages" },
-  { href: "/shops", label: "Shops" },
+  { href: "/shops", label: "Services" },
   { href: "/stories", label: "Stories" },
   { href: "/communities", label: "Communities" },
 ];
@@ -310,12 +311,19 @@ export function SavannaShell({
               >
                 <span
                   className={cn(
-                    "grid h-11 place-items-center transition-[width,background-color] duration-200",
+                    "relative grid h-11 isolate place-items-center overflow-hidden transition-[width,color] duration-200",
                     active
-                      ? "inline-flex w-max min-w-max items-center gap-2 rounded-[28px] bg-[#D9A441]/20 px-3 text-[#D9A441] dark:text-[#D9A441]"
+                      ? "inline-flex w-max min-w-max items-center gap-2 rounded-[28px] px-3 text-[#D9A441] dark:text-[#D9A441]"
                       : "w-11 rounded-[28px] text-[#8a765d]"
                   )}
                 >
+                  {active ? (
+                    <motion.span
+                      layoutId="savanna-mobile-bottom-nav-active-pill"
+                      className="absolute inset-0 -z-10 rounded-[28px] bg-[#D9A441]/20"
+                      transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.75 }}
+                    />
+                  ) : null}
                   {item.label === "Profile" && profileAvatarUrl ? (
                     <img
                       src={profileAvatarUrl}

@@ -23,7 +23,7 @@ import {
 export type MobileNavIconName =
   | "Home"
   | "Messages"
-  | "Shops"
+  | "Services"
   | "Learn"
   | "Stories"
   | "Communities"
@@ -58,6 +58,11 @@ export interface ShoppingBasketIconHandle {
   stopAnimation: () => void;
 }
 
+export interface HandCoinsIconHandle {
+  startAnimation: () => void;
+  stopAnimation: () => void;
+}
+
 export interface PlusIconHandle {
   startAnimation: () => void;
   stopAnimation: () => void;
@@ -84,6 +89,8 @@ interface UserIconProps extends SendHorizontalIconProps {}
 
 interface ShoppingBasketIconProps extends SendHorizontalIconProps {}
 
+interface HandCoinsIconProps extends SendHorizontalIconProps {}
+
 interface BookTextIconProps extends SendHorizontalIconProps {}
 
 interface PlusIconProps
@@ -103,6 +110,8 @@ interface PlusIconProps
 }
 
 const iconTransition = { duration: 0.42, ease: [0.23, 1, 0.32, 1] as const };
+const MOBILE_NAV_ICON_ACTIVE_PILL_DELAY_MS = 520;
+const MOBILE_NAV_ICON_PRESS_ANIMATION_MS = 760;
 
 function iconAccessibilityProps(props: AnimatedIconProps) {
   return props["aria-label"]
@@ -755,7 +764,145 @@ const ShoppingBasketIcon = forwardRef<
 
 ShoppingBasketIcon.displayName = "ShoppingBasketIcon";
 
+const HandCoinsIcon = forwardRef<HandCoinsIconHandle, HandCoinsIconProps>(
+  (
+    {
+      onMouseEnter,
+      onMouseLeave,
+      className,
+      size = 28,
+      duration = 1,
+      isAnimated = true,
+      color,
+      style,
+      ...props
+    },
+    ref
+  ) => {
+    const controls = useAnimation();
+    const reduced = useReducedMotion();
+    const isControlled = useRef(false);
+
+    useImperativeHandle(ref, () => {
+      isControlled.current = true;
+      return {
+        startAnimation: () =>
+          reduced ? controls.start("normal") : controls.start("animate"),
+        stopAnimation: () => controls.start("normal"),
+      };
+    });
+
+    const handleEnter = useCallback(
+      (event?: MouseEvent<HTMLDivElement>) => {
+        if (!isAnimated || reduced) return;
+        if (!isControlled.current) controls.start("animate");
+        else onMouseEnter?.(event as MouseEvent<HTMLDivElement>);
+      },
+      [controls, isAnimated, onMouseEnter, reduced]
+    );
+
+    const handleLeave = useCallback(
+      (event: MouseEvent<HTMLDivElement>) => {
+        if (!isControlled.current) {
+          controls.start("normal");
+        } else {
+          onMouseLeave?.(event);
+        }
+      },
+      [controls, onMouseLeave]
+    );
+
+    const circleVariants: Variants = {
+      normal: {
+        y: 0,
+        opacity: 1,
+        transition: {
+          opacity: { duration: 0.2 * duration },
+          type: "spring",
+          stiffness: 150,
+          damping: 15,
+          bounce: 0.8,
+        },
+      },
+      animate: {
+        opacity: [0, 1],
+        y: [-20, 0],
+        transition: {
+          opacity: { duration: 0.2 * duration },
+          type: "spring",
+          stiffness: 150,
+          damping: 15,
+          bounce: 0.8,
+        },
+      },
+    };
+
+    const secondCircleVariants: Variants = {
+      normal: {
+        y: 0,
+        opacity: 1,
+        transition: {
+          opacity: { duration: 0.2 * duration },
+          delay: 0.15 * duration,
+          type: "spring",
+          stiffness: 150,
+          damping: 15,
+          bounce: 0.8,
+        },
+      },
+      animate: {
+        opacity: [0, 1],
+        y: [-20, 0],
+        transition: {
+          opacity: { duration: 0.2 * duration },
+          delay: 0.15 * duration,
+          type: "spring",
+          stiffness: 150,
+          damping: 15,
+          bounce: 0.8,
+        },
+      },
+    };
+
+    return (
+      <LazyMotion features={domMin} strict>
+        <m.div
+          className={cn("inline-flex items-center justify-center", className)}
+          onMouseEnter={handleEnter}
+          onMouseLeave={handleLeave}
+          {...props}
+          style={{ color, ...style }}
+        >
+          <m.svg
+            xmlns="http://www.w3.org/2000/svg"
+            width={size}
+            height={size}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            animate={controls}
+            initial="normal"
+            style={{ overflow: "visible" }}
+          >
+            <path d="M11 15h2a2 2 0 1 0 0-4h-3c-.6 0-1.1.2-1.4.6L3 17" />
+            <path d="m7 21 1.6-1.4c.3-.4.8-.6 1.4-.6h4c1.1 0 2.1-.4 2.8-1.2l4.6-4.4a2 2 0 0 0-2.75-2.91l-4.2 3.9" />
+            <path d="m2 16 6 6" />
+            <m.circle cx="16" cy="9" r="2.9" variants={circleVariants} />
+            <m.circle cx="6" cy="5" r="3" variants={secondCircleVariants} />
+          </m.svg>
+        </m.div>
+      </LazyMotion>
+    );
+  }
+);
+
+HandCoinsIcon.displayName = "HandCoinsIcon";
+
 export { ShoppingBasketIcon, UserIcon };
+export { HandCoinsIcon };
 
 const BookTextIcon = forwardRef<SendHorizontalIconHandle, BookTextIconProps>(
   (
@@ -947,7 +1094,7 @@ export function AnimatedStoreIcon({
   pulse: _pulse,
   ...props
 }: AnimatedIconProps) {
-  return <ShoppingBasketIcon size={size} {...props} />;
+  return <HandCoinsIcon size={size} {...props} />;
 }
 
 export function AnimatedBookOpenTextIcon({
@@ -1010,12 +1157,134 @@ export function AnimatedShoppingBagIcon({
   );
 }
 
+interface SquarePlayIconProps extends Omit<
+  HTMLAttributes<HTMLDivElement>,
+  | "color"
+  | "onDrag"
+  | "onDragStart"
+  | "onDragEnd"
+  | "onAnimationStart"
+  | "onAnimationEnd"
+  | "onAnimationIteration"
+> {
+  size?: number;
+  duration?: number;
+  /**
+   * "active" plays the frame draw-in + play-triangle pop. Driven by the
+   * parent nav item's hover/press `state` so it matches the other
+   * bottom-nav icons, which only animate after the selected-tab pill
+   * finishes sliding in on touch devices.
+   */
+  state?: "idle" | "active";
+  color?: string;
+}
+
+/**
+ * Animated "stories" glyph: a rounded square frame that wipes in via
+ * `pathLength`, then the play triangle pops in with a slight overshoot.
+ * Replaces the old static film-reel mark for the Stories nav item.
+ *
+ * Animation is `state`-driven, exactly like the sibling nav icons: the
+ * parent `MobileNavIcon` flips `state` to "active" on hover (desktop) or,
+ * on touch devices, after the active-pill transition via
+ * `scheduleMobilePressAnimation`. Honours `useReducedMotion`.
+ *
+ * Adapted from a `motion/react` snippet: this project only ships
+ * `framer-motion`, whose `m` / `LazyMotion` exports are identical.
+ */
+const SquarePlayIcon = forwardRef<HTMLDivElement, SquarePlayIconProps>(
+  (
+    {
+      className,
+      size = 24,
+      duration = 1,
+      state = "idle",
+      color,
+      ...props
+    },
+    ref,
+  ) => {
+    const reduced = useReducedMotion();
+    const motionState = reduced ? "idle" : state;
+
+    const frameVariants: Variants = {
+      idle: { pathLength: 1, opacity: 1 },
+      active: {
+        pathLength: [0, 1],
+        opacity: [0, 1],
+        transition: { duration: 0.55 * duration, ease: "easeInOut" },
+      },
+    };
+
+    const symbolVariants: Variants = {
+      idle: { scale: 1, opacity: 1 },
+      active: {
+        scale: [0, 1.1, 1],
+        opacity: [0, 1, 1],
+        transition: {
+          duration: 0.4 * duration,
+          delay: 0.32 * duration,
+          times: [0, 0.6, 1],
+          ease: [0.34, 1.4, 0.64, 1],
+        },
+      },
+    };
+
+    return (
+      <LazyMotion features={domMin} strict>
+        <m.div
+          ref={ref}
+          className={cn("inline-flex items-center justify-center", className)}
+          {...props}
+          style={{ color, ...props.style }}
+        >
+          <m.svg
+            xmlns="http://www.w3.org/2000/svg"
+            width={size}
+            height={size}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            initial="idle"
+            animate={motionState}
+          >
+            <m.rect
+              x="3"
+              y="3"
+              width="18"
+              height="18"
+              rx="2"
+              variants={frameVariants}
+            />
+            <m.path
+              d="M9 9.003a1 1 0 0 1 1.517-.859l4.997 2.997a1 1 0 0 1 0 1.718l-4.997 2.997A1 1 0 0 1 9 14.996z"
+              variants={symbolVariants}
+              style={{ transformBox: "view-box", originX: "12px", originY: "12px" }}
+            />
+          </m.svg>
+        </m.div>
+      </LazyMotion>
+    );
+  },
+);
+
+SquarePlayIcon.displayName = "SquarePlayIcon";
+
 export function MobileNavIcon({ name, active, size = 22 }: MobileNavIconProps) {
   const reducedMotion = useReducedMotion();
   const [hovered, setHovered] = useState(false);
   const [pressed, setPressed] = useState(false);
-  const [canHover, setCanHover] = useState(false);
+  const [canHover, setCanHover] = useState(() =>
+    typeof window !== "undefined"
+      ? window.matchMedia("(hover: hover) and (pointer: fine)").matches
+      : false
+  );
   const pressTimer = useRef<number | null>(null);
+  const pressDelayTimer = useRef<number | null>(null);
+  const previousActive = useRef(false);
   const state = !reducedMotion && (hovered || pressed) ? "active" : "idle";
   const playPressAnimation = useCallback(() => {
     if (pressTimer.current) window.clearTimeout(pressTimer.current);
@@ -1023,8 +1292,20 @@ export function MobileNavIcon({ name, active, size = 22 }: MobileNavIconProps) {
     pressTimer.current = window.setTimeout(() => {
       setPressed(false);
       pressTimer.current = null;
-    }, 760);
+    }, MOBILE_NAV_ICON_PRESS_ANIMATION_MS);
   }, []);
+  const scheduleMobilePressAnimation = useCallback(() => {
+    if (pressDelayTimer.current) window.clearTimeout(pressDelayTimer.current);
+    if (pressTimer.current) {
+      window.clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+    setPressed(false);
+    pressDelayTimer.current = window.setTimeout(() => {
+      pressDelayTimer.current = null;
+      playPressAnimation();
+    }, MOBILE_NAV_ICON_ACTIVE_PILL_DELAY_MS);
+  }, [playPressAnimation]);
   const iconInteraction = reducedMotion
     ? {}
     : {
@@ -1035,10 +1316,10 @@ export function MobileNavIcon({ name, active, size = 22 }: MobileNavIconProps) {
           setHovered(false);
         },
         onPointerDown: () => {
-          if (!canHover) playPressAnimation();
+          if (!canHover) scheduleMobilePressAnimation();
         },
         onTouchStart: () => {
-          if (!canHover) playPressAnimation();
+          if (!canHover) scheduleMobilePressAnimation();
         },
         onFocus: () => {
           if (canHover) setHovered(true);
@@ -1057,9 +1338,16 @@ export function MobileNavIcon({ name, active, size = 22 }: MobileNavIconProps) {
     return () => hoverQuery.removeEventListener("change", syncHoverCapability);
   }, []);
 
+  useEffect(() => {
+    const becameActive = active && !previousActive.current;
+    previousActive.current = active;
+    if (becameActive && !canHover) scheduleMobilePressAnimation();
+  }, [active, canHover, scheduleMobilePressAnimation]);
+
   useEffect(
     () => () => {
       if (pressTimer.current) window.clearTimeout(pressTimer.current);
+      if (pressDelayTimer.current) window.clearTimeout(pressDelayTimer.current);
     },
     []
   );
@@ -1159,7 +1447,57 @@ export function MobileNavIcon({ name, active, size = 22 }: MobileNavIconProps) {
     );
   }
 
-  if (name === "Shops") {
+  if (name === "Services") {
+    const coinVariants: Variants = {
+      idle: {
+        y: 0,
+        opacity: 1,
+        transition: {
+          opacity: { duration: 0.2 },
+          type: "spring",
+          stiffness: 150,
+          damping: 15,
+          bounce: 0.8,
+        },
+      },
+      active: {
+        opacity: [0, 1],
+        y: [-20, 0],
+        transition: {
+          opacity: { duration: 0.2 },
+          type: "spring",
+          stiffness: 150,
+          damping: 15,
+          bounce: 0.8,
+        },
+      },
+    };
+    const secondCoinVariants: Variants = {
+      idle: {
+        y: 0,
+        opacity: 1,
+        transition: {
+          opacity: { duration: 0.2 },
+          delay: 0.15,
+          type: "spring",
+          stiffness: 150,
+          damping: 15,
+          bounce: 0.8,
+        },
+      },
+      active: {
+        opacity: [0, 1],
+        y: [-20, 0],
+        transition: {
+          opacity: { duration: 0.2 },
+          delay: 0.15,
+          type: "spring",
+          stiffness: 150,
+          damping: 15,
+          bounce: 0.8,
+        },
+      },
+    };
     return (
       <motion.svg
         aria-hidden="true"
@@ -1175,31 +1513,52 @@ export function MobileNavIcon({ name, active, size = 22 }: MobileNavIconProps) {
         style={{ overflow: "visible" }}
         {...iconInteraction}
       >
-        {[
-          "M2 11h20",
-          "m3.5 11 1.6 7.4a2 2 0 0 0 2 1.6h9.8a2 2 0 0 0 2-1.6l1.7-7.4",
-          "m5 11 4-7",
-          "m19 11-4-7",
-          "m9 11 1 9",
-          "m15 11-1 9",
-          "M4.5 15.5h15",
-        ].map((path, index) => (
-          <motion.path
-            key={path}
-            d={path}
-            initial="idle"
-            animate={state}
-            variants={{
-              idle: { pathLength: 1, opacity: 1 },
-              active: { pathLength: [0, 1], opacity: [0, 1] },
-            }}
-            transition={{
-              duration: 0.5,
-              delay: Math.min(index, 3) * 0.08,
-              ease: [0.16, 1, 0.3, 1],
-            }}
-          />
-        ))}
+        <motion.path
+          d="M11 15h2a2 2 0 1 0 0-4h-3c-.6 0-1.1.2-1.4.6L3 17"
+          initial="idle"
+          animate={state}
+          variants={{
+            idle: { pathLength: 1, opacity: 1 },
+            active: { pathLength: [0, 1], opacity: [0, 1] },
+          }}
+          transition={{ ...iconTransition, duration: 0.5 }}
+        />
+        <motion.path
+          d="m7 21 1.6-1.4c.3-.4.8-.6 1.4-.6h4c1.1 0 2.1-.4 2.8-1.2l4.6-4.4a2 2 0 0 0-2.75-2.91l-4.2 3.9"
+          initial="idle"
+          animate={state}
+          variants={{
+            idle: { pathLength: 1, opacity: 1 },
+            active: { pathLength: [0, 1], opacity: [0, 1] },
+          }}
+          transition={{ ...iconTransition, duration: 0.5, delay: 0.08 }}
+        />
+        <motion.path
+          d="m2 16 6 6"
+          initial="idle"
+          animate={state}
+          variants={{
+            idle: { pathLength: 1, opacity: 1 },
+            active: { pathLength: [0, 1], opacity: [0, 1] },
+          }}
+          transition={{ ...iconTransition, duration: 0.42, delay: 0.16 }}
+        />
+        <motion.circle
+          cx="16"
+          cy="9"
+          r="2.9"
+          initial="idle"
+          animate={state}
+          variants={coinVariants}
+        />
+        <motion.circle
+          cx="6"
+          cy="5"
+          r="3"
+          initial="idle"
+          animate={state}
+          variants={secondCoinVariants}
+        />
       </motion.svg>
     );
   }
@@ -1247,59 +1606,7 @@ export function MobileNavIcon({ name, active, size = 22 }: MobileNavIconProps) {
   }
 
   if (name === "Stories") {
-    const movingLineVariants: Variants = {
-      idle: { y: 0, opacity: 1 },
-      active: {
-        y: [0, -4.5, 0, -4.5, 0],
-        opacity: [1, 0.35, 1, 0.35, 1],
-      },
-    };
-
-    return (
-      <motion.svg
-        aria-hidden="true"
-        data-active={active}
-        width={size}
-        height={size}
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        style={{ overflow: "visible" }}
-        {...iconInteraction}
-      >
-        <motion.g
-          initial="idle"
-          animate={state}
-          variants={{ idle: { scale: 1 }, active: { scale: [1, 1.03, 1] } }}
-          transition={{ duration: 0.62, ease: "easeInOut" }}
-          style={{ transformBox: "view-box", transformOrigin: "12px 12px" }}
-        >
-          <rect width="18" height="18" x="3" y="3" rx="2" />
-          <path d="M7 3v18" />
-          <path d="M17 3v18" />
-          {["M3 7.5h4", "M17 7.5h4", "M3 12h18", "M3 16.5h4", "M17 16.5h4"].map(
-            (path, index) => (
-              <motion.path
-                key={path}
-                d={path}
-                initial="idle"
-                animate={state}
-                variants={movingLineVariants}
-                transition={{
-                  duration: 0.72,
-                  delay: index * 0.035,
-                  ease: "easeInOut",
-                  times: [0, 0.22, 0.45, 0.68, 1],
-                }}
-              />
-            )
-          )}
-        </motion.g>
-      </motion.svg>
-    );
+    return <SquarePlayIcon size={size} state={state} {...iconInteraction} />;
   }
 
   if (name === "Communities") {

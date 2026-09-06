@@ -20,6 +20,13 @@ import {
 import { useFollowedUserIds } from "@/lib/userProfile";
 import { cn } from "@/lib/utils";
 import {
+  AnimatePresence,
+  motion,
+  useReducedMotion,
+  type Transition,
+  type Variants,
+} from "framer-motion";
+import {
   Bookmark,
   ChevronRight,
   Heart,
@@ -47,6 +54,25 @@ import { Link } from "wouter";
 
 const storyColors = ["#151A17", "#A87820", "#5A4A34", "#C95C55", "#6F6A60"];
 const storyMediaTypes = ["image/jpeg", "image/png", "image/webp", "video/mp4"];
+
+/** Easing used when the Stories row is pulled up into the header. */
+const storiesExitEase: [number, number, number, number] = [0.4, 0, 1, 1];
+const storiesCollapseSpring: Transition = {
+  type: "spring",
+  stiffness: 420,
+  damping: 34,
+  mass: 0.85,
+};
+const storiesPopSpring: Transition = {
+  type: "spring",
+  stiffness: 620,
+  damping: 24,
+  mass: 0.6,
+};
+const storiesSettle: Transition = {
+  duration: 0.18,
+  ease: storiesExitEase,
+};
 
 type StoryAudience = "public" | "custom" | "private";
 type StoryMode = "text" | "image" | "video";
@@ -1102,12 +1128,55 @@ export function MobileStoriesHeader() {
     [followedUserIds.data, stories.data, user]
   );
   const view = useViewFirebaseStory();
+  const prefersReducedMotion = useReducedMotion();
   const [compact, setCompact] = useState(false);
   const [pull, setPull] = useState(0);
   const [startY, setStartY] = useState<number | null>(null);
   const [composing, setComposing] = useState(false);
   const [activeGroupIndex, setActiveGroupIndex] = useState<number | null>(null);
   const [activeStoryIndex, setActiveStoryIndex] = useState(0);
+  const [collapsedClusterWidth, setCollapsedClusterWidth] = useState(0);
+  const collapsedClusterRef = useRef<HTMLDivElement>(null);
+  const collapseTransition: Transition = prefersReducedMotion
+    ? { duration: 0 }
+    : storiesCollapseSpring;
+  const popTransition: Transition = prefersReducedMotion
+    ? { duration: 0 }
+    : storiesPopSpring;
+  const settleTransition: Transition = prefersReducedMotion
+    ? { duration: 0 }
+    : storiesSettle;
+  const storiesRailVariants = useMemo<Variants>(
+    () => ({
+      expanded: {
+        opacity: 1,
+        y: 0,
+        transition: prefersReducedMotion
+          ? { duration: 0 }
+          : { staggerChildren: 0.028, delayChildren: 0.06 },
+      },
+      compact: {
+        opacity: 0,
+        y: -18,
+        transition: prefersReducedMotion
+          ? { duration: 0 }
+          : {
+              duration: 0.18,
+              ease: storiesExitEase,
+              staggerChildren: 0.022,
+              staggerDirection: -1,
+            },
+      },
+    }),
+    [prefersReducedMotion]
+  );
+  const storyChipVariants = useMemo<Variants>(
+    () => ({
+      expanded: { opacity: 1, y: 0, scale: 1, transition: popTransition },
+      compact: { opacity: 0, y: -10, scale: 0.72, transition: settleTransition },
+    }),
+    [popTransition, settleTransition]
+  );
   const storyPreviewParams = new URLSearchParams(window.location.search);
   const previewCompact =
     import.meta.env.DEV && storyPreviewParams.get("stories") === "compact";
@@ -1297,6 +1366,18 @@ export function MobileStoriesHeader() {
     }
     return Array.from(groups.values());
   }, [storySource]);
+  // The collapsed cluster is width-animated so the wordmark slides instead of
+  // jumping. framer-motion cannot spring to "auto", so measure the cluster.
+  useEffect(() => {
+    const node = collapsedClusterRef.current;
+    if (!node) return;
+    const measure = () => setCollapsedClusterWidth(node.offsetWidth);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [compact, stories.isLoading, groupedStories.length]);
   const activeGroup =
     activeGroupIndex === null
       ? null
@@ -1333,28 +1414,59 @@ export function MobileStoriesHeader() {
   }, [activeGroup, activeStoryIndex]);
 
   const collapsedStoriesCluster = compact ? (
-    <div
+    <motion.div
+      key="savanna-collapsed-stories"
       aria-label="Collapsed Stories cluster"
-      className="savanna-collapsed-story-cluster flex shrink-0 items-center"
+      className="flex shrink-0 items-center overflow-hidden"
+      initial={{ width: 0, opacity: 0 }}
+      animate={{ width: collapsedClusterWidth, opacity: 1 }}
+      exit={{ width: 0, opacity: 0, transition: settleTransition }}
+      transition={collapseTransition}
     >
-      {stories.isLoading ? (
-        <div className="savanna-brand-token grid size-8 shrink-0 place-items-center rounded-full">
-          <Loader2 className="size-3 animate-spin" />
-        </div>
-      ) : (
-        groupedStories.slice(0, 3).map((group, groupIndex) => (
-          <button
-            key={group.authorUserId}
-            onClick={() => openGroup(groupIndex)}
-            aria-label={`Open ${group.authorName}'s Stories`}
-            className={`savanna-brand-token grid size-8 shrink-0 place-items-center rounded-full text-[10px] font-semibold transition-transform hover:scale-105 focus-visible:z-20 ${groupIndex ? "-ml-1.5" : ""}`}
-            style={{ zIndex: groupIndex + 1 }}
-          >
-            {group.authorName.slice(0, 1).toUpperCase()}
-          </button>
-        ))
-      )}
-    </div>
+      <div
+        ref={collapsedClusterRef}
+        style={{ marginLeft: 0 }}
+        className="savanna-collapsed-story-cluster flex shrink-0 items-center"
+      >
+        {stories.isLoading ? (
+          <div className="savanna-brand-token grid size-8 shrink-0 place-items-center rounded-full">
+            <Loader2 className="size-3 animate-spin" />
+          </div>
+        ) : (
+          groupedStories.slice(0, 3).map((group, groupIndex) => (
+            <motion.button
+              key={group.authorUserId}
+              onClick={() => openGroup(groupIndex)}
+              aria-label={`Open ${group.authorName}'s Stories`}
+              className={`savanna-brand-token grid size-8 shrink-0 place-items-center rounded-full text-[10px] font-semibold transition-transform hover:scale-105 focus-visible:z-20 ${groupIndex ? "-ml-1.5" : ""}`}
+              style={{ zIndex: groupIndex + 1 }}
+              initial={{ scale: 0.2, opacity: 0, y: 8 }}
+              animate={{
+                scale: 1,
+                opacity: 1,
+                y: 0,
+                transition: prefersReducedMotion
+                  ? { duration: 0 }
+                  : { ...storiesPopSpring, delay: 0.06 + groupIndex * 0.055 },
+              }}
+              exit={{
+                scale: 0.2,
+                opacity: 0,
+                transition: prefersReducedMotion
+                  ? { duration: 0 }
+                  : {
+                      duration: 0.12,
+                      ease: storiesExitEase,
+                      delay: (2 - groupIndex) * 0.03,
+                    },
+              }}
+            >
+              {group.authorName.slice(0, 1).toUpperCase()}
+            </motion.button>
+          ))
+        )}
+      </div>
+    </motion.div>
   ) : null;
 
   return (
@@ -1362,7 +1474,9 @@ export function MobileStoriesHeader() {
       <header className="savanna-mobile-header savanna-glass-header fixed inset-x-0 top-0 z-40 bg-[#f7f6f1]/92 backdrop-blur-xl dark:bg-[#0A1014]/95 lg:hidden">
         <div className="flex h-[68px] items-center justify-between gap-3 px-4">
           <div className="flex min-w-0 items-center gap-0">
-            {collapsedStoriesCluster}
+            <AnimatePresence initial={false}>
+              {collapsedStoriesCluster}
+            </AnimatePresence>
             <Link
               href="/"
               aria-label="Savanna messages"
@@ -1387,10 +1501,17 @@ export function MobileStoriesHeader() {
             )}
           </Link>
         </div>
-        <section
+        <motion.section
           aria-label="Stories"
-          className={`savanna-glass-stories-row overflow-hidden bg-[#f7f6f1]/92 px-4 backdrop-blur-xl transition-[height,background-color] duration-300 ease-out dark:bg-[#0A1014]/95 ${compact ? "hidden" : "block"}`}
-          style={{ height: expandedHeight }}
+          aria-hidden={compact}
+          inert={compact || undefined}
+          className={`savanna-glass-stories-row overflow-hidden bg-[#f7f6f1]/92 px-4 backdrop-blur-xl dark:bg-[#0A1014]/95 ${compact ? "pointer-events-none" : "block"}`}
+          initial={false}
+          animate={{
+            height: compact ? 0 : expandedHeight,
+            opacity: compact ? 0 : 1,
+          }}
+          transition={collapseTransition}
           onPointerDown={event => {
             if (window.scrollY === 0) setStartY(event.clientY);
           }}
@@ -1407,9 +1528,17 @@ export function MobileStoriesHeader() {
             setPull(0);
           }}
         >
-          <div className="flex h-full flex-col justify-start gap-0 pt-0">
+          <motion.div
+            className="flex h-full flex-col justify-start gap-0 pt-0"
+            initial={false}
+            animate={compact ? "compact" : "expanded"}
+            variants={storiesRailVariants}
+          >
             <div className="story-rail flex min-w-0 w-full flex-none items-center gap-3 overflow-x-auto py-0">
-              <div className="flex shrink-0 flex-col items-center gap-1">
+              <motion.div
+                variants={storyChipVariants}
+                className="flex shrink-0 flex-col items-center gap-1"
+              >
                 <button
                   onClick={() =>
                     isAuthenticated
@@ -1440,7 +1569,7 @@ export function MobileStoriesHeader() {
                 <span className="whitespace-nowrap text-[10px] font-medium text-[#5f6861] dark:text-[#9AA1A6]">
                   Your Story
                 </span>
-              </div>
+              </motion.div>
               {stories.isLoading ? (
                 <div className="savanna-brand-token grid size-14 shrink-0 place-items-center rounded-full">
                   <Loader2 className="size-3.5 animate-spin" />
@@ -1448,8 +1577,9 @@ export function MobileStoriesHeader() {
               ) : (
                 groupedStories.slice(0, 8).map((group, groupIndex) => {
                   return (
-                    <div
+                    <motion.div
                       key={group.authorUserId}
+                      variants={storyChipVariants}
                       className="flex shrink-0 flex-col items-center gap-1"
                     >
                       <button
@@ -1462,18 +1592,20 @@ export function MobileStoriesHeader() {
                       <span className="max-w-16 truncate text-center text-[10px] font-medium text-[#5f6861] dark:text-[#9AA1A6]">
                         {group.authorName.split(" ")[0]}
                       </span>
-                    </div>
+                    </motion.div>
                   );
                 })
               )}
             </div>
-          </div>
-        </section>
+          </motion.div>
+        </motion.section>
       </header>
-      <div
+      <motion.div
         aria-hidden="true"
         className="savanna-mobile-header-spacer lg:hidden"
-        style={{ height: compact ? 68 : 68 + expandedHeight }}
+        initial={false}
+        animate={{ height: compact ? 68 : 68 + expandedHeight }}
+        transition={collapseTransition}
       />
       {composing ? (
         <div

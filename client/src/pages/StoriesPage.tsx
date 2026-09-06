@@ -9,6 +9,7 @@ import { useFirebaseMessageMemories } from "@/lib/firebaseChat";
 import { useCommentFirebaseStory, useDeleteFirebaseStoryComment, useFirebaseStories, useFirebaseStory, useFirebaseStoryAnalytics, useFirebaseStoryComments, useLogFirebaseStoryPlacementEvent, useReactToFirebaseStory, useReplyToFirebaseStory, useSaveFirebaseStoryMemory, useViewFirebaseStory, type FirebaseStory, type FirebaseStoryPlacementAction } from "@/lib/firebaseStories";
 import { useFollowedUserIds } from "@/lib/userProfile";
 import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
 import { ArrowLeft, BarChart3, Bookmark, BookmarkCheck, Eye, Heart, Loader2, Megaphone, MessageCircle, MoreVertical, Pause, Play, Send, Share2, ShoppingBag, Sparkles, Store, Trash2, Volume2, VolumeX, X } from "lucide-react";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -644,7 +645,7 @@ export default function StoriesPage() {
     <SavannaShell hideMobileHeader>
       <div className="savanna-route-stories relative -mx-4 -my-5 min-h-[100dvh] bg-[#0A1014] text-white sm:-mx-6 lg:mx-auto lg:-my-8 lg:max-w-[540px]">
         <div className="pointer-events-none fixed inset-x-0 top-0 z-30 mx-auto max-w-[540px] px-4 pt-[max(1rem,env(safe-area-inset-top))]">
-          <div className="pointer-events-auto flex gap-2 overflow-x-auto pb-2">
+          <div className="savanna-animated-filter-tabs pointer-events-auto flex gap-2 overflow-x-auto pb-2">
             {storyTabs.map(tab => (
               <button
                 key={tab.value}
@@ -652,11 +653,12 @@ export default function StoriesPage() {
                 onClick={() => setActiveTab(tab.value)}
                 data-active={activeTab === tab.value}
                 className={cn(
-                  "savanna-story-filter-pill shrink-0 rounded-full border px-3.5 py-2 text-xs font-semibold backdrop-blur-xl transition-colors",
-                  activeTab === tab.value ? "border-[#D9A441]/30 bg-[#D9A441]/20 text-[#D9A441]" : "border-white/10 bg-black/24 text-white/72",
+                  "savanna-story-filter-pill relative isolate shrink-0 overflow-hidden rounded-full border px-3.5 py-2 text-xs font-semibold backdrop-blur-xl transition-colors",
+                  activeTab === tab.value ? "border-transparent text-[#D9A441]" : "border-white/10 bg-black/24 text-white/72",
                 )}
               >
-                {tab.label}
+                {activeTab === tab.value ? <motion.span layoutId="savanna-story-filter-active-pill" className="savanna-animated-filter-pill-bg absolute inset-0 -z-10 rounded-full bg-[#D9A441]/20" transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.75 }} /> : null}
+                <span className="relative z-10">{tab.label}</span>
               </button>
             ))}
           </div>

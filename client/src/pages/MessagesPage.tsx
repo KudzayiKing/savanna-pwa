@@ -39,7 +39,7 @@ import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { Bookmark, CalendarClock, ChevronDown, ChevronUp, FileText, Heart, Languages, Loader2, MessageCircle, Paperclip, Pin, Reply, Search, StopCircle, Users, X } from "lucide-react";
-import { type ChangeEvent, type FormEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ChangeEvent, type FormEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 
@@ -231,6 +231,10 @@ export default function MessagesPage() {
   const [locallyCreatedConversations, setLocallyCreatedConversations] = useState<ConversationListItem[]>([]);
   const [storyComposerOpen, setStoryComposerOpen] = useState(false);
   const [wallpaperDrawerOpen, setWallpaperDrawerOpen] = useState(false);
+  const [customTabModalOpen, setCustomTabModalOpen] = useState(false);
+  const [customTabName, setCustomTabName] = useState("");
+  const [customTabUserSearch, setCustomTabUserSearch] = useState("");
+  const [selectedTabUsers, setSelectedTabUsers] = useState<AppUser[]>([]);
   const [sendPulse, setSendPulse] = useState(0);
   const [recording, setRecording] = useState(false);
   const [mediaTrayOpen, setMediaTrayOpen] = useState(false);
@@ -279,6 +283,8 @@ export default function MessagesPage() {
   const isUsernameSearch = conversationSearch.trim().startsWith("@") && normalizedUsernameSearch.length >= 2;
   const normalizedInviteeSearch = normalizeUsername(inviteeSearch);
   const isInviteeSearch = inviteeSearch.trim().startsWith("@") && normalizedInviteeSearch.length >= 2;
+  const normalizedCustomTabUserSearch = normalizeUsername(customTabUserSearch);
+  const isCustomTabUserSearch = normalizedCustomTabUserSearch.length >= 2;
   const usernameResults = useQuery({
     queryKey: ["firebase", "username-search", normalizedUsernameSearch, user?.id ?? "guest"],
     queryFn: () => searchUserProfilesByUsername(conversationSearch, user),
@@ -288,6 +294,11 @@ export default function MessagesPage() {
     queryKey: ["firebase", "invitee-search", normalizedInviteeSearch, user?.id ?? "guest"],
     queryFn: () => searchUserProfilesByUsername(inviteeSearch, user),
     enabled: Boolean(user && newChatOpen && creationMode !== "community" && isInviteeSearch),
+  });
+  const customTabUserResults = useQuery({
+    queryKey: ["firebase", "custom-tab-user-search", normalizedCustomTabUserSearch, user?.id ?? "guest"],
+    queryFn: () => searchUserProfilesByUsername(customTabUserSearch, user),
+    enabled: Boolean(user && customTabModalOpen && isCustomTabUserSearch),
   });
   const communityMutations = useFirebaseCommunityMutations(user);
   const scrollCurrentThreadToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
@@ -920,10 +931,52 @@ export default function MessagesPage() {
     }
   };
 
-  const addCustomTab = () => {
-    const label = window.prompt("Name this chat tab");
-    if (!label?.trim()) return;
-    setCustomTabs(current => current.includes(label.trim()) ? current : [...current, label.trim()].slice(0, 5));
+  const resetCustomTabModal = () => {
+    setCustomTabName("");
+    setCustomTabUserSearch("");
+    setSelectedTabUsers([]);
+  };
+
+  const handleCustomTabModalOpenChange = (open: boolean) => {
+    setCustomTabModalOpen(open);
+    if (!open) resetCustomTabModal();
+  };
+
+  const openCustomTabModal = () => {
+    setCustomTabModalOpen(true);
+  };
+
+  const addTabUser = (profile: AppUser) => {
+    setSelectedTabUsers(current => current.some(item => item.id === profile.id) ? current : [...current, profile].slice(0, 24));
+    setCustomTabUserSearch("");
+  };
+
+  const removeTabUser = (profileId: string) => {
+    setSelectedTabUsers(current => current.filter(profile => profile.id !== profileId));
+  };
+
+  const handleCreateCustomTab = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const label = customTabName.trim();
+    if (!label) return toast.error("Name this filter tab.");
+    if (customTabs.includes(label)) return toast.error("That filter tab already exists.");
+    if (customTabs.length >= 5) return toast.error("You can keep up to 5 custom filter tabs.");
+
+    const selectedUserIds = new Set(selectedTabUsers.map(profile => profile.id));
+    const matchingConversationIds = selectedUserIds.size
+      ? conversationSource
+        .filter(conversation => conversation.memberIds.some(memberId => selectedUserIds.has(memberId)))
+        .map(conversation => conversation.id)
+      : [];
+
+    setCustomTabs(current => current.includes(label) ? current : [...current, label].slice(0, 5));
+    setTabMembership(current => ({
+      ...current,
+      [label]: Array.from(new Set([...(current[label] ?? []), ...matchingConversationIds])),
+    }));
+    setChatFilter(label);
+    handleCustomTabModalOpenChange(false);
+    toast.success(matchingConversationIds.length ? `Filter tab created with ${matchingConversationIds.length} chats` : "Filter tab created");
   };
 
   const saveSelectedToTab = () => {
@@ -1673,6 +1726,139 @@ export default function MessagesPage() {
     </Button>
   );
 
+  const renderCustomTabFields = (footer: ReactNode) => (
+    <form className="savanna-custom-tab-form space-y-4" onSubmit={handleCreateCustomTab}>
+      <label className="block space-y-2">
+        <span className="text-xs font-bold uppercase tracking-[0.18em] text-[#9a6410] dark:text-[#D9A441]">Filter name</span>
+        <Input
+          value={customTabName}
+          onChange={event => setCustomTabName(event.target.value)}
+          placeholder="Family, Work, Close friends"
+          aria-label="Filter tab name"
+          className="savanna-new-chat-input h-11 rounded-2xl border-[#ead2a4] bg-white text-[#151A17] dark:bg-[#2a2119]"
+        />
+      </label>
+
+      {selectedTabUsers.length ? (
+        <div className="flex flex-wrap gap-2" aria-label="Selected filter people">
+          {selectedTabUsers.map(profile => {
+            const displayName = profile.name || (profile.username ? `@${profile.username}` : "Savanna user");
+            return (
+              <button key={profile.id} type="button" onClick={() => removeTabUser(profile.id)} className="inline-flex h-9 min-w-0 items-center gap-2 rounded-full bg-[#D9A441]/20 px-3 text-xs font-semibold text-[#9a6410] transition-colors hover:bg-[#D9A441]/30 dark:text-[#D9A441]" aria-label={`Remove ${displayName}`}>
+                {profile.photoURL ? <img src={profile.photoURL} alt="" className="size-5 rounded-full object-cover" /> : <span className="grid size-5 shrink-0 place-items-center rounded-full bg-[#D9A441]/20">{displayName.slice(0, 1).toUpperCase()}</span>}
+                <span className="max-w-32 truncate">{displayName}</span>
+                <X className="size-3 shrink-0" />
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+
+      <div className="space-y-2">
+        <label className="savanna-mobile-chat-search savanna-chat-search-with-gold-icon flex h-11 items-center gap-2 rounded-full bg-[#F6F5F5] px-4 text-sm dark:bg-[var(--chat-search)]">
+          <AnimatedSearchIcon size={16} className="savanna-chat-search-icon shrink-0 text-[#D9A441]" />
+          <input
+            value={customTabUserSearch}
+            onChange={event => setCustomTabUserSearch(event.target.value)}
+            placeholder="Search people by username"
+            aria-label="Search people by username"
+            className="min-w-0 flex-1 bg-transparent text-[#151A17] outline-none placeholder:text-[#5F6861] dark:text-[#F0F2F5] dark:placeholder:text-[#9AA1A6]"
+          />
+        </label>
+        <div className="max-h-64 overflow-y-auto rounded-[22px] bg-white/80 p-2 dark:bg-[#172127]" role="list" aria-label="People in your circle">
+          {!customTabUserSearch.trim() ? (
+            <div className="grid min-h-28 place-items-center px-4 text-center text-sm font-semibold text-[#5F6861] dark:text-[#9AA1A6]">
+              Search people in your circle or nearby.
+            </div>
+          ) : !isCustomTabUserSearch ? (
+            <div className="grid min-h-28 place-items-center px-4 text-center text-sm font-semibold text-[#5F6861] dark:text-[#9AA1A6]">
+              Type at least two letters to search.
+            </div>
+          ) : customTabUserResults.isLoading ? (
+            <div className="flex min-h-28 items-center justify-center gap-2 text-sm font-semibold text-[#9a6410] dark:text-[#D9A441]">
+              <Loader2 className="size-4 animate-spin" />
+              Searching people
+            </div>
+          ) : customTabUserResults.data?.length ? (
+            customTabUserResults.data.map(profile => {
+              const selected = selectedTabUsers.some(item => item.id === profile.id);
+              const displayName = profile.name || (profile.username ? `@${profile.username}` : "Savanna user");
+              return (
+                <button
+                  key={profile.id}
+                  type="button"
+                  onClick={() => selected ? removeTabUser(profile.id) : addTabUser(profile)}
+                  className={cn(
+                    "flex w-full items-center gap-3 rounded-[18px] px-3 py-2.5 text-left transition-colors",
+                    selected ? "bg-[#D9A441]/20" : "hover:bg-[#D9A441]/10"
+                  )}
+                  aria-pressed={selected}
+                >
+                  <span className="savanna-brand-token grid size-10 shrink-0 place-items-center overflow-hidden rounded-full text-sm font-semibold">
+                    {profile.photoURL ? <img src={profile.photoURL} alt="" className="size-full object-cover" /> : displayName.slice(0, 1).toUpperCase()}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-[#151A17] dark:text-[#E9EDEF]">{displayName}</span>
+                    <span className="block truncate text-xs text-[#5F6861] dark:text-[#9AA1A6]">@{profile.username}</span>
+                  </span>
+                  <span className="rounded-full bg-[#D9A441]/20 px-2.5 py-1 text-[11px] font-semibold text-[#D9A441]">{selected ? "Added" : "Add"}</span>
+                </button>
+              );
+            })
+          ) : (
+            <div className="grid min-h-28 place-items-center px-4 text-center text-sm font-semibold text-[#5F6861] dark:text-[#9AA1A6]">
+              No people found for @{normalizedCustomTabUserSearch}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {footer}
+    </form>
+  );
+
+  const customTabModal = isMobile ? (
+    <Drawer open={customTabModalOpen} onOpenChange={handleCustomTabModalOpenChange}>
+      <DrawerContent className="savanna-new-chat-drawer savanna-custom-tab-modal max-h-[88vh] rounded-t-[28px] border-[#ead2a4] bg-[#fffaf0] dark:border-[#5b4833] dark:bg-[#21180f]">
+        <DrawerHeader className="text-left">
+          <div className="flex items-start justify-between gap-3 text-left">
+            <div className="min-w-0 flex-1 text-left">
+              <DrawerTitle className="text-left font-display text-2xl text-[#3d2d1a] dark:text-[#fff8ed]">New filter</DrawerTitle>
+              <DrawerDescription>Choose the people this tab should collect.</DrawerDescription>
+            </div>
+            <Button type="button" variant="ghost" size="icon" onClick={() => handleCustomTabModalOpenChange(false)} className="shrink-0 rounded-full text-[#9a6410] dark:text-[#D9A441]" aria-label="Close filter tab modal">
+              <X className="size-5" />
+            </Button>
+          </div>
+        </DrawerHeader>
+        <div className="overflow-y-auto px-4 pb-4">
+          {renderCustomTabFields(
+            <DrawerFooter className="px-0 pb-0">
+              <Button type="submit" className="savanna-brand-token rounded-xl shadow-none"><PlusIcon className="mr-2" size={16} />Add filter</Button>
+            </DrawerFooter>
+          )}
+        </div>
+      </DrawerContent>
+    </Drawer>
+  ) : (
+    <Dialog open={customTabModalOpen} onOpenChange={handleCustomTabModalOpenChange}>
+      <DialogContent className="savanna-new-chat-dialog savanna-custom-tab-modal max-w-md gap-0 rounded-[28px] border-[#ead2a4] bg-[#fffaf0] p-6 dark:border-[#5b4833] dark:bg-[#21180f]">
+        <DialogHeader className="pr-8 text-left">
+          <DialogTitle className="font-display text-2xl text-[#3d2d1a] dark:text-[#fff8ed]">New filter</DialogTitle>
+          <DialogDescription>Choose the people this tab should collect.</DialogDescription>
+        </DialogHeader>
+        <div className="mt-4">
+          {renderCustomTabFields(
+            <DialogFooter className="mt-2 gap-2">
+              <Button type="button" variant="ghost" onClick={() => handleCustomTabModalOpenChange(false)} className="rounded-full px-4 text-[#9a6410] hover:bg-[#D9A441]/10 dark:text-[#D9A441]">Close</Button>
+              <Button type="submit" className="savanna-brand-token rounded-xl shadow-none"><PlusIcon className="mr-2" size={16} />Add filter</Button>
+            </DialogFooter>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+
   // On web the create modal floats centered as a dialog; on mobile it stays a
   // bottom drawer within thumb reach.
   const newChatDrawer = isMobile ? (
@@ -1899,16 +2085,33 @@ export default function MessagesPage() {
           </label>
           {renderUsernameResults("mobile")}
           {renderDueFollowUpsPrompt("mobile")}
-          <div className="story-rail mt-4 flex gap-2 overflow-x-auto px-3 pb-1" role="tablist" aria-label="Chat filters">
-            {filterTabs.map(([value, label]) => <button key={value} role="tab" aria-selected={chatFilter === value} onClick={() => setChatFilter(value)} className={`savanna-mobile-message-filter-tab shrink-0 rounded-full px-3 py-2 text-xs font-semibold ${chatFilter === value ? "bg-[#D9A441]/20 text-[#A87820] dark:bg-[#D9A441]/20 dark:text-[#D9A441]" : "bg-background text-[#715d43] dark:bg-background dark:text-[#AEBAC1]"}`}>{label}</button>)}
-            {customTabs.map(tab => <button key={tab} role="tab" aria-selected={chatFilter === tab} onClick={() => setChatFilter(tab)} className={`savanna-mobile-message-filter-tab shrink-0 rounded-full px-3 py-2 text-xs font-semibold ${chatFilter === tab ? "bg-[#D9A441]/20 text-[#A87820] dark:bg-[#D9A441]/20 dark:text-[#D9A441]" : "bg-background text-[#715d43] dark:bg-background dark:text-[#AEBAC1]"}`}>{tab}</button>)}
-            <button type="button" onClick={addCustomTab} className="savanna-brand-token grid size-8 shrink-0 place-items-center rounded-full" aria-label="Create a chat tab"><PlusIcon size={16} /></button>
+          <div className="story-rail savanna-animated-filter-tabs mt-4 flex gap-2 overflow-x-auto px-3 pb-1" role="tablist" aria-label="Chat filters">
+            {filterTabs.map(([value, label]) => {
+              const isActive = chatFilter === value;
+              return (
+                <button key={value} role="tab" aria-selected={isActive} onClick={() => setChatFilter(value)} className={cn("savanna-mobile-message-filter-tab relative isolate shrink-0 overflow-hidden rounded-full border-0 px-3 py-2 text-xs font-semibold transition-colors", isActive ? "text-[#D9A441]" : "bg-background text-[#715d43] dark:bg-background dark:text-[#AEBAC1]")}>
+                  {isActive ? <motion.span layoutId="savanna-mobile-message-filter-active-pill" className="savanna-animated-filter-pill-bg absolute inset-0 -z-10 rounded-full bg-[#D9A441]/20" transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.75 }} /> : null}
+                  <span className="relative z-10">{label}</span>
+                </button>
+              );
+            })}
+            {customTabs.map(tab => {
+              const isActive = chatFilter === tab;
+              return (
+                <button key={tab} role="tab" aria-selected={isActive} onClick={() => setChatFilter(tab)} className={cn("savanna-mobile-message-filter-tab relative isolate shrink-0 overflow-hidden rounded-full border-0 px-3 py-2 text-xs font-semibold transition-colors", isActive ? "text-[#D9A441]" : "bg-background text-[#715d43] dark:bg-background dark:text-[#AEBAC1]")}>
+                  {isActive ? <motion.span layoutId="savanna-mobile-message-filter-active-pill" className="savanna-animated-filter-pill-bg absolute inset-0 -z-10 rounded-full bg-[#D9A441]/20" transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.75 }} /> : null}
+                  <span className="relative z-10">{tab}</span>
+                </button>
+              );
+            })}
+            <button type="button" onClick={openCustomTabModal} className="savanna-brand-token grid size-8 shrink-0 place-items-center rounded-full" aria-label="Create a chat tab"><PlusIcon size={16} /></button>
           </div>
           <div className="savanna-mobile-chat-rows mt-3 divide-y-0 px-2">
             {conversations.isLoading ? <div className="grid min-h-48 place-items-center"><Loader2 className="size-5 animate-spin text-[#9a6410]" /></div> : filteredChatList.length ? filteredChatList.map(renderChatRow) : <div className="grid min-h-56 place-items-center"><MessageCircle className="size-8 text-[#d2a34f]" /></div>}
           </div>
           <Button onClick={() => setNewChatOpen(true)} size="icon" className="savanna-brand-token fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-4 z-40 size-12 rounded-full shadow-none" aria-label="Start a new chat"><PlusIcon size={20} /></Button>
           {newChatDrawer}
+          {customTabModal}
           {wallpaperDrawer}
         </div>
       </SavannaShell>
@@ -1930,10 +2133,26 @@ export default function MessagesPage() {
           {renderUsernameResults("desktop")}
           {renderDueFollowUpsPrompt("desktop")}
           <DesktopStoryRail items={desktopStoryItems} onCreateStory={() => setStoryComposerOpen(true)} />
-          <div className="savanna-desktop-message-tabs flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Desktop chat filters">
-            {filterTabs.map(([value, label]) => <button key={value} role="tab" aria-selected={chatFilter === value} onClick={() => setChatFilter(value)} data-active={chatFilter === value} className="shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold">{label}</button>)}
-            {customTabs.map(tab => <button key={tab} role="tab" aria-selected={chatFilter === tab} onClick={() => setChatFilter(tab)} data-active={chatFilter === tab} className="shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold">{tab}</button>)}
-            <button type="button" onClick={addCustomTab} className="savanna-brand-token grid size-8 shrink-0 place-items-center rounded-full" aria-label="Create a chat tab"><PlusIcon size={15} /></button>
+          <div className="savanna-desktop-message-tabs savanna-animated-filter-tabs flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Desktop chat filters">
+            {filterTabs.map(([value, label]) => {
+              const isActive = chatFilter === value;
+              return (
+                <button key={value} role="tab" aria-selected={isActive} onClick={() => setChatFilter(value)} data-active={isActive} className="relative isolate shrink-0 overflow-hidden rounded-full border-0 px-3 py-1.5 text-xs font-semibold transition-colors">
+                  {isActive ? <motion.span layoutId="savanna-desktop-message-filter-active-pill" className="savanna-animated-filter-pill-bg absolute inset-0 -z-10 rounded-full bg-[#D9A441]/20" transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.75 }} /> : null}
+                  <span className="relative z-10">{label}</span>
+                </button>
+              );
+            })}
+            {customTabs.map(tab => {
+              const isActive = chatFilter === tab;
+              return (
+                <button key={tab} role="tab" aria-selected={isActive} onClick={() => setChatFilter(tab)} data-active={isActive} className="relative isolate shrink-0 overflow-hidden rounded-full border-0 px-3 py-1.5 text-xs font-semibold transition-colors">
+                  {isActive ? <motion.span layoutId="savanna-desktop-message-filter-active-pill" className="savanna-animated-filter-pill-bg absolute inset-0 -z-10 rounded-full bg-[#D9A441]/20" transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.75 }} /> : null}
+                  <span className="relative z-10">{tab}</span>
+                </button>
+              );
+            })}
+            <button type="button" onClick={openCustomTabModal} className="savanna-brand-token grid size-8 shrink-0 place-items-center rounded-full" aria-label="Create a chat tab"><PlusIcon size={15} /></button>
           </div>
           <div className="savanna-desktop-chat-rows mt-3 flex-1 overflow-y-auto">
             {conversations.isLoading ? <div className="grid min-h-48 place-items-center"><Loader2 className="size-5 animate-spin text-[#A87820]" /></div> : filteredChatList.length ? filteredChatList.map(renderChatRow) : <div className="grid min-h-48 place-items-center"><MessageCircle className="size-7 text-[#9AA1A6]" /></div>}
@@ -1990,6 +2209,7 @@ export default function MessagesPage() {
           )}
         </section>
         {newChatDrawer}
+        {customTabModal}
         {storyComposerDrawer}
         {wallpaperDrawer}
       </div>

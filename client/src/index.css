@@ -1599,8 +1599,8 @@ body:has(.savanna-login-screen) {
 }
 
 .savanna-app .savanna-media-tray-tabs button[aria-pressed="true"] {
-  background: rgba(217, 164, 65, 0.2) !important;
-  background-color: rgba(217, 164, 65, 0.2) !important;
+  background: transparent !important;
+  background-color: transparent !important;
   border: none !important;
   box-shadow: none !important;
   color: #D9A441 !important;
@@ -1612,6 +1612,11 @@ body:has(.savanna-login-screen) {
 
 .dark .savanna-app .savanna-media-tray-tabs button[aria-pressed="true"] {
   color: var(--chat-gold) !important;
+}
+
+.savanna-app .savanna-media-tray-tabs .savanna-media-tray-tab-active-pill {
+  background: rgba(217, 164, 65, 0.2) !important;
+  background-color: rgba(217, 164, 65, 0.2) !important;
 }
 
 .savanna-app .savanna-media-tray input:focus,
@@ -2051,6 +2056,53 @@ body:has(.savanna-login-screen) {
 .dark .savanna-new-chat-dialog textarea.savanna-new-chat-input {
   background-color: var(--chat-search) !important;
   color: var(--chat-text-primary) !important;
+}
+
+/* The custom filter drawer/dialog is portal-rendered, so it needs the same
+   Savanna tokens without relying on the .savanna-app ancestor. */
+.savanna-custom-tab-modal .savanna-brand-token {
+  border: 0 !important;
+  background: color-mix(in srgb, #D9A441 20%, transparent) !important;
+  color: #D9A441 !important;
+  box-shadow: none !important;
+  opacity: 1 !important;
+}
+
+.savanna-custom-tab-modal .savanna-brand-token *,
+.savanna-custom-tab-modal .savanna-brand-token svg {
+  color: #D9A441 !important;
+  stroke: currentColor !important;
+}
+
+.savanna-custom-tab-modal [data-slot="drawer-header"],
+.savanna-custom-tab-modal [data-slot="drawer-title"],
+.savanna-custom-tab-modal [data-slot="drawer-description"] {
+  text-align: left !important;
+}
+
+.savanna-custom-tab-modal .savanna-new-chat-input {
+  border-color: #DDE2DD !important;
+  box-shadow: none !important;
+}
+
+.savanna-custom-tab-modal .savanna-new-chat-input:focus,
+.savanna-custom-tab-modal .savanna-new-chat-input:focus-visible,
+.savanna-custom-tab-modal .savanna-mobile-chat-search input:focus,
+.savanna-custom-tab-modal .savanna-mobile-chat-search input:focus-visible {
+  outline: 0 !important;
+  border-color: #DDE2DD !important;
+  box-shadow: none !important;
+}
+
+.savanna-custom-tab-modal .savanna-mobile-chat-search:focus-within {
+  outline: 0 !important;
+  box-shadow: none !important;
+}
+
+.dark .savanna-custom-tab-modal .savanna-new-chat-input,
+.dark .savanna-custom-tab-modal .savanna-new-chat-input:focus,
+.dark .savanna-custom-tab-modal .savanna-new-chat-input:focus-visible {
+  border-color: var(--chat-border) !important;
 }
 
 @media (min-width: 1024px) {
@@ -3478,6 +3530,20 @@ body .savanna-app .savanna-chat-search-with-gold-icon input {
   background: color-mix(in srgb, #D9A441 20%, transparent) !important;
   background-color: color-mix(in srgb, #D9A441 20%, transparent) !important;
   color: #D9A441 !important;
+}
+
+body .savanna-app .savanna-animated-filter-tabs button[aria-selected="true"],
+body .savanna-app .savanna-animated-filter-tabs button[data-active="true"] {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  color: #D9A441 !important;
+}
+
+body .savanna-app .savanna-animated-filter-tabs .savanna-animated-filter-pill-bg {
+  background: color-mix(in srgb, #D9A441 20%, transparent) !important;
+  background-color: color-mix(in srgb, #D9A441 20%, transparent) !important;
 }
 
 body .savanna-app .savanna-emoji-picker .epr-header {
