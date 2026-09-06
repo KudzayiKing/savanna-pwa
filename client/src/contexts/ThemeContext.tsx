@@ -33,8 +33,8 @@ export function ThemeProvider({
 
   useEffect(() => {
     const root = document.documentElement;
-    const pageColor = theme === "dark" ? "#111B21" : "#FFFFFF";
-    const statusBarColor = theme === "dark" ? "rgba(17, 27, 33, 0.72)" : "rgba(255, 255, 255, 0.72)";
+    const pageColor = theme === "dark" ? "#0A1014" : "#FFFFFF";
+    const statusBarColor = theme === "dark" ? "#0A1014" : "rgba(255, 255, 255, 0.72)";
     if (theme === "dark") {
       root.classList.add("dark");
     } else {
@@ -48,6 +48,15 @@ export function ThemeProvider({
       document.head.appendChild(themeMeta);
     }
     themeMeta.content = statusBarColor;
+    let appleStatusMeta = document.querySelector<HTMLMetaElement>('meta[name="apple-mobile-web-app-status-bar-style"]');
+    if (!appleStatusMeta) {
+      appleStatusMeta = document.createElement("meta");
+      appleStatusMeta.name = "apple-mobile-web-app-status-bar-style";
+      document.head.appendChild(appleStatusMeta);
+    }
+    appleStatusMeta.content = "black-translucent";
+    root.style.colorScheme = theme;
+    root.style.setProperty("--savanna-status-bar-color", statusBarColor);
     document.documentElement.style.backgroundColor = pageColor;
     document.body.style.backgroundColor = pageColor;
 

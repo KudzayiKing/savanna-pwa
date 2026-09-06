@@ -1136,7 +1136,10 @@ export function MobileStoriesHeader() {
   const [activeGroupIndex, setActiveGroupIndex] = useState<number | null>(null);
   const [activeStoryIndex, setActiveStoryIndex] = useState(0);
   const [collapsedClusterWidth, setCollapsedClusterWidth] = useState(0);
+  const [centeredWordmarkX, setCenteredWordmarkX] = useState(0);
   const collapsedClusterRef = useRef<HTMLDivElement>(null);
+  const mobileHeaderBarRef = useRef<HTMLDivElement>(null);
+  const mobileWordmarkRef = useRef<HTMLDivElement>(null);
   const collapseTransition: Transition = prefersReducedMotion
     ? { duration: 0 }
     : storiesCollapseSpring;
@@ -1378,6 +1381,25 @@ export function MobileStoriesHeader() {
     observer.observe(node);
     return () => observer.disconnect();
   }, [compact, stories.isLoading, groupedStories.length]);
+  useEffect(() => {
+    const bar = mobileHeaderBarRef.current;
+    const wordmark = mobileWordmarkRef.current;
+    if (!bar || !wordmark) return;
+    const measure = () => {
+      const barWidth = bar.getBoundingClientRect().width;
+      const wordmarkWidth = wordmark.getBoundingClientRect().width;
+      setCenteredWordmarkX(Math.max(0, (barWidth - wordmarkWidth) / 2 - 16));
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", measure);
+      return () => window.removeEventListener("resize", measure);
+    }
+    const observer = new ResizeObserver(measure);
+    observer.observe(bar);
+    observer.observe(wordmark);
+    return () => observer.disconnect();
+  }, []);
   const activeGroup =
     activeGroupIndex === null
       ? null
@@ -1417,7 +1439,7 @@ export function MobileStoriesHeader() {
     <motion.div
       key="savanna-collapsed-stories"
       aria-label="Collapsed Stories cluster"
-      className="flex shrink-0 items-center overflow-hidden"
+      className="savanna-collapsed-story-shell flex shrink-0 items-center overflow-hidden"
       initial={{ width: 0, opacity: 0 }}
       animate={{ width: collapsedClusterWidth, opacity: 1 }}
       exit={{ width: 0, opacity: 0, transition: settleTransition }}
@@ -1472,11 +1494,22 @@ export function MobileStoriesHeader() {
   return (
     <>
       <header className="savanna-mobile-header savanna-glass-header fixed inset-x-0 top-0 z-40 bg-[#f7f6f1]/92 backdrop-blur-xl dark:bg-[#0A1014]/95 lg:hidden">
-        <div className="flex h-[68px] items-center justify-between gap-3 px-4">
-          <div className="flex min-w-0 items-center gap-0">
+        <div ref={mobileHeaderBarRef} className="relative h-[68px] px-4">
+          <div className="absolute inset-y-0 left-4 z-10 flex items-center">
             <AnimatePresence initial={false}>
               {collapsedStoriesCluster}
             </AnimatePresence>
+          </div>
+          <motion.div
+            ref={mobileWordmarkRef}
+            className="savanna-mobile-wordmark-shell absolute inset-y-0 left-4 z-20 flex items-center"
+            initial={false}
+            animate={{
+              x: compact ? centeredWordmarkX : 0,
+              scale: compact ? 1.03 : 1,
+            }}
+            transition={collapseTransition}
+          >
             <Link
               href="/"
               aria-label="Savanna messages"
@@ -1484,11 +1517,11 @@ export function MobileStoriesHeader() {
             >
               <span className="savanna-wordmark">Savanna</span>
             </Link>
-          </div>
+          </motion.div>
           <Link
             href={isAuthenticated ? "/profile" : "/login"}
             aria-label="Open profile"
-            className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-full text-[#151A17] dark:text-[#E9EDEF]"
+            className="absolute right-4 top-1/2 z-30 grid size-11 shrink-0 -translate-y-1/2 place-items-center overflow-hidden rounded-full text-[#151A17] dark:text-[#E9EDEF]"
           >
             {ownStoryAvatarUrl ? (
               <img

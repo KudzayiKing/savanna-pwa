@@ -129,7 +129,7 @@ body::before {
 
 .dark body::before {
   border-bottom-color: color-mix(in srgb, #2A3942 62%, transparent);
-  background: color-mix(in srgb, #111B21 52%, transparent);
+  background: color-mix(in srgb, #0A1014 82%, transparent);
 }
 
 button, a, input, textarea, select { -webkit-tap-highlight-color: transparent; }
@@ -2595,8 +2595,12 @@ body:has(.savanna-login-screen) {
     margin-right: 3px;
   }
 
-  .savanna-app .savanna-collapsed-story-cluster + a[aria-label="Savanna messages"] {
-    margin-left: 3px !important;
+  .savanna-app .savanna-collapsed-story-shell {
+    margin-right: 0.75rem;
+  }
+
+  .savanna-app .savanna-collapsed-story-shell + a[aria-label="Savanna messages"] {
+    margin-left: 0 !important;
   }
 
   .savanna-app .savanna-mobile-header .savanna-wordmark {
@@ -2915,6 +2919,15 @@ body:has(.savanna-login-screen) {
   background-color: transparent !important;
   border-color: transparent !important;
   box-shadow: none !important;
+}
+
+:root:not(.dark) .savanna-app .savanna-mobile-header.savanna-glass-header [aria-label="Open profile"],
+:root:not(.dark) .savanna-app .savanna-mobile-header.savanna-glass-header [aria-label="Open profile"] svg,
+:root:not(.dark) .savanna-app .savanna-mobile-header.savanna-glass-header [aria-label="Savanna messages"],
+:root:not(.dark) .savanna-app .savanna-mobile-header.savanna-glass-header .savanna-brand-token,
+:root:not(.dark) .savanna-app .savanna-mobile-header.savanna-glass-header .savanna-brand-token * {
+  color: #D9A441 !important;
+  stroke: currentColor !important;
 }
 
 :root:not(.dark) .savanna-app nav.savanna-mobile-bottom-nav.savanna-glass-bottom-nav {
