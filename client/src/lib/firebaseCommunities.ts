@@ -2,6 +2,7 @@ import type { AppUser } from "@/lib/userProfile";
 import { createDiscoveryBadge, type DiscoveryBadge } from "@shared/discovery";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  arrayRemove,
   arrayUnion,
   collection,
   doc,
@@ -56,8 +57,35 @@ export type FirebaseCommunityMessage = {
   authorName: string;
   authorPhotoURL: string | null;
   body: string;
+  contentType: "text" | "attachment";
+  attachments: FirebaseCommunityMessageAttachment[];
+  reactions: Partial<Record<FirebaseCommunityMessageReactionKey, string[]>>;
   createdAt: Date;
 };
+
+export type FirebaseCommunityMessageAttachment = {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  url: string | null;
+  path: string | null;
+};
+
+export type FirebaseCommunityMessageAttachmentInput = {
+  fileName: string;
+  mimeType: string;
+  url: string;
+  path?: string | null;
+};
+
+export type FirebaseCommunityMessageReactionKey = "heart" | "thumbs_up" | "laugh" | "pray";
+
+export const FIREBASE_COMMUNITY_MESSAGE_REACTIONS: Array<{ key: FirebaseCommunityMessageReactionKey; label: string; emoji: string }> = [
+  { key: "heart", label: "Heart", emoji: "❤️" },
+  { key: "thumbs_up", label: "Like", emoji: "👍" },
+  { key: "laugh", label: "Laugh", emoji: "😂" },
+  { key: "pray", label: "Thanks", emoji: "🙏" },
+];
 
 export type FirebaseCommunityPostKind = "post" | "question" | "listing" | "announcement";
 
@@ -191,12 +219,35 @@ function mapCommunity(id: string, data: DocumentData): FirebaseCommunity {
 }
 
 function mapCommunityMessage(id: string, data: DocumentData): FirebaseCommunityMessage {
+  const attachments = Array.isArray(data.attachments)
+    ? data.attachments
+      .map((item, index): FirebaseCommunityMessageAttachment | null => {
+        if (!item || typeof item !== "object") return null;
+        const attachment = item as Partial<FirebaseCommunityMessageAttachment>;
+        return {
+          id: typeof attachment.id === "string" ? attachment.id : `${id}-${index}`,
+          fileName: typeof attachment.fileName === "string" ? attachment.fileName : "Attachment",
+          mimeType: typeof attachment.mimeType === "string" ? attachment.mimeType : "application/octet-stream",
+          url: typeof attachment.url === "string" ? attachment.url : null,
+          path: typeof attachment.path === "string" ? attachment.path : null,
+        };
+      })
+      .filter((item): item is FirebaseCommunityMessageAttachment => item !== null)
+    : [];
+  const reactions = FIREBASE_COMMUNITY_MESSAGE_REACTIONS.reduce<Partial<Record<FirebaseCommunityMessageReactionKey, string[]>>>((next, reaction) => {
+    const value = data.reactions?.[reaction.key];
+    next[reaction.key] = Array.isArray(value) ? value.map(String) : [];
+    return next;
+  }, {});
   return {
     id,
     authorUserId: String(data.authorUserId ?? ""),
     authorName: typeof data.authorName === "string" ? data.authorName : "Savanna user",
     authorPhotoURL: typeof data.authorPhotoURL === "string" ? data.authorPhotoURL : null,
     body: typeof data.body === "string" ? data.body : "",
+    contentType: attachments.length ? "attachment" : "text",
+    attachments,
+    reactions,
     createdAt: toDate(data.createdAt),
   };
 }
@@ -383,9 +434,14 @@ export async function listFirebaseCommunityDiscoveryPosts(user?: AppUser | null)
     .slice(0, 80);
 }
 
-export async function sendFirebaseCommunityMessage(user: AppUser, communityId: string, body: string) {
-  const trimmed = body.trim();
-  if (!trimmed) throw new Error("Write a message first.");
+export async function sendFirebaseCommunityMessage(
+  user: AppUser,
+  communityId: string,
+  input: { body?: string; attachment?: FirebaseCommunityMessageAttachmentInput | null },
+) {
+  const trimmed = input.body?.trim() ?? "";
+  const attachment = input.attachment ?? null;
+  if (!trimmed && !attachment) throw new Error("Write a message first.");
   const messageRef = doc(collection(getFirestoreDb(), "communities", communityId, "chatMessages"));
   await writeBatch(getFirestoreDb())
     .set(messageRef, {
@@ -393,10 +449,34 @@ export async function sendFirebaseCommunityMessage(user: AppUser, communityId: s
       authorName: user.name ?? user.username ?? "Savanna user",
       authorPhotoURL: user.photoURL ?? null,
       body: trimmed.slice(0, 2000),
+      contentType: attachment ? "attachment" : "text",
+      attachments: attachment ? [{
+        id: `${Date.now()}`,
+        fileName: attachment.fileName,
+        mimeType: attachment.mimeType,
+        url: attachment.url,
+        path: attachment.path ?? null,
+      }] : [],
+      reactions: {},
       createdAt: serverTimestamp(),
     })
     .update(communityRef(communityId), { updatedAt: serverTimestamp() })
     .commit();
+}
+
+export async function toggleFirebaseCommunityMessageReaction(input: {
+  user: AppUser;
+  communityId: string;
+  messageId: string;
+  reaction: FirebaseCommunityMessageReactionKey;
+  active: boolean;
+}) {
+  const reactionAllowed = FIREBASE_COMMUNITY_MESSAGE_REACTIONS.some(item => item.key === input.reaction);
+  if (!reactionAllowed) throw new Error("Choose a supported reaction.");
+  await updateDoc(doc(getFirestoreDb(), "communities", input.communityId, "chatMessages", input.messageId), {
+    [`reactions.${input.reaction}`]: input.active ? arrayRemove(input.user.id) : arrayUnion(input.user.id),
+    reactionUpdatedAt: serverTimestamp(),
+  });
 }
 
 export async function createFirebaseCommunityPost(user: AppUser, communityId: string, input: { title?: string | null; body: string; kind?: FirebaseCommunityPostKind; product?: FirebaseProduct | null }) {
@@ -554,9 +634,16 @@ export function useFirebaseCommunityMutations(user?: AppUser | null) {
       onSuccess: communityId => invalidateCommunity(communityId),
     }),
     sendMessage: useMutation({
-      mutationFn: async (input: { communityId: string; body: string }) => {
+      mutationFn: async (input: { communityId: string; body?: string; attachment?: FirebaseCommunityMessageAttachmentInput | null }) => {
         if (!user) throw new Error("Sign in to chat in this community");
-        await sendFirebaseCommunityMessage(user, input.communityId, input.body);
+        await sendFirebaseCommunityMessage(user, input.communityId, input);
+      },
+      onSuccess: (_result, input) => invalidateCommunity(input.communityId),
+    }),
+    reactToMessage: useMutation({
+      mutationFn: async (input: { communityId: string; messageId: string; reaction: FirebaseCommunityMessageReactionKey; active: boolean }) => {
+        if (!user) throw new Error("Sign in to react");
+        await toggleFirebaseCommunityMessageReaction({ ...input, user });
       },
       onSuccess: (_result, input) => invalidateCommunity(input.communityId),
     }),

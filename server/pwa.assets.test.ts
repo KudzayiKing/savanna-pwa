@@ -994,7 +994,7 @@ describe("Savanna PWA assets", () => {
     expect(messages).toContain('const grey = "text-[#5f6861] dark:text-[#9AA1A6]"');
     expect(messages).toContain('<ChatListDeliveryIcon status={previewStatus ?? "sent"} />');
     expect(messages).toContain("!isMobile || mobileDetail");
-    expect(messages).toContain('<DeliveryIcon status={message.status} className="text-white/90" />');
+    expect(messages).toContain('<DeliveryIcon status={message.status} className="text-current" />');
     expect(messages).toContain("const showPreviewDelivery = Boolean(");
     expect(messages).toContain("conversation.lastMessageSenderId === user.id");
     expect(messages).toContain("savanna-outgoing-message");
@@ -1083,8 +1083,11 @@ describe("Savanna PWA assets", () => {
     expect(messages).toContain("renderReactionSummary(message)");
     expect(messages).toContain("activeMessageActions === message.id");
     expect(messages).toContain("longPressTimer.current = window.setTimeout");
-    expect(messages).toContain("revealMessageActions(messageId, true)");
+    expect(messages).toContain("MESSAGE_ACTION_AUTO_HIDE_MS = 10_000");
+    expect(messages).toContain("revealMessageActions(messageId, MESSAGE_ACTION_AUTO_HIDE_MS)");
+    expect(messages).toContain("pressedActionMessageId.current = messageId");
     expect(messages).toContain("scheduleMessageActionsHide");
+    expect(messages).toContain("<AnimatePresence initial={false}>");
     expect(messages).toContain("savanna-message-actions");
     expect(messages).toContain("savanna-desktop-message-bubble max-w-[58%] cursor-pointer rounded-2xl px-3 py-2");
     expect(messages).not.toContain('targetLabel="this message" blockUserId={message.senderUserId}');
@@ -1614,7 +1617,7 @@ describe("Savanna PWA assets", () => {
       /:root:not\(\.dark\) \.savanna-app \.savanna-desktop-message-thread,[\s\S]*?savanna-mobile-message-thread\s*\{[\s\S]*?background:\s*#FFFFFF\s*!important/
     );
     expect(styles).toContain('.savanna-app .savanna-message-bubble.savanna-outgoing-message [aria-label="Delivered"]');
-    expect(styles).toContain("color: rgba(255, 255, 255, 0.92) !important;");
+    expect(styles).toContain("color: currentColor !important;");
     expect(styles).toContain("height: var(--savanna-visual-viewport-height, 100dvh) !important;");
     expect(styles).toContain("scroll-padding-bottom: calc(var(--savanna-mobile-composer-height, 76px) + env(safe-area-inset-bottom)) !important;");
 

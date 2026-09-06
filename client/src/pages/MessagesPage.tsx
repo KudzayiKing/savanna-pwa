@@ -37,17 +37,19 @@ import { generateAnswer } from "@/savanna/orchestrator/SavannaOrchestrator";
 import { isSameUser, normalizeUsername, searchUserProfilesByUsername, type AppUser } from "@/lib/userProfile";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
+import { AnimatePresence, motion } from "framer-motion";
 import { Bookmark, CalendarClock, ChevronDown, ChevronUp, FileText, Heart, Languages, Loader2, MessageCircle, Paperclip, Pin, Reply, Search, StopCircle, Users, X } from "lucide-react";
 import { type ChangeEvent, type FormEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 
 const allowedMimeTypes = ["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf", "audio/mpeg", "audio/mp4", "audio/webm", "video/mp4", "video/webm"];
+const MESSAGE_ACTION_AUTO_HIDE_MS = 10_000;
 const reactionGlyphs: Record<FirebaseMessageReactionKey, string> = {
-  heart: "Love",
-  thumbs_up: "+1",
-  laugh: "Ha",
-  pray: "Thx",
+  heart: "❤️",
+  thumbs_up: "👍",
+  laugh: "😂",
+  pray: "🙏",
 };
 
 type ConversationListItem = FirebaseConversationListItem;
@@ -268,6 +270,7 @@ export default function MessagesPage() {
   const desktopComposerRef = useRef<HTMLFormElement | null>(null);
   const actionHideTimer = useRef<number | null>(null);
   const longPressTimer = useRef<number | null>(null);
+  const pressedActionMessageId = useRef<string | null>(null);
   const pendingOpenMessageId = useRef<string | null>(null);
   const lastAutoScrolledMessageId = useRef<string | null>(null);
   const autoScrollRetryTimer = useRef<number | null>(null);
@@ -1063,7 +1066,7 @@ export default function MessagesPage() {
 
   const openPinnedMessage = (messageId: string) => {
     scrollToMessage(messageId);
-    revealMessageActions(messageId, true);
+    revealMessageActions(messageId, MESSAGE_ACTION_AUTO_HIDE_MS);
   };
 
   const buildInviteLink = (code: string) => `${window.location.origin}/messages?invite=${encodeURIComponent(code)}`;
@@ -1149,15 +1152,15 @@ export default function MessagesPage() {
     actionHideTimer.current = null;
   };
 
-  const scheduleMessageActionsHide = () => {
+  const scheduleMessageActionsHide = (delay = MESSAGE_ACTION_AUTO_HIDE_MS) => {
     clearActionHideTimer();
-    actionHideTimer.current = window.setTimeout(() => setActiveMessageActions(null), 3600);
+    actionHideTimer.current = window.setTimeout(() => setActiveMessageActions(null), delay);
   };
 
-  const revealMessageActions = (messageId: string, autoHide = false) => {
+  const revealMessageActions = (messageId: string, hideDelay?: number) => {
     clearActionHideTimer();
     setActiveMessageActions(messageId);
-    if (autoHide) scheduleMessageActionsHide();
+    if (hideDelay !== undefined) scheduleMessageActionsHide(hideDelay);
   };
 
   const clearLongPressTimer = () => {
@@ -1167,19 +1170,56 @@ export default function MessagesPage() {
   };
 
   const messageActionTriggerProps = (messageId: string) => ({
+    "data-message-action-id": messageId,
     onClick: (event: ReactMouseEvent<HTMLElement>) => {
       if ((event.target as HTMLElement).closest("button")) return;
-      if (!isMobile) revealMessageActions(messageId, true);
+      if (!isMobile) revealMessageActions(messageId, MESSAGE_ACTION_AUTO_HIDE_MS);
     },
     onPointerDown: (event: ReactPointerEvent<HTMLElement>) => {
-      if (!isMobile || (event.target as HTMLElement).closest("button")) return;
+      if ((event.target as HTMLElement).closest("button")) return;
+      pressedActionMessageId.current = messageId;
+      if (activeMessageActions === messageId) clearActionHideTimer();
+      if (!isMobile) return;
       clearLongPressTimer();
-      longPressTimer.current = window.setTimeout(() => revealMessageActions(messageId, true), 420);
+      longPressTimer.current = window.setTimeout(() => {
+        longPressTimer.current = null;
+        revealMessageActions(messageId);
+      }, 420);
     },
-    onPointerUp: clearLongPressTimer,
-    onPointerCancel: clearLongPressTimer,
-    onPointerLeave: clearLongPressTimer,
+    onPointerUp: () => {
+      clearLongPressTimer();
+      if (pressedActionMessageId.current === messageId) scheduleMessageActionsHide();
+      pressedActionMessageId.current = null;
+    },
+    onPointerCancel: () => {
+      clearLongPressTimer();
+      if (pressedActionMessageId.current === messageId) scheduleMessageActionsHide();
+      pressedActionMessageId.current = null;
+    },
+    onPointerLeave: () => {
+      clearLongPressTimer();
+      if (pressedActionMessageId.current === messageId) scheduleMessageActionsHide();
+      pressedActionMessageId.current = null;
+    },
   });
+
+  useEffect(() => {
+    if (!activeMessageActions) return;
+    const closeWhenPressingOutside = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      const surface = target?.closest<HTMLElement>("[data-message-action-id]");
+      if (surface?.dataset.messageActionId === activeMessageActions) {
+        clearActionHideTimer();
+        return;
+      }
+      clearLongPressTimer();
+      clearActionHideTimer();
+      pressedActionMessageId.current = null;
+      setActiveMessageActions(null);
+    };
+    document.addEventListener("pointerdown", closeWhenPressingOutside);
+    return () => document.removeEventListener("pointerdown", closeWhenPressingOutside);
+  }, [activeMessageActions]);
 
   const renderSavannaAnswer = (answer: SavannaRecallAnswer) => {
     const sources = answer.sources.length ? answer.sources : answer.source ? [answer.source] : [];
@@ -1406,7 +1446,25 @@ export default function MessagesPage() {
   };
 
   const renderMessageActions = (message: FirebaseMessage) => (
-    activeMessageActions === message.id ? <div className="savanna-message-actions mt-2 flex flex-wrap items-center justify-end gap-1">
+    <AnimatePresence initial={false}>
+      {activeMessageActions === message.id ? (
+        <motion.div
+          key="message-actions"
+          data-message-action-id={message.id}
+          className="savanna-message-actions mt-2 flex origin-top-right flex-wrap items-center justify-end gap-1"
+          initial={{ opacity: 0, y: -6, scale: 0.96, filter: "blur(4px)" }}
+          animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+          exit={{ opacity: 0, y: -4, scale: 0.97, filter: "blur(3px)" }}
+          transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+          onPointerDown={event => {
+            event.stopPropagation();
+            clearActionHideTimer();
+          }}
+          onPointerUp={() => scheduleMessageActionsHide()}
+          onPointerCancel={() => scheduleMessageActionsHide()}
+          onPointerLeave={() => scheduleMessageActionsHide()}
+          onClick={event => event.stopPropagation()}
+        >
       <button type="button" onClick={() => toggleMessagePin(message)} className="inline-flex h-7 items-center gap-1 rounded-full bg-[#D9A441]/10 px-2 text-[11px] font-semibold text-[#A87820] dark:bg-[#D9A441]/15 dark:text-[#D9A441]">
         <Pin className="size-3" />
         {user && message.pinnedBy.includes(user.id) ? "Unpin" : "Pin"}
@@ -1439,7 +1497,9 @@ export default function MessagesPage() {
         <Bookmark className="size-3" />
         {user && message.savedBy.includes(user.id) ? "Saved" : "Save"}
       </button>
-    </div> : null
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
   );
 
   /**

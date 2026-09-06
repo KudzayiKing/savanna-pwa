@@ -1,4 +1,6 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { ChatMediaTray, type MediaTrayTab, type StickerSelection } from "@/components/ChatMediaTray";
+import { KeyboardIcon, StickerIcon, type ChatIconHandle } from "@/components/AnimatedChatIcons";
 import { AnimatedPlusIcon, AnimatedSendIcon, MobileNavIcon } from "@/components/AnimatedNavIcons";
 import { SavannaShell } from "@/components/SavannaShell";
 import { StoryComposer } from "@/components/StoriesPanel";
@@ -10,12 +12,16 @@ import {
   useFirebaseCommunityMessages,
   useFirebaseCommunityMutations,
   useFirebaseCommunityPosts,
+  FIREBASE_COMMUNITY_MESSAGE_REACTIONS,
+  type FirebaseCommunityMessage,
+  type FirebaseCommunityMessageAttachment,
+  type FirebaseCommunityMessageReactionKey,
   type FirebaseCommunityPostKind,
 } from "@/lib/firebaseCommunities";
 import { useMyFirebaseStorefront } from "@/lib/firebaseShops";
 import { cn } from "@/lib/utils";
 import { ArrowLeft, ArrowRight, Loader2, Lock, Megaphone, MessageSquare, PackageSearch, Palette, Share2, ShoppingBag, Store, X } from "lucide-react";
-import { type FormEvent, useMemo, useState } from "react";
+import { type FormEvent, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useRoute } from "wouter";
 import { toast } from "sonner";
 
@@ -47,6 +53,37 @@ function formatPrice(minor?: number | null, currency?: string | null) {
   return new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: 2 }).format(minor / 100);
 }
 
+function isCommunityStickerAttachment(attachment: FirebaseCommunityMessageAttachment) {
+  return Boolean(attachment.url && attachment.mimeType === "image/webp" && (attachment.fileName.startsWith("sticker-") || attachment.url.includes("/stickers/")));
+}
+
+function communityAttachmentLabel(fileName: string) {
+  return (
+    fileName
+      .replace(/^sticker-/i, "")
+      .replace(/\.(webp|png|gif|jpe?g)$/i, "")
+      .replace(/[_-]+/g, " ")
+      .trim() || "Attachment"
+  );
+}
+
+function CommunityMessageAttachment({ attachment }: { attachment: FirebaseCommunityMessageAttachment }) {
+  if (!attachment.url) return null;
+  if (attachment.mimeType.startsWith("image/")) {
+    const sticker = isCommunityStickerAttachment(attachment);
+    return (
+      <a href={attachment.url} target="_blank" rel="noreferrer" className={cn("mt-2 block overflow-hidden rounded-xl", sticker ? "w-32 bg-transparent" : "bg-black/5 dark:bg-white/10")}>
+        <img src={attachment.url} alt={communityAttachmentLabel(attachment.fileName)} loading="lazy" className={sticker ? "aspect-square w-32 object-contain" : "max-h-72 w-full object-cover"} />
+      </a>
+    );
+  }
+  return (
+    <a href={attachment.url} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center rounded-full bg-[#D9A441]/10 px-3 py-1.5 text-xs font-semibold text-[#A87820] dark:text-[#D9A441]">
+      {communityAttachmentLabel(attachment.fileName)}
+    </a>
+  );
+}
+
 export default function CommunityDetailPage() {
   const { user, isAuthenticated } = useAuth();
   const [, params] = useRoute("/communities/:communityId");
@@ -54,12 +91,16 @@ export default function CommunityDetailPage() {
   const communityId = params?.communityId ?? "";
   const [activeTab, setActiveTab] = useState<CommunityTab>("chat");
   const [chatBody, setChatBody] = useState("");
+  const [mediaTrayOpen, setMediaTrayOpen] = useState(false);
+  const [mediaTrayTab, setMediaTrayTab] = useState<MediaTrayTab>("emojis");
   const [postTitle, setPostTitle] = useState("");
   const [postBody, setPostBody] = useState("");
   const [postKind, setPostKind] = useState<FirebaseCommunityPostKind>("post");
   const [selectedProductId, setSelectedProductId] = useState("");
   const [storyComposerOpen, setStoryComposerOpen] = useState(false);
   const [wallpaperOpen, setWallpaperOpen] = useState(false);
+  const stickerIcon = useRef<ChatIconHandle>(null);
+  const keyboardIcon = useRef<ChatIconHandle>(null);
   const detail = useFirebaseCommunityDetail(communityId, user);
   const isMember = Boolean(detail.data?.member);
   const isOwner = detail.data?.member?.role === "owner";
@@ -107,14 +148,106 @@ export default function CommunityDetailPage() {
   const submitMessage = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!community) return;
+    if (!chatBody.trim()) return;
     communityMutations.sendMessage.mutate(
       { communityId: community.id, body: chatBody },
       {
-        onSuccess: () => setChatBody(""),
+        onSuccess: () => {
+          setChatBody("");
+          setMediaTrayOpen(false);
+        },
         onError: error => toast.error(error.message),
       },
     );
   };
+
+  const toggleMediaTray = () => {
+    setMediaTrayOpen(open => {
+      const next = !open;
+      if (next) stickerIcon.current?.startAnimation();
+      return next;
+    });
+  };
+
+  const backToKeyboard = () => {
+    keyboardIcon.current?.startAnimation();
+    setMediaTrayOpen(false);
+  };
+
+  const appendEmoji = (emoji: string) => {
+    setChatBody(current => `${current}${emoji}`);
+  };
+
+  const sendCommunityGif = (gifUrl: string) => {
+    if (!community) return;
+    setMediaTrayOpen(false);
+    stickerIcon.current?.stopAnimation();
+    communityMutations.sendMessage.mutate(
+      {
+        communityId: community.id,
+        attachment: {
+          fileName: `gif-${Date.now()}.gif`,
+          mimeType: "image/gif",
+          url: gifUrl,
+        },
+      },
+      { onError: error => toast.error(error.message) },
+    );
+  };
+
+  const sendCommunitySticker = (sticker: StickerSelection) => {
+    if (!community) return;
+    setMediaTrayOpen(false);
+    stickerIcon.current?.stopAnimation();
+    communityMutations.sendMessage.mutate(
+      {
+        communityId: community.id,
+        attachment: {
+          fileName: `sticker-${sticker.id.split("/").pop() ?? Date.now()}.webp`,
+          mimeType: "image/webp",
+          url: sticker.url,
+          path: sticker.path,
+        },
+      },
+      { onError: error => toast.error(error.message) },
+    );
+  };
+
+  const reactToCommunityMessage = (message: FirebaseCommunityMessage, reaction: FirebaseCommunityMessageReactionKey) => {
+    if (!community || !user) return toast.error("Sign in to react");
+    const active = Boolean(message.reactions[reaction]?.includes(user.id));
+    communityMutations.reactToMessage.mutate(
+      { communityId: community.id, messageId: message.id, reaction, active },
+      { onError: error => toast.error(error.message) },
+    );
+  };
+
+  const renderCommunityMessageReactions = (message: FirebaseCommunityMessage) => (
+    <div className="mt-2 flex flex-wrap gap-1.5">
+      {FIREBASE_COMMUNITY_MESSAGE_REACTIONS.map(reaction => {
+        const userIds = message.reactions[reaction.key] ?? [];
+        const active = Boolean(user && userIds.includes(user.id));
+        return (
+          <button
+            key={reaction.key}
+            type="button"
+            aria-pressed={active}
+            onClick={() => reactToCommunityMessage(message, reaction.key)}
+            className={cn(
+              "inline-flex h-7 min-w-7 items-center justify-center gap-1 rounded-full px-2 text-[13px] font-semibold transition-colors",
+              active
+                ? "bg-[#D9A441]/20 text-[#D9A441]"
+                : "bg-black/[0.04] text-[#5F6861] hover:bg-[#D9A441]/10 dark:bg-white/[0.08] dark:text-[#AEBAC1] dark:hover:bg-[#D9A441]/15",
+            )}
+            aria-label={`${reaction.label} reaction`}
+          >
+            <span>{reaction.emoji}</span>
+            {userIds.length ? <span className="text-[11px]">{userIds.length}</span> : null}
+          </button>
+        );
+      })}
+    </div>
+  );
 
   const submitPost = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -250,6 +383,7 @@ export default function CommunityDetailPage() {
                     <div className="grid min-h-56 place-items-center"><Loader2 className="size-5 animate-spin text-[#D9A441]" /></div>
                   ) : messages.data?.length ? messages.data.map(message => {
                     const mine = message.authorUserId === user?.id;
+                    const sticker = message.attachments.length === 1 && !message.body.trim() && isCommunityStickerAttachment(message.attachments[0]) ? message.attachments[0] : null;
                     return (
                       <article key={message.id} className={cn("flex gap-3", mine && "justify-end")}>
                         {!mine ? (
@@ -257,11 +391,21 @@ export default function CommunityDetailPage() {
                             {message.authorPhotoURL ? <img src={message.authorPhotoURL} alt="" className="size-full rounded-full object-cover" /> : message.authorName.slice(0, 1).toUpperCase()}
                           </span>
                         ) : null}
-                        <div className={cn("max-w-[78%] rounded-[22px] px-4 py-3", mine ? "bg-[#D9A441]/20 text-[#3d2d1a] dark:text-[#F8E8C4]" : "bg-[#F6F5F5] text-[#151A17] dark:bg-[#202C33] dark:text-[#E9EDEF]")}>
-                          <p className="text-xs font-semibold text-[#D9A441]">{mine ? "You" : message.authorName}</p>
-                          <p className="mt-1 whitespace-pre-wrap text-sm leading-6">{message.body}</p>
-                          <p className="mt-2 text-right text-[11px] opacity-65">{formatTime(message.createdAt)}</p>
-                        </div>
+                        {sticker?.url ? (
+                          <div className={cn("flex max-w-[78%] flex-col", mine ? "items-end" : "items-start")}>
+                            <img src={sticker.url} alt={communityAttachmentLabel(sticker.fileName)} loading="lazy" className="size-[168px] object-contain sm:size-[208px]" />
+                            <span className={cn("savanna-sticker-meta -mt-1 inline-flex rounded-full px-2 py-[3px] text-[10px] font-medium leading-none shadow-sm", mine ? "bg-[#D9A441]/20 text-[#3d2d1a] dark:text-[#F8E8C4]" : "bg-[#F6F5F5] text-[#5F6861] dark:bg-[#202C33] dark:text-[#AEBAC1]")}>{formatTime(message.createdAt)}</span>
+                            {renderCommunityMessageReactions(message)}
+                          </div>
+                        ) : (
+                          <div className={cn("max-w-[78%] rounded-[22px] px-4 py-3", mine ? "bg-[#D9A441]/20 text-[#3d2d1a] dark:text-[#F8E8C4]" : "bg-[#F6F5F5] text-[#151A17] dark:bg-[#202C33] dark:text-[#E9EDEF]")}>
+                            <p className="text-xs font-semibold text-[#D9A441]">{mine ? "You" : message.authorName}</p>
+                            {message.body ? <p className="mt-1 whitespace-pre-wrap text-sm leading-6">{message.body}</p> : null}
+                            {message.attachments.map(attachment => <CommunityMessageAttachment key={attachment.id} attachment={attachment} />)}
+                            <p className="mt-2 text-right text-[11px] opacity-65">{formatTime(message.createdAt)}</p>
+                            {renderCommunityMessageReactions(message)}
+                          </div>
+                        )}
                       </article>
                     );
                   }) : (
@@ -273,11 +417,31 @@ export default function CommunityDetailPage() {
                     </div>
                   )}
                 </div>
-                <form onSubmit={submitMessage} className="savanna-community-composer flex items-center gap-2 rounded-full border border-[#DDE3DC] bg-white p-2 dark:border-[#26343A] dark:bg-[#111B21]">
-                  <Input value={chatBody} onChange={event => setChatBody(event.target.value)} placeholder="Message this community" className="min-w-0 flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0" />
-                  <Button type="submit" disabled={communityMutations.sendMessage.isPending} size="icon" className="savanna-brand-token shrink-0 rounded-full shadow-none">
-                    {communityMutations.sendMessage.isPending ? <Loader2 className="size-4 animate-spin" /> : <AnimatedSendIcon size={18} />}
-                  </Button>
+                <form onSubmit={submitMessage} className="savanna-community-composer space-y-2">
+                  <div className="flex items-center gap-2 rounded-full border border-[#DDE3DC] bg-white p-2 dark:border-[#26343A] dark:bg-[#111B21]">
+                    {mediaTrayOpen ? (
+                      <Button type="button" variant="ghost" size="icon" onClick={backToKeyboard} className="shrink-0 rounded-xl" aria-label="Show keyboard">
+                        <KeyboardIcon ref={keyboardIcon} size={20} />
+                      </Button>
+                    ) : (
+                      <Button type="button" variant="ghost" size="icon" onClick={toggleMediaTray} className="shrink-0 rounded-xl" aria-label="Show stickers, emojis and GIFs">
+                        <StickerIcon ref={stickerIcon} size={20} />
+                      </Button>
+                    )}
+                    <Input value={chatBody} onChange={event => setChatBody(event.target.value)} placeholder="Message this community" className="min-w-0 flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0" />
+                    <Button type="submit" disabled={communityMutations.sendMessage.isPending || !chatBody.trim()} size="icon" className="savanna-brand-token shrink-0 rounded-full shadow-none">
+                      {communityMutations.sendMessage.isPending ? <Loader2 className="size-4 animate-spin" /> : <AnimatedSendIcon size={18} />}
+                    </Button>
+                  </div>
+                  <ChatMediaTray
+                    open={mediaTrayOpen}
+                    tab={mediaTrayTab}
+                    onTabChange={setMediaTrayTab}
+                    onEmojiSelect={appendEmoji}
+                    onGifSelect={sendCommunityGif}
+                    onStickerSelect={sendCommunitySticker}
+                    onClose={() => setMediaTrayOpen(false)}
+                  />
                 </form>
               </>
             )}
