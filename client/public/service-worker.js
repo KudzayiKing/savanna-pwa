@@ -1,9 +1,11 @@
 // Bump on every change to this file: the cache name is the only thing that
 // tells a returning client its shell is stale.
-const CACHE_NAME = "savanna-shell-v11";
+const CACHE_NAME = "savanna-shell-v17";
 const SHELL_URLS = [
   "/",
   "/manifest.webmanifest",
+  "/manifest-light.webmanifest",
+  "/manifest-dark.webmanifest",
   "/icons/icon.svg",
   "/icons/icon-maskable.svg",
 ];

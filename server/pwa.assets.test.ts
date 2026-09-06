@@ -6,12 +6,18 @@ const projectRoot = resolve(import.meta.dirname, "..");
 
 describe("Savanna PWA assets", () => {
   it("declares an installable standalone manifest with branded icons", async () => {
-    const source = await readFile(resolve(projectRoot, "client/public/manifest.webmanifest"), "utf8");
+    const [source, lightSource, darkSource] = await Promise.all([
+      readFile(resolve(projectRoot, "client/public/manifest.webmanifest"), "utf8"),
+      readFile(resolve(projectRoot, "client/public/manifest-light.webmanifest"), "utf8"),
+      readFile(resolve(projectRoot, "client/public/manifest-dark.webmanifest"), "utf8"),
+    ]);
     const manifest = JSON.parse(source) as {
       name: string;
       short_name: string;
       start_url: string;
       display: string;
+      background_color: string;
+      theme_color: string;
       icons: Array<{ src: string; sizes: string; purpose?: string }>;
     };
 
@@ -19,6 +25,12 @@ describe("Savanna PWA assets", () => {
     expect(manifest.short_name).toBe("Savanna");
     expect(manifest.start_url).toBe("/");
     expect(manifest.display).toBe("standalone");
+    expect(manifest.background_color).toBe("#FFFFFF");
+    expect(manifest.theme_color).toBe("#FFFFFF");
+    expect(JSON.parse(lightSource).theme_color).toBe("#FFFFFF");
+    expect(JSON.parse(darkSource).background_color).toBe("#0A1014");
+    expect(JSON.parse(darkSource).theme_color).toBe("#0A1014");
+    expect(JSON.parse(darkSource).start_url).toBe("/");
     expect(manifest.icons.map(icon => icon.sizes)).toEqual(expect.arrayContaining(["192x192", "512x512"]));
 
     // Icons must ship with the app. They used to point at /manus-storage/...,
@@ -49,11 +61,17 @@ describe("Savanna PWA assets", () => {
   });
 
   it("applies service worker updates only after the page agrees", async () => {
-    const worker = await readFile(resolve(projectRoot, "client/public/service-worker.js"), "utf8");
+    const [worker, main] = await Promise.all([
+      readFile(resolve(projectRoot, "client/public/service-worker.js"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/main.tsx"), "utf8"),
+    ]);
 
     // Activating during install swaps the cached shell out from under code that
     // is still running, so lazily-loaded chunks 404. The worker waits for the
     // page to opt in instead.
+    expect(worker).toContain('const CACHE_NAME = "savanna-shell-v17";');
+    expect(main).toContain('const WORKER_URL = "/service-worker.js?v=17";');
+    expect(main).toContain('"savanna:pwa-update-ready"');
     expect(worker).toContain('addEventListener("message"');
     expect(worker).toContain("SKIP_WAITING");
     expect(worker).toMatch(/addEventListener\("message"[\s\S]{0,400}SKIP_WAITING/);
@@ -61,8 +79,26 @@ describe("Savanna PWA assets", () => {
   });
 
   it("provides both browser install handling and an explicit offline status surface", async () => {
-    const source = await readFile(resolve(projectRoot, "client/src/components/PwaExperience.tsx"), "utf8");
+    const [source, app, styles] = await Promise.all([
+      readFile(resolve(projectRoot, "client/src/components/PwaExperience.tsx"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/App.tsx"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/index.css"), "utf8"),
+    ]);
     expect(source).toContain('beforeinstallprompt');
+    expect(source).toContain("PwaAppPrompts");
+    expect(source).toContain("Download Savanna");
+    expect(source).toContain('"savanna:pwa-update-ready"');
+    expect(source).toContain("New version ready");
+    expect(source).toContain("SKIP_WAITING");
+    expect(source).toContain("savanna-pwa-update-prompt");
+    expect(source).not.toContain("border-[#ead2a4] bg-[#fffaf0]/92");
+    expect(app).toContain("<PwaAppPrompts />");
+    expect(styles).toContain(".savanna-pwa-install-drawer .savanna-brand-token");
+    expect(styles).toContain(".savanna-pwa-update-prompt .savanna-brand-token");
+    expect(styles).toContain(".savanna-pwa-update-prompt {");
+    expect(styles).toContain("border: 0 !important;");
+    expect(styles).toContain("backdrop-filter: saturate(190%) blur(28px);");
+    expect(styles).toContain(".dark .savanna-pwa-update-prompt {");
     expect(source).toContain('window.addEventListener("offline"');
     expect(source).toContain("payments and live updates are paused");
   });
@@ -475,22 +511,36 @@ describe("Savanna PWA assets", () => {
     ]);
 
     expect(html).toContain('content="width=device-width, initial-scale=1.0, viewport-fit=cover"');
-    expect(html).toMatch(/name="apple-mobile-web-app-status-bar-style"[\s\S]*?content="black-translucent"/);
-    expect(html).toContain('content="rgba(255, 255, 255, 0.72)"');
+    expect(html).toMatch(/name="apple-mobile-web-app-status-bar-style"[\s\S]*?content="default"/);
+    expect(html).toContain('content="#FFFFFF"');
+    expect(html).toContain("document.write(");
+    expect(html).toContain('name="apple-mobile-web-app-status-bar-style" content="');
+    expect(html).toContain('(dark ? "black" : "default")');
+    expect(html).toContain('dark ? "#0A1014" : "#FFFFFF"');
+    expect(html).toContain("var manifestHref = dark");
+    expect(html).toContain('"/manifest-dark.webmanifest"');
+    expect(html).toContain('"/manifest-light.webmanifest"');
     expect(themeContext).toContain('const pageColor = theme === "dark" ? "#0A1014" : "#FFFFFF";');
-    expect(themeContext).toContain('const statusBarColor = theme === "dark" ? "#0A1014" : "rgba(255, 255, 255, 0.72)";');
+    expect(themeContext).toContain('const appleStatusStyle = theme === "dark" ? "black" : "default";');
+    expect(themeContext).toContain("function needsApplePwaStatusBarReload()");
+    expect(themeContext).toContain("window.location.reload()");
     expect(themeContext).toContain('document.querySelector<HTMLMetaElement>(\'meta[name="theme-color"]\')');
-    expect(themeContext).toContain("themeMeta.content = statusBarColor");
+    expect(themeContext).toContain("themeMeta.content = pageColor");
+    expect(themeContext).toContain('link[rel="manifest"]');
+    expect(themeContext).toContain('theme === "dark" ? "/manifest-dark.webmanifest" : "/manifest-light.webmanifest"');
     expect(themeContext).toContain('document.querySelector<HTMLMetaElement>(\'meta[name="apple-mobile-web-app-status-bar-style"]\')');
-    expect(themeContext).toContain('appleStatusMeta.content = "black-translucent";');
+    expect(themeContext).toContain("appleStatusMeta.content = appleStatusStyle;");
     expect(themeContext).toContain("root.style.colorScheme = theme;");
-    expect(themeContext).toContain('root.style.setProperty("--savanna-status-bar-color", statusBarColor);');
     expect(themeContext).toContain("document.body.style.backgroundColor = pageColor");
-    expect(styles).toContain("body::before");
+    const statusBarBlock = styles.match(/body::before \{[\s\S]*?\n\}/)?.[0] ?? "";
+    expect(styles).not.toContain("--savanna-status-bar-color");
+    expect(styles).toContain("body::before {");
     expect(styles).toContain("height: env(safe-area-inset-top, 0px);");
-    expect(styles).toContain("-webkit-backdrop-filter: saturate(180%) blur(22px);");
+    expect(styles).toContain("background: #FFFFFF;");
     expect(styles).toContain(".dark body::before");
-    expect(styles).toContain("background: color-mix(in srgb, #0A1014 82%, transparent);");
+    expect(styles).toContain("background: #0A1014;");
+    expect(statusBarBlock).not.toContain("backdrop-filter");
+    expect(statusBarBlock).not.toContain("-webkit-backdrop-filter");
     expect(styles).toContain(':root:not(.dark) .savanna-app .savanna-mobile-header.savanna-glass-header [aria-label="Open profile"]');
     expect(styles).toContain(':root:not(.dark) .savanna-app .savanna-mobile-header.savanna-glass-header .savanna-brand-token');
   });

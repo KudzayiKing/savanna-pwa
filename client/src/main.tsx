@@ -72,7 +72,13 @@ function registerServiceWorker() {
   // Keep in step with CACHE_NAME in client/public/service-worker.js. The query
   // string is what forces the browser to refetch the worker script rather than
   // serving a cached copy of it.
-  const WORKER_URL = "/service-worker.js?v=10";
+  const WORKER_URL = "/service-worker.js?v=17";
+
+  const announceUpdateReady = (worker: ServiceWorker) => {
+    window.dispatchEvent(new CustomEvent("savanna:pwa-update-ready", {
+      detail: { worker },
+    }));
+  };
 
   // True when this page is already controlled, i.e. this is an update rather
   // than a first install. `controllerchange` fires in both cases, but only the
@@ -99,15 +105,7 @@ function registerServiceWorker() {
           // No controller means this was the first install, not an update.
           if (!navigator.serviceWorker.controller) return;
 
-          toast.message("A new version of Savanna is ready.", {
-            action: {
-              label: "Reload",
-              onClick: () => installing.postMessage({ type: "SKIP_WAITING" }),
-            },
-            // Stays until the user acts: auto-dismissing would hide the only
-            // signal that the app is running an outdated shell.
-            duration: Infinity,
-          });
+          announceUpdateReady(installing);
         });
       });
     })

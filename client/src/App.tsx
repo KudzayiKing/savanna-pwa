@@ -1,5 +1,6 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { PwaAppPrompts } from "./components/PwaExperience";
 import { Suspense, lazy } from "react";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -121,6 +122,7 @@ function App() {
         <WallpaperProvider>
           <TooltipProvider>
             <Toaster />
+            <PwaAppPrompts />
             <Router />
           </TooltipProvider>
         </WallpaperProvider>

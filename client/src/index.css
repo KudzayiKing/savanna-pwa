@@ -121,15 +121,11 @@ body::before {
   z-index: 2147483000;
   height: env(safe-area-inset-top, 0px);
   pointer-events: none;
-  border-bottom: 1px solid color-mix(in srgb, #DDE3DC 54%, transparent);
-  background: color-mix(in srgb, #FFFFFF 56%, transparent);
-  -webkit-backdrop-filter: saturate(180%) blur(22px);
-  backdrop-filter: saturate(180%) blur(22px);
+  background: #FFFFFF;
 }
 
 .dark body::before {
-  border-bottom-color: color-mix(in srgb, #2A3942 62%, transparent);
-  background: color-mix(in srgb, #0A1014 82%, transparent);
+  background: #0A1014;
 }
 
 button, a, input, textarea, select { -webkit-tap-highlight-color: transparent; }
@@ -2073,6 +2069,40 @@ body:has(.savanna-login-screen) {
 .savanna-new-chat-dialog .savanna-brand-token svg {
   color: #D9A441 !important;
   stroke: currentColor !important;
+}
+
+.savanna-pwa-install-drawer .savanna-brand-token,
+.savanna-pwa-update-prompt .savanna-brand-token {
+  border: 0 !important;
+  background: color-mix(in srgb, #D9A441 20%, transparent) !important;
+  color: #D9A441 !important;
+  box-shadow: none !important;
+  opacity: 1 !important;
+}
+
+.savanna-pwa-install-drawer .savanna-brand-token *,
+.savanna-pwa-install-drawer .savanna-brand-token svg,
+.savanna-pwa-update-prompt .savanna-brand-token *,
+.savanna-pwa-update-prompt .savanna-brand-token svg {
+  color: #D9A441 !important;
+  stroke: currentColor !important;
+}
+
+/* The update prompt uses the same translucent glass recipe as the bottom nav,
+   but it lives outside `.savanna-app` because it is mounted at the app root. */
+.savanna-pwa-update-prompt {
+  border: 0 !important;
+  background: color-mix(in srgb, #FFFFFF 58%, transparent) !important;
+  background-color: color-mix(in srgb, #FFFFFF 50%, transparent) !important;
+  -webkit-backdrop-filter: saturate(190%) blur(28px);
+  backdrop-filter: saturate(190%) blur(28px);
+  box-shadow: none !important;
+}
+
+.dark .savanna-pwa-update-prompt {
+  border: 0 !important;
+  background: color-mix(in srgb, var(--chat-surface) 54%, var(--chat-bg) 6%, transparent) !important;
+  background-color: color-mix(in srgb, var(--chat-surface) 54%, transparent) !important;
 }
 
 /* The custom filter drawer/dialog is portal-rendered, so it needs the same

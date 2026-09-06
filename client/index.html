@@ -8,19 +8,45 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
-    <meta name="theme-color" content="rgba(255, 255, 255, 0.72)" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta
-      name="apple-mobile-web-app-status-bar-style"
-      content="black-translucent"
-    />
+    <script>
+      (function () {
+        try {
+          var requested = new URLSearchParams(window.location.search).get(
+            "theme"
+          );
+          var stored = window.localStorage.getItem("theme");
+          var dark =
+            requested === "dark" ||
+            (requested !== "light" && stored === "dark");
+          var pageColor = dark ? "#0A1014" : "#FFFFFF";
+          var manifestHref = dark
+            ? "/manifest-dark.webmanifest"
+            : "/manifest-light.webmanifest";
+          document.documentElement.classList.toggle("dark", dark);
+          document.documentElement.style.backgroundColor = pageColor;
+          document.write(
+            '<meta name="theme-color" content="' +
+              pageColor +
+              '"><meta name="apple-mobile-web-app-status-bar-style" content="' +
+              (dark ? "black" : "default") +
+              '"><link rel="manifest" href="' +
+              manifestHref +
+              '">'
+          );
+        } catch (e) {
+          document.write(
+            '<meta name="theme-color" content="#FFFFFF"><meta name="apple-mobile-web-app-status-bar-style" content="default"><link rel="manifest" href="/manifest-light.webmanifest">'
+          );
+        }
+      })();
+    </script>
     <meta name="application-name" content="Savanna" />
     <meta
       name="description"
       content="A thoughtful space for private conversations, local commerce, and learning."
     />
-    <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link
       rel="icon"
@@ -74,32 +100,6 @@
         fill: #111b21;
       }
     </style>
-    <script>
-      (function () {
-        try {
-          var requested = new URLSearchParams(window.location.search).get(
-            "theme"
-          );
-          var stored = window.localStorage.getItem("theme");
-          var dark =
-            requested === "dark" ||
-            (requested !== "light" && stored === "dark");
-          if (dark) {
-            document.documentElement.classList.add("dark");
-            document.documentElement.style.backgroundColor = "#111B21";
-          }
-          var themeMeta = document.querySelector('meta[name="theme-color"]');
-          if (themeMeta) {
-            themeMeta.setAttribute(
-              "content",
-              dark ? "rgba(17, 27, 33, 0.72)" : "rgba(255, 255, 255, 0.72)"
-            );
-          }
-        } catch (e) {
-          /* localStorage unavailable (privacy mode): stay light */
-        }
-      })();
-    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

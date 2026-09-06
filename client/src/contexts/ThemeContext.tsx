@@ -10,6 +10,25 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
+function isStandaloneDisplay() {
+  return (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    window.matchMedia("(display-mode: fullscreen)").matches ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true
+  );
+}
+
+function isAppleMobileDevice() {
+  return (
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+  );
+}
+
+function needsApplePwaStatusBarReload() {
+  return isStandaloneDisplay() && isAppleMobileDevice();
+}
+
 interface ThemeProviderProps {
   children: React.ReactNode;
   defaultTheme?: Theme;
@@ -34,7 +53,7 @@ export function ThemeProvider({
   useEffect(() => {
     const root = document.documentElement;
     const pageColor = theme === "dark" ? "#0A1014" : "#FFFFFF";
-    const statusBarColor = theme === "dark" ? "#0A1014" : "rgba(255, 255, 255, 0.72)";
+    const appleStatusStyle = theme === "dark" ? "black" : "default";
     if (theme === "dark") {
       root.classList.add("dark");
     } else {
@@ -47,16 +66,22 @@ export function ThemeProvider({
       themeMeta.name = "theme-color";
       document.head.appendChild(themeMeta);
     }
-    themeMeta.content = statusBarColor;
+    themeMeta.content = pageColor;
+    let manifestLink = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
+    if (!manifestLink) {
+      manifestLink = document.createElement("link");
+      manifestLink.rel = "manifest";
+      document.head.appendChild(manifestLink);
+    }
+    manifestLink.href = theme === "dark" ? "/manifest-dark.webmanifest" : "/manifest-light.webmanifest";
     let appleStatusMeta = document.querySelector<HTMLMetaElement>('meta[name="apple-mobile-web-app-status-bar-style"]');
     if (!appleStatusMeta) {
       appleStatusMeta = document.createElement("meta");
       appleStatusMeta.name = "apple-mobile-web-app-status-bar-style";
       document.head.appendChild(appleStatusMeta);
     }
-    appleStatusMeta.content = "black-translucent";
+    appleStatusMeta.content = appleStatusStyle;
     root.style.colorScheme = theme;
-    root.style.setProperty("--savanna-status-bar-color", statusBarColor);
     document.documentElement.style.backgroundColor = pageColor;
     document.body.style.backgroundColor = pageColor;
 
@@ -67,7 +92,14 @@ export function ThemeProvider({
 
   const toggleTheme = switchable
     ? () => {
-        setTheme(prev => (prev === "light" ? "dark" : "light"));
+        setTheme(prev => {
+          const next = prev === "light" ? "dark" : "light";
+          if (needsApplePwaStatusBarReload()) {
+            localStorage.setItem("theme", next);
+            window.setTimeout(() => window.location.reload(), 0);
+          }
+          return next;
+        });
       }
     : undefined;
 
