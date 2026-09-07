@@ -52,7 +52,7 @@ export function ThemeProvider({
 
   useEffect(() => {
     const root = document.documentElement;
-    const pageColor = theme === "dark" ? "#0A1014" : "#FFFFFF";
+    const pageColor = theme === "dark" ? "#0B0F0E" : "#FFFFFF";
     const appleStatusStyle = theme === "dark" ? "black" : "default";
     if (theme === "dark") {
       root.classList.add("dark");
@@ -67,6 +67,7 @@ export function ThemeProvider({
       document.head.appendChild(themeMeta);
     }
     themeMeta.content = pageColor;
+    root.style.setProperty("--savanna-system-bar-color", pageColor);
     let manifestLink = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
     if (!manifestLink) {
       manifestLink = document.createElement("link");

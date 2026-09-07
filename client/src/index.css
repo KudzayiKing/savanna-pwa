@@ -38,6 +38,7 @@
 
 :root {
   color-scheme: light;
+  --savanna-system-bar-color: #FFFFFF;
   --radius: 0.75rem;
   --ivory: #FFFFFF;
   --ivory-surface: #FFFFFF;
@@ -79,6 +80,7 @@
 
 .dark {
   color-scheme: dark;
+  --savanna-system-bar-color: #0B0F0E;
   --background: var(--obsidian);
   --foreground: var(--warm-white);
   --card: var(--obsidian-surface);
@@ -125,7 +127,53 @@ body::before {
 }
 
 .dark body::before {
-  background: #0A1014;
+  background: #0B0F0E;
+}
+
+/* Paint the home-indicator/gesture-bar safe area with the active page theme.
+   The nav itself sits above this inset, so the system gesture surface stays
+   themed without covering the interactive bottom navigation. */
+body::after {
+  content: "";
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 39;
+  height: env(safe-area-inset-bottom, 0px);
+  pointer-events: none;
+  background: var(--savanna-system-bar-color);
+}
+
+.dark body::after {
+  background: var(--savanna-system-bar-color);
+}
+
+html {
+  background-color: var(--savanna-system-bar-color);
+}
+
+html.dark,
+html.dark body,
+html.dark #root {
+  background-color: var(--savanna-system-bar-color) !important;
+}
+
+/* React-mounted counterpart to body::after. Keeping an explicit layer makes
+   the gesture area reliable after an installed PWA resumes from the OS. */
+.savanna-pwa-gesture-bar {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 40;
+  height: env(safe-area-inset-bottom, 0px);
+  pointer-events: none;
+  background: var(--savanna-system-bar-color);
+}
+
+html.dark .savanna-pwa-gesture-bar {
+  background: var(--savanna-system-bar-color);
 }
 
 button, a, input, textarea, select { -webkit-tap-highlight-color: transparent; }
@@ -2530,10 +2578,10 @@ body:has(.savanna-login-screen) {
     box-shadow: none !important;
   }
 
-  .dark .savanna-app :is(.savanna-route-shops, .savanna-route-learn) .savanna-discovery-banner {
-    background-color: var(--chat-surface) !important;
-    box-shadow: none !important;
-  }
+.dark .savanna-app :is(.savanna-route-shops, .savanna-route-learn) .savanna-discovery-banner {
+  background-color: var(--chat-surface) !important;
+  box-shadow: none !important;
+}
 
   .dark .savanna-app :is(.savanna-route-shops, .savanna-route-learn) label:has(input) {
     border-color: var(--chat-border) !important;
@@ -2605,6 +2653,13 @@ body:has(.savanna-login-screen) {
   .dark .savanna-app .savanna-route-orders .savanna-order-status[class*="text-[#FF5B6B]"] {
     color: var(--chat-alert-red) !important;
   }
+}
+
+/* The banner artwork uses the same warm ink in both themes. This final rule
+   follows the route-wide dark heading cascade on mobile and web alike. */
+.dark .savanna-app .savanna-discovery-banner h2,
+.dark .savanna-app .savanna-discovery-banner p {
+  color: #472416 !important;
 }
 
 /* Mobile Messages rows align with the search field inset; utility hover
@@ -3662,3 +3717,8 @@ body .savanna-app .savanna-media-tray-close {
   background-color: transparent !important;
   color: #D9A441 !important;
 }
+
+/* Rail + sidebar megaphone mark: single white logo source, recolored by theme.
+   Light theme -> black (brightness(0)); Dark theme -> white (source color). */
+.savanna-rail-mark { filter: brightness(0); }
+.dark .savanna-rail-mark { filter: none; }

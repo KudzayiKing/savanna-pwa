@@ -1,11 +1,13 @@
 // Bump on every change to this file: the cache name is the only thing that
 // tells a returning client its shell is stale.
-const CACHE_NAME = "savanna-shell-v17";
+const CACHE_NAME = "savanna-shell-v30";
 const SHELL_URLS = [
   "/",
   "/manifest.webmanifest",
   "/manifest-light.webmanifest",
   "/manifest-dark.webmanifest",
+  "/savanna_megaphone_vector.svg",
+  "/savanna_megaphone_icon.svg",
   "/icons/icon.svg",
   "/icons/icon-maskable.svg",
 ];
@@ -208,7 +210,7 @@ self.addEventListener("fetch", event => {
     // end with `.then(() => trimCache(cache))`, which resolved to `undefined`
     // and threw the fetched response away — so on a cache miss the handler fell
     // through to the 504 below even though the network fetch had succeeded.
-    // That surfaced as `GET /savanna-logo.svg 504 (Offline)` in the console on
+    // That surfaced as `GET /savanna_new_logo.svg 504 (Offline)` in the console on
     // every first visit, while the image still landed in cache and worked on
     // reload. `trimCache` is now awaited for its side effect only.
     event.respondWith(

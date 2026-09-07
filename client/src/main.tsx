@@ -72,7 +72,7 @@ function registerServiceWorker() {
   // Keep in step with CACHE_NAME in client/public/service-worker.js. The query
   // string is what forces the browser to refetch the worker script rather than
   // serving a cached copy of it.
-  const WORKER_URL = "/service-worker.js?v=17";
+  const WORKER_URL = "/service-worker.js?v=30";
 
   const announceUpdateReady = (worker: ServiceWorker) => {
     window.dispatchEvent(new CustomEvent("savanna:pwa-update-ready", {

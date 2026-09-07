@@ -62,7 +62,10 @@ export async function createApp(): Promise<express.Express> {
   // and rate limiting, so a forged request is rejected before it costs work.
   app.use("/api", verifyOrigin);
 
-  app.use((req, res, next) => selectLimiter(req)(req, res, next));
+  // Rate-limit API traffic only. The document shell and its Vite/static
+  // assets are safe GETs; counting them against the API budget can make the
+  // app itself return 429 after a burst of reloads or asset requests.
+  app.use("/api", (req, res, next) => selectLimiter(req)(req, res, next));
 
   const captureRawBody = (req: Request, _res: unknown, buffer: Buffer) => {
     (req as Request & { rawBody?: string }).rawBody = buffer.toString("utf8");

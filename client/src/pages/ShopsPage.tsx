@@ -159,7 +159,7 @@ export default function ShopsPage() {
   return <SavannaShell>
     <div className="savanna-route-shops space-y-7 pb-28 lg:pb-0">
       <section
-        className="savanna-discovery-banner relative overflow-hidden rounded-[26px]"
+        className="savanna-discovery-banner relative overflow-hidden rounded-[20px]"
         aria-label={bannerIsRtl ? "تجارة محلية" : "Local commerce"}
         dir={bannerIsRtl ? "rtl" : "ltr"}
         lang={bannerCopy.lang}

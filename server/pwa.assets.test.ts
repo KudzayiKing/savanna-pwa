@@ -26,10 +26,10 @@ describe("Savanna PWA assets", () => {
     expect(manifest.start_url).toBe("/");
     expect(manifest.display).toBe("standalone");
     expect(manifest.background_color).toBe("#FFFFFF");
-    expect(manifest.theme_color).toBe("#FFFFFF");
-    expect(JSON.parse(lightSource).theme_color).toBe("#FFFFFF");
-    expect(JSON.parse(darkSource).background_color).toBe("#0A1014");
-    expect(JSON.parse(darkSource).theme_color).toBe("#0A1014");
+    expect(manifest.theme_color).toBe("#DDAC2C");
+    expect(JSON.parse(lightSource).theme_color).toBe("#DDAC2C");
+    expect(JSON.parse(darkSource).background_color).toBe("#0B0F0E");
+    expect(JSON.parse(darkSource).theme_color).toBe("#DDAC2C");
     expect(JSON.parse(darkSource).start_url).toBe("/");
     expect(manifest.icons.map(icon => icon.sizes)).toEqual(expect.arrayContaining(["192x192", "512x512"]));
 
@@ -69,8 +69,9 @@ describe("Savanna PWA assets", () => {
     // Activating during install swaps the cached shell out from under code that
     // is still running, so lazily-loaded chunks 404. The worker waits for the
     // page to opt in instead.
-    expect(worker).toContain('const CACHE_NAME = "savanna-shell-v17";');
-    expect(main).toContain('const WORKER_URL = "/service-worker.js?v=17";');
+    expect(worker).toContain('const CACHE_NAME = "savanna-shell-v30";');
+    expect(worker).toContain('"/savanna_megaphone_vector.svg"');
+    expect(main).toContain('const WORKER_URL = "/service-worker.js?v=30";');
     expect(main).toContain('"savanna:pwa-update-ready"');
     expect(worker).toContain('addEventListener("message"');
     expect(worker).toContain("SKIP_WAITING");
@@ -91,6 +92,7 @@ describe("Savanna PWA assets", () => {
     expect(source).toContain("New version ready");
     expect(source).toContain("SKIP_WAITING");
     expect(source).toContain("savanna-pwa-update-prompt");
+    expect(source).toContain("savanna-pwa-gesture-bar");
     expect(source).not.toContain("border-[#ead2a4] bg-[#fffaf0]/92");
     expect(app).toContain("<PwaAppPrompts />");
     expect(styles).toContain(".savanna-pwa-install-drawer .savanna-brand-token");
@@ -101,6 +103,10 @@ describe("Savanna PWA assets", () => {
     expect(styles).toContain(".dark .savanna-pwa-update-prompt {");
     expect(source).toContain('window.addEventListener("offline"');
     expect(source).toContain("payments and live updates are paused");
+    const html = await readFile(resolve(projectRoot, "client/index.html"), "utf8");
+    expect(html).toContain('class="savanna-splash-mark"');
+    expect(html).toContain('src="/savanna_megaphone_vector.svg"');
+    expect(html).toContain("sv-mark-intro");
   });
 
   it("offers Google sign-in as a no-SMS Firebase Auth path", async () => {
@@ -516,16 +522,18 @@ describe("Savanna PWA assets", () => {
     expect(html).toContain("document.write(");
     expect(html).toContain('name="apple-mobile-web-app-status-bar-style" content="');
     expect(html).toContain('(dark ? "black" : "default")');
-    expect(html).toContain('dark ? "#0A1014" : "#FFFFFF"');
+    expect(html).toContain('dark ? "#0B0F0E" : "#FFFFFF"');
+    expect(html).toContain('document.documentElement.style.colorScheme = dark ? "dark" : "light";');
     expect(html).toContain("var manifestHref = dark");
     expect(html).toContain('"/manifest-dark.webmanifest"');
     expect(html).toContain('"/manifest-light.webmanifest"');
-    expect(themeContext).toContain('const pageColor = theme === "dark" ? "#0A1014" : "#FFFFFF";');
+    expect(themeContext).toContain('const pageColor = theme === "dark" ? "#0B0F0E" : "#FFFFFF";');
     expect(themeContext).toContain('const appleStatusStyle = theme === "dark" ? "black" : "default";');
     expect(themeContext).toContain("function needsApplePwaStatusBarReload()");
     expect(themeContext).toContain("window.location.reload()");
     expect(themeContext).toContain('document.querySelector<HTMLMetaElement>(\'meta[name="theme-color"]\')');
     expect(themeContext).toContain("themeMeta.content = pageColor");
+    expect(themeContext).toContain('root.style.setProperty("--savanna-system-bar-color", pageColor);');
     expect(themeContext).toContain('link[rel="manifest"]');
     expect(themeContext).toContain('theme === "dark" ? "/manifest-dark.webmanifest" : "/manifest-light.webmanifest"');
     expect(themeContext).toContain('document.querySelector<HTMLMetaElement>(\'meta[name="apple-mobile-web-app-status-bar-style"]\')');
@@ -538,7 +546,13 @@ describe("Savanna PWA assets", () => {
     expect(styles).toContain("height: env(safe-area-inset-top, 0px);");
     expect(styles).toContain("background: #FFFFFF;");
     expect(styles).toContain(".dark body::before");
-    expect(styles).toContain("background: #0A1014;");
+    expect(styles).toContain("background: #0B0F0E;");
+    expect(styles).toContain("body::after {");
+    expect(styles).toContain(".dark body::after");
+    expect(styles).toContain("height: env(safe-area-inset-bottom, 0px);");
+    expect(styles).toContain(".savanna-pwa-gesture-bar {");
+    expect(styles).toContain("html.dark .savanna-pwa-gesture-bar {");
+    expect(styles).toContain("--savanna-system-bar-color: #0B0F0E;");
     expect(statusBarBlock).not.toContain("backdrop-filter");
     expect(statusBarBlock).not.toContain("-webkit-backdrop-filter");
     expect(styles).toContain(':root:not(.dark) .savanna-app .savanna-mobile-header.savanna-glass-header [aria-label="Open profile"]');
@@ -1425,6 +1439,7 @@ describe("Savanna PWA assets", () => {
     expect(shell).toContain("hideMobileHeader?: boolean");
     expect(shell).toContain("hideDesktopHeader?: boolean");
     expect(shell).toContain("hideChrome || hideMobileHeader ? null : <MobileStoriesHeader />");
+    expect(shell).toContain('src="/savanna_megaphone_vector.svg"');
     expect(shell).toContain("!hideDesktopHeader && !usesIconRail");
     expect(styles).toContain(".savanna-app .savanna-profile-page .savanna-profile-card");
     expect(styles).toContain(".savanna-app .savanna-profile-page .savanna-profile-topbar");
@@ -1461,6 +1476,8 @@ describe("Savanna PWA assets", () => {
     // active one grows to fit its label, and a `flex-1` slot would hoard the
     // leftover space on one side.
     expect(shell).toContain('className="flex h-full flex-none items-center justify-center rounded-[28px] text-xs font-semibold"');
+    expect(shell).toContain("onClick={triggerMobileHaptic}");
+    expect(shell).toContain("navigator.vibrate(10)");
     expect(shell).toContain('className="whitespace-nowrap leading-none text-[#D9A441] dark:text-[#D9A441]"');
     expect(shell).toContain('savanna-mobile-bottom-nav savanna-glass-bottom-nav fixed bottom-[max(0.75rem,calc(env(safe-area-inset-bottom)+0.5rem))] left-1/2 z-50 flex h-[60px] w-[min(calc(100vw-1.5rem),430px)] items-center justify-between rounded-[34px] px-2 py-2');
 
@@ -1509,6 +1526,7 @@ describe("Savanna PWA assets", () => {
     expect(shops).toContain("AnimatedStoreIcon");
     expect(shops).toContain("AnimatedSearchIcon size={17}");
     expect(shops).toContain('const SHOPPING_BANNER_URL = "/shops_banner_african.webp"');
+    expect(shops).toContain('savanna-discovery-banner relative overflow-hidden rounded-[20px]');
     expect(shops).toContain("Featured products");
     expect(shops).toContain('["around", "Around you"]');
     expect(shops).toContain('["memories", "Memories"]');
@@ -1568,6 +1586,9 @@ describe("Savanna PWA assets", () => {
     expect(learn).toContain('aria-label="Learning discovery filters"');
     expect(learn).toContain("trpc.learning.courses.previewLessons.useQuery");
     expect(styles).toContain(".savanna-discovery-banner");
+    expect(styles).toContain(".dark .savanna-app .savanna-discovery-banner h2");
+    expect(styles).toContain(".dark .savanna-app .savanna-discovery-banner p");
+    expect(styles).toContain("color: #472416 !important;");
     expect(styles).toContain(".savanna-discovery-tabs button[data-active=\"true\"]");
     expect(styles).toContain(":is(.savanna-discovery-card, .savanna-discovery-empty)");
     expect(styles).toContain("background: #F6F5F5 !important;");

@@ -26,6 +26,14 @@ const navigation = [
 
 const mobileNavigation = navigation;
 
+function triggerMobileHaptic() {
+  const isMobile =
+    window.matchMedia("(max-width: 767px), (pointer: coarse)").matches;
+  if (isMobile && "vibrate" in navigator) {
+    navigator.vibrate(10);
+  }
+}
+
 type SavannaShellProps = {
   children: ReactNode;
   context?: ReactNode;
@@ -92,9 +100,27 @@ export function SavannaShell({
               <Link
                 href="/messages"
                 aria-label="Savanna"
-                className="mb-5 block size-11 shrink-0"
+                className="group mb-5 block size-11 shrink-0"
               >
-                <img src="/savanna-logo.svg" alt="" className="size-11" />
+                {/*
+                 * The rail shows the static mark so the waves aren't pulsing
+                 * away in the corner of the screen; the animated one is already
+                 * in the DOM (and cached by the splash) and cross-fades in on
+                 * hover. Kept as two layers rather than swapping `src` so
+                 * there's no decode hitch on the first hover.
+                 */}
+                <span className="relative block size-11">
+                  <img
+                    src="/savanna_megaphone_icon.svg"
+                    alt=""
+                    className="absolute inset-0 size-11 savanna-rail-mark transition-opacity duration-150 group-hover:opacity-0"
+                  />
+                  <img
+                    src="/savanna_megaphone_vector.svg"
+                    alt=""
+                    className="absolute inset-0 size-11 savanna-rail-mark opacity-0 transition-opacity duration-150 group-hover:opacity-100"
+                  />
+                </span>
               </Link>
               <nav
                 aria-label="Primary navigation"
@@ -307,6 +333,7 @@ export function SavannaShell({
               <Link
                 href={item.href}
                 key={item.href}
+                onClick={triggerMobileHaptic}
                 className="flex h-full flex-none items-center justify-center rounded-[28px] text-xs font-semibold"
               >
                 <span

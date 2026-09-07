@@ -183,6 +183,7 @@ export function PwaAppPrompts() {
 
   return (
     <>
+      <div aria-hidden="true" className="savanna-pwa-gesture-bar" />
       <Drawer
         open={installOpen && isMobile && !isInstalled}
         onOpenChange={open => {
