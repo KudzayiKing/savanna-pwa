@@ -1,5 +1,33 @@
 # Savanna PWA — long-term project notes
 
+## Push notifications: dispatched by a Cloud Function, not Express
+Firebase Hosting is **static**. `firebase.json` has a single rewrite
+(`** → /index.html`), so `/api/**` returns HTML — the Express route in
+`server/_core/notificationRoutes.ts` can never run in production (verified: POST
+to `/api/notifications/dispatch` → 200 `text/html`, 29 505 bytes).
+
+Pipeline: client `notifySavannaEvent()` writes a `notificationIntents` doc →
+Cloud Function `dispatchNotificationIntent` in `functions/index.js`
+(`onDocumentCreated("notificationIntents/{intentId}")`) validates and fans out
+via `sendEachForMulticast` → tokens from
+`users/{uid}/notificationDevices where enabled == true`.
+
+- `functions/index.js` is a deliberate line-for-line port of
+  `server/_core/notificationRoutes.ts`. **Change both together.**
+- The client no longer POSTs anywhere. The intent doc *is* the trigger.
+- Rules: clients may only `create` intents with `senderUserId == uid` and
+  `status == 'queued'`, never read/update. Function uses Admin SDK → bypasses.
+- Deploying functions needs the **Blaze** plan.
+- `notificationIntents` only back-fills on *create* — old queued docs stay
+  queued forever. Don't expect history to flush.
+- A device token only exists after the user taps Profile → Notifications →
+  **Enable push**. `notificationDevices` was empty (0 docs) for months.
+- iOS: web push only works for a PWA **added to the Home Screen** (16.4+), never
+  in a Safari tab.
+- No `firebase-messaging-sw.js` needed — `getToken()` gets an explicit
+  `serviceWorkerRegistration` (`/service-worker.js?v=37`), whose own `push`
+  listener correctly unwraps the FCM envelope.
+
 ## Stack
 React 19 + TS + Vite 7 + Tailwind 4 + Wouter · Express 4 + tRPC 11 + Drizzle ORM
 (MySQL/TiDB) + superjson · esbuild bundles the server · pnpm.
@@ -37,6 +65,23 @@ hosting `https://savanna-2caf0.web.app`, CLI user `kibaliailabs@gmail.com`.
 `npx vite build` → `dist/public`). Use the **global** `/usr/local/bin/firebase`
 (`npx firebase-tools` wedges the shell, exit 127). Storage not initialised yet,
 so `--only storage` fails until 'Get Started' is clicked in the console.
+
+## Production-only "stuck on splash / Refresh Savanna" = circular chunk
+`manualChunks` in `vite.config.ts` assigns modules by path string and Rollup does
+NOT check the result for cycles — it emits them silently, and dev has no
+chunking, so it only ever breaks in production. At runtime one side evaluates
+before the other's bindings exist → entry chunk throws before `createRoot` →
+`#root` stays empty → `client/index.html` shows the 8s "Refresh Savanna" overlay.
+Shipped twice: once via a `vendor` catch-all, once via `idb` (2026-09-08, when
+`firebase/messaging` pulled `@firebase/installations` in; `@firebase/app` also
+imports `openDB` from `idb`, and Rollup put `idb` in `vendor-firebase` →
+`vendor-firebase-core ↔ vendor-firebase`).
+- Diagnose fast: read line 1 of each `dist/public/assets/*.js` — the static
+  `import{…}from"./chunk.js"` headers *are* the chunk graph.
+- Guard: `npm run check:chunks` (`scripts/check-chunk-cycles.mjs`), also wired
+  into `build` right after `vite build`. Keep it there.
+- Fix pattern: pin the shared module into the *base* chunk of the group rather
+  than letting Rollup place it (`/idb/`, `/tslib/` → `vendor-firebase-core`).
 
 ## Chat layout: composers sit absolutely over the thread
 The thread reserves room via a **measured CSS variable**, never a constant (the
@@ -91,6 +136,13 @@ constraints*. `uid in memberIds` is provable from
 (needs Java).
 
 ## Environment quirks
+**`npm install` wedges the shell** — happened twice now (2026-09-08: once from
+the managed node workspace, once from `functions/`). Right after, *every* Bash
+command returns exit 127 with empty stdout+stderr — even `echo` (a builtin) —
+and Grep dies with `SandboxError … sandbox-exec: Argument list too long`. It is
+process-wide: spawned subagents are wedged too. It recovers on its own after
+some minutes. So: run any `npm install` **last**, and finish all other shell
+work first. When the shell is dead, fall back to Read/Write/Edit/Glob.
 No `timeout` binary (use background tasks) · `pnpm add` fails with
 `ERR_PNPM_CODEBUDDY_BROKER_DENY` (hence hand-rolled `server/_core/security.ts`;
 its in-memory rate limiter won't scale — swap for Redis) · backgrounding with

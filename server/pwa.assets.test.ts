@@ -18,6 +18,7 @@ describe("Savanna PWA assets", () => {
       display: string;
       background_color: string;
       theme_color: string;
+      gcm_sender_id?: string;
       icons: Array<{ src: string; sizes: string; purpose?: string }>;
     };
 
@@ -26,10 +27,13 @@ describe("Savanna PWA assets", () => {
     expect(manifest.start_url).toBe("/");
     expect(manifest.display).toBe("standalone");
     expect(manifest.background_color).toBe("#FFFFFF");
-    expect(manifest.theme_color).toBe("#DDAC2C");
-    expect(JSON.parse(lightSource).theme_color).toBe("#DDAC2C");
+    expect(manifest.theme_color).toBe("#FFFFFF");
+    expect(manifest.gcm_sender_id).toBe("103953800507");
+    expect(JSON.parse(lightSource).theme_color).toBe("#FFFFFF");
+    expect(JSON.parse(lightSource).gcm_sender_id).toBe("103953800507");
     expect(JSON.parse(darkSource).background_color).toBe("#0B0F0E");
-    expect(JSON.parse(darkSource).theme_color).toBe("#DDAC2C");
+    expect(JSON.parse(darkSource).theme_color).toBe("#0B0F0E");
+    expect(JSON.parse(darkSource).gcm_sender_id).toBe("103953800507");
     expect(JSON.parse(darkSource).start_url).toBe("/");
     expect(manifest.icons.map(icon => icon.sizes)).toEqual(expect.arrayContaining(["192x192", "512x512"]));
 
@@ -60,23 +64,29 @@ describe("Savanna PWA assets", () => {
     expect(worker).toContain("response.clone()");
   });
 
-  it("applies service worker updates only after the page agrees", async () => {
-    const [worker, main] = await Promise.all([
+  it("keeps PWA recovery manual so a failed boot cannot reload-loop", async () => {
+    const [worker, main, html] = await Promise.all([
       readFile(resolve(projectRoot, "client/public/service-worker.js"), "utf8"),
       readFile(resolve(projectRoot, "client/src/main.tsx"), "utf8"),
+      readFile(resolve(projectRoot, "client/index.html"), "utf8"),
     ]);
 
-    // Activating during install swaps the cached shell out from under code that
-    // is still running, so lazily-loaded chunks 404. The worker waits for the
-    // page to opt in instead.
-    expect(worker).toContain('const CACHE_NAME = "savanna-shell-v30";');
-    expect(worker).toContain('"/savanna_megaphone_vector.svg"');
-    expect(main).toContain('const WORKER_URL = "/service-worker.js?v=30";');
+    // Automatic controller swaps caused Android installed PWAs to loop between
+    // the splash and the boot fallback. Recovery is now a visible manual reset.
+    expect(worker).toContain('const CACHE_NAME = "savanna-shell-v42";');
+    expect(worker).toContain('"/icons/icon.svg"');
+    expect(main).toContain('const WORKER_URL = "/service-worker.js?v=42";');
     expect(main).toContain('"savanna:pwa-update-ready"');
+    expect(main).toContain('"vite:preloadError"');
     expect(worker).toContain('addEventListener("message"');
     expect(worker).toContain("SKIP_WAITING");
     expect(worker).toMatch(/addEventListener\("message"[\s\S]{0,400}SKIP_WAITING/);
     expect(worker).not.toMatch(/addEventListener\("install"[\s\S]{0,400}self\.skipWaiting\(\)/);
+    expect(worker).not.toContain("client.navigate");
+    expect(html).toContain("savanna-boot-fallback");
+    expect(html).toContain("recoverAppStorage");
+    expect(html).not.toContain("recoverWaitingWorker");
+    expect(html).not.toContain("controllerchange");
   });
 
   it("provides both browser install handling and an explicit offline status surface", async () => {
@@ -105,8 +115,11 @@ describe("Savanna PWA assets", () => {
     expect(source).toContain("payments and live updates are paused");
     const html = await readFile(resolve(projectRoot, "client/index.html"), "utf8");
     expect(html).toContain('class="savanna-splash-mark"');
-    expect(html).toContain('src="/savanna_megaphone_vector.svg"');
-    expect(html).toContain("sv-mark-intro");
+    // The message-circle-more mark is inlined into the splash so the three
+    // typing dots can animate before React boots.
+    expect(html).toContain('class="savanna-message-icon"');
+    expect(html).toContain("savanna-message-dot-1");
+    expect(html).toContain("sv-message-dot");
   });
 
   it("offers Google sign-in as a no-SMS Firebase Auth path", async () => {
@@ -521,14 +534,14 @@ describe("Savanna PWA assets", () => {
     expect(html).toContain('content="#FFFFFF"');
     expect(html).toContain("document.write(");
     expect(html).toContain('name="apple-mobile-web-app-status-bar-style" content="');
-    expect(html).toContain('(dark ? "black" : "default")');
+    expect(html).toContain('(dark ? "black-translucent" : "default")');
     expect(html).toContain('dark ? "#0B0F0E" : "#FFFFFF"');
     expect(html).toContain('document.documentElement.style.colorScheme = dark ? "dark" : "light";');
     expect(html).toContain("var manifestHref = dark");
     expect(html).toContain('"/manifest-dark.webmanifest"');
     expect(html).toContain('"/manifest-light.webmanifest"');
     expect(themeContext).toContain('const pageColor = theme === "dark" ? "#0B0F0E" : "#FFFFFF";');
-    expect(themeContext).toContain('const appleStatusStyle = theme === "dark" ? "black" : "default";');
+    expect(themeContext).toContain('const appleStatusStyle = theme === "dark" ? "black-translucent" : "default";');
     expect(themeContext).toContain("function needsApplePwaStatusBarReload()");
     expect(themeContext).toContain("window.location.reload()");
     expect(themeContext).toContain('document.querySelector<HTMLMetaElement>(\'meta[name="theme-color"]\')');
@@ -1439,7 +1452,8 @@ describe("Savanna PWA assets", () => {
     expect(shell).toContain("hideMobileHeader?: boolean");
     expect(shell).toContain("hideDesktopHeader?: boolean");
     expect(shell).toContain("hideChrome || hideMobileHeader ? null : <MobileStoriesHeader />");
-    expect(shell).toContain('src="/savanna_megaphone_vector.svg"');
+    expect(shell).toContain("MessageCircleMoreIcon");
+    expect(shell).toContain("savanna-rail-message-icon");
     expect(shell).toContain("!hideDesktopHeader && !usesIconRail");
     expect(styles).toContain(".savanna-app .savanna-profile-page .savanna-profile-card");
     expect(styles).toContain(".savanna-app .savanna-profile-page .savanna-profile-topbar");

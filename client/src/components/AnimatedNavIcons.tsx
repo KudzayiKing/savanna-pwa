@@ -68,6 +68,11 @@ export interface PlusIconHandle {
   stopAnimation: () => void;
 }
 
+export interface MessageCircleMoreIconHandle {
+  startAnimation: () => void;
+  stopAnimation: () => void;
+}
+
 interface SendHorizontalIconProps
   extends Omit<
     HTMLAttributes<HTMLDivElement>,
@@ -108,6 +113,8 @@ interface PlusIconProps
   isAnimated?: boolean;
   color?: string;
 }
+
+interface MessageCircleMoreIconProps extends SendHorizontalIconProps {}
 
 const iconTransition = { duration: 0.42, ease: [0.23, 1, 0.32, 1] as const };
 const MOBILE_NAV_ICON_ACTIVE_PILL_DELAY_MS = 520;
@@ -392,6 +399,134 @@ const PlusIcon = forwardRef<PlusIconHandle, PlusIconProps>(
 PlusIcon.displayName = "PlusIcon";
 
 export { PlusIcon };
+
+const MESSAGE_CIRCLE_DOT_VARIANTS: Variants = {
+  normal: {
+    opacity: 1,
+  },
+  animate: (custom: number) => ({
+    opacity: [1, 0, 0, 1, 1, 0, 0, 1],
+    transition: {
+      opacity: {
+        times: [
+          0,
+          0.1,
+          0.1 + custom * 0.1,
+          0.1 + custom * 0.1 + 0.1,
+          0.5,
+          0.6,
+          0.6 + custom * 0.1,
+          0.6 + custom * 0.1 + 0.1,
+        ],
+        duration: 1.5,
+      },
+    },
+  }),
+};
+
+const MessageCircleMoreIcon = forwardRef<
+  MessageCircleMoreIconHandle,
+  MessageCircleMoreIconProps
+>(
+  (
+    {
+      onMouseEnter,
+      onMouseLeave,
+      className,
+      size = 28,
+      duration = 1,
+      isAnimated = true,
+      color,
+      style,
+      ...props
+    },
+    ref
+  ) => {
+    const controls = useAnimation();
+    const reduced = useReducedMotion();
+    const isControlled = useRef(false);
+
+    useImperativeHandle(ref, () => {
+      isControlled.current = true;
+      return {
+        startAnimation: () =>
+          reduced ? controls.start("normal") : controls.start("animate"),
+        stopAnimation: () => controls.start("normal"),
+      };
+    });
+
+    const handleEnter = useCallback(
+      (event?: MouseEvent<HTMLDivElement>) => {
+        if (!isAnimated || reduced) return;
+        if (!isControlled.current) controls.start("animate");
+        else onMouseEnter?.(event as MouseEvent<HTMLDivElement>);
+      },
+      [controls, isAnimated, onMouseEnter, reduced]
+    );
+
+    const handleLeave = useCallback(
+      (event: MouseEvent<HTMLDivElement>) => {
+        if (!isControlled.current) {
+          controls.start("normal");
+        } else {
+          onMouseLeave?.(event);
+        }
+      },
+      [controls, onMouseLeave]
+    );
+
+    return (
+      <LazyMotion features={domMin} strict>
+        <m.div
+          className={cn("inline-flex items-center justify-center", className)}
+          onMouseEnter={handleEnter}
+          onMouseLeave={handleLeave}
+          {...props}
+          style={{ color, ...style }}
+        >
+          <svg
+            fill="none"
+            height={size}
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            viewBox="0 0 24 24"
+            width={size}
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719" />
+            <m.path
+              animate={controls}
+              custom={0}
+              d="M8 12h.01"
+              initial="normal"
+              variants={MESSAGE_CIRCLE_DOT_VARIANTS}
+            />
+            <m.path
+              animate={controls}
+              custom={1}
+              d="M12 12h.01"
+              initial="normal"
+              variants={MESSAGE_CIRCLE_DOT_VARIANTS}
+            />
+            <m.path
+              animate={controls}
+              custom={2}
+              d="M16 12h.01"
+              initial="normal"
+              variants={MESSAGE_CIRCLE_DOT_VARIANTS}
+            />
+          </svg>
+        </m.div>
+      </LazyMotion>
+    );
+  }
+);
+
+MessageCircleMoreIcon.displayName = "MessageCircleMoreIcon";
+
+export { MessageCircleMoreIcon };
 
 export function AnimatedSearchIcon({
   size = 18,

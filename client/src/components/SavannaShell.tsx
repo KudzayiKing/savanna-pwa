@@ -8,6 +8,7 @@ import {
 import { MobileStoriesHeader } from "@/components/StoriesPanel";
 import {
   AnimatedPlusIcon,
+  MessageCircleMoreIcon,
   MobileNavIcon,
   type MobileNavIconName,
 } from "@/components/AnimatedNavIcons";
@@ -100,27 +101,12 @@ export function SavannaShell({
               <Link
                 href="/messages"
                 aria-label="Savanna"
-                className="group mb-5 block size-11 shrink-0"
+                className="group mb-5 flex size-11 shrink-0 items-center justify-center text-[#151A17] dark:text-white"
               >
-                {/*
-                 * The rail shows the static mark so the waves aren't pulsing
-                 * away in the corner of the screen; the animated one is already
-                 * in the DOM (and cached by the splash) and cross-fades in on
-                 * hover. Kept as two layers rather than swapping `src` so
-                 * there's no decode hitch on the first hover.
-                 */}
-                <span className="relative block size-11">
-                  <img
-                    src="/savanna_megaphone_icon.svg"
-                    alt=""
-                    className="absolute inset-0 size-11 savanna-rail-mark transition-opacity duration-150 group-hover:opacity-0"
-                  />
-                  <img
-                    src="/savanna_megaphone_vector.svg"
-                    alt=""
-                    className="absolute inset-0 size-11 savanna-rail-mark opacity-0 transition-opacity duration-150 group-hover:opacity-100"
-                  />
-                </span>
+                <MessageCircleMoreIcon
+                  className="savanna-rail-message-icon"
+                  size={34}
+                />
               </Link>
               <nav
                 aria-label="Primary navigation"

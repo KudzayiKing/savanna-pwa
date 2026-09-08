@@ -21,6 +21,7 @@ import {
 } from "firebase/firestore";
 import { getFirestoreDb } from "./firebase";
 import { listFirebaseBlockedUserIds } from "./firebaseSafety";
+import { notifySavannaEvent } from "./firebaseNotifications";
 import { listFirebaseStorefronts, type FirebaseProduct, type FirebaseStorefront } from "./firebaseShops";
 
 export type FirebaseCommunityVisibility = "public" | "private";
@@ -462,6 +463,11 @@ export async function sendFirebaseCommunityMessage(
     })
     .update(communityRef(communityId), { updatedAt: serverTimestamp() })
     .commit();
+  notifySavannaEvent(user.id, {
+    eventType: "community.message",
+    communityId,
+    communityMessageId: messageRef.id,
+  });
 }
 
 export async function toggleFirebaseCommunityMessageReaction(input: {
@@ -507,6 +513,11 @@ export async function createFirebaseCommunityPost(user: AppUser, communityId: st
     })
     .update(communityRef(communityId), { updatedAt: timestamp })
     .commit();
+  notifySavannaEvent(user.id, {
+    eventType: "community.post",
+    communityId,
+    communityPostId: postRef.id,
+  });
 }
 
 export async function reactToFirebaseCommunityPost(user: AppUser, communityId: string, postId: string, emoji: string) {

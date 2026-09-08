@@ -3717,8 +3717,3 @@ body .savanna-app .savanna-media-tray-close {
   background-color: transparent !important;
   color: #D9A441 !important;
 }
-
-/* Rail + sidebar megaphone mark: single white logo source, recolored by theme.
-   Light theme -> black (brightness(0)); Dark theme -> white (source color). */
-.savanna-rail-mark { filter: brightness(0); }
-.dark .savanna-rail-mark { filter: none; }

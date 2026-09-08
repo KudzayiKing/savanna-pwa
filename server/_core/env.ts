@@ -30,6 +30,13 @@ export const ENV = {
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
 
+  // --- Firebase Admin (server-only notifications) -------------------------
+  firebaseProjectId: process.env.FIREBASE_PROJECT_ID ?? process.env.VITE_FIREBASE_PROJECT_ID ?? "",
+  firebaseServiceAccountBase64: process.env.FIREBASE_SERVICE_ACCOUNT_BASE64 ?? "",
+  firebaseServiceAccountJson: process.env.FIREBASE_SERVICE_ACCOUNT_JSON ?? "",
+  firebaseClientEmail: process.env.FIREBASE_CLIENT_EMAIL ?? "",
+  firebasePrivateKey: process.env.FIREBASE_PRIVATE_KEY ?? "",
+
   // --- Optional Gemma cloud fallback --------------------------------------
   // The browser-local path uses LiteRT-LM/WebGPU; these are server-only fallbacks.
   gemmaApiBaseUrl: (process.env.GEMMA_API_BASE_URL ?? "").replace(/\/+$/, ""),

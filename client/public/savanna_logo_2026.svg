@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" role="img" aria-label="Savanna">
+  <title>Savanna</title>
+  <style>
+    /*
+     * Default fills match the dark-theme look. Hosts that inline this SVG can
+     * override the bubble per theme (e.g. `html:not(.dark) .savanna-bubble { fill: #151A17 }`)
+     * because their selector is more specific than this internal one. The three
+     * lines are always gold regardless of theme.
+     */
+    .savanna-bubble { fill: #FFFFFF; }
+    .savanna-line { fill: #D9A441; }
+  </style>
+  <!--
+    Bubble body: a circle with a large pointed tail on the bottom-left. The
+    tail's two base vertices sit on the circle's lower-left arc (~7-8 o'clock)
+    so the join is fully covered. The tip extends to the bottom-left corner.
+  -->
+  <circle class="savanna-bubble" cx="500" cy="430" r="350" />
+  <polygon class="savanna-bubble" points="210,620 360,730 40,960" />
+  <!--
+    Three gold pills. Top two full-width, bottom one shorter and left-aligned
+    with the others. The -1/-2/-3 suffixes are used by the splash keyframes
+    to stagger appear/disappear; harmless elsewhere.
+  -->
+  <rect class="savanna-line savanna-line-1" x="200" y="310" width="600" height="60" rx="30" />
+  <rect class="savanna-line savanna-line-2" x="200" y="410" width="600" height="60" rx="30" />
+  <rect class="savanna-line savanna-line-3" x="200" y="510" width="380" height="60" rx="30" />
+</svg>

@@ -18,6 +18,7 @@ interface ImportMetaEnv {
   readonly VITE_FIREBASE_STORAGE_BUCKET: string;
   readonly VITE_FIREBASE_MESSAGING_SENDER_ID: string;
   readonly VITE_FIREBASE_APP_ID: string;
+  readonly VITE_FIREBASE_VAPID_KEY?: string;
 
   /** Optional. While unset, App Check is off — see `lib/firebase.ts`. */
   readonly VITE_FIREBASE_APP_CHECK_SITE_KEY?: string;

@@ -339,6 +339,44 @@ service cloud.firestore {
           ]);
       }
 
+      match /notificationSettings/{settingsId} {
+        allow read, create, update: if isSelf(uid)
+          && settingsId == 'preferences'
+          && request.resource.data.keys().hasOnly([
+            'enabled', 'directMessages', 'groupMessages', 'communityMessages',
+            'communityPosts', 'storyReplies', 'updatedAt'
+          ])
+          && request.resource.data.get('enabled', true) is bool
+          && request.resource.data.get('directMessages', true) is bool
+          && request.resource.data.get('groupMessages', true) is bool
+          && request.resource.data.get('communityMessages', true) is bool
+          && request.resource.data.get('communityPosts', true) is bool
+          && request.resource.data.get('storyReplies', true) is bool;
+
+        allow delete: if false;
+      }
+
+      match /notificationDevices/{deviceId} {
+        allow read, create, update: if isSelf(uid)
+          && request.resource.data.keys().hasOnly([
+            'token', 'enabled', 'permission', 'platform', 'userAgent',
+            'appVersion', 'disabledReason', 'createdAt', 'updatedAt'
+          ])
+          && request.resource.data.get('enabled', false) is bool
+          && request.resource.data.get('permission', 'default') in ['default', 'granted', 'denied', 'unsupported']
+          && request.resource.data.get('platform', '') is string
+          && request.resource.data.get('platform', '').size() <= 80
+          && (
+            request.resource.data.get('token', null) == null
+            || (
+              request.resource.data.token is string
+              && request.resource.data.token.size() <= 4096
+            )
+          );
+
+        allow delete: if false;
+      }
+
       match /following/{followingUid} {
         allow read, delete: if isSelf(uid);
 
@@ -522,6 +560,22 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /notificationIntents/{intentId} {
+      allow create: if signedIn()
+        && request.resource.data.senderUserId == request.auth.uid
+        && request.resource.data.status == 'queued'
+        && request.resource.data.eventType in [
+          'conversation.message', 'community.message', 'community.post'
+        ]
+        && request.resource.data.keys().hasOnly([
+          'senderUserId', 'eventType', 'conversationId', 'messageId',
+          'communityId', 'communityMessageId', 'communityPostId',
+          'status', 'createdAt'
+        ]);
+
+      allow read, update, delete: if false;
+    }
+
     // --- Presence ----------------------------------------------------------
 
     match /presence/{uid} {
@@ -632,10 +686,19 @@ service cloud.firestore {
         allow create: if isCommunityMember(communityId)
           && request.resource.data.authorUserId == request.auth.uid
           && request.resource.data.body is string
-          && request.resource.data.body.size() > 0
+          && request.resource.data.body.size() <= 2000
+          && request.resource.data.get('contentType', 'text') in ['text', 'attachment']
+          && (
+            request.resource.data.body.size() > 0
+            || (
+              request.resource.data.get('contentType', 'text') == 'attachment'
+              && request.resource.data.attachments is list
+              && request.resource.data.attachments.size() > 0
+            )
+          )
           && request.resource.data.keys().hasOnly([
             'authorUserId', 'authorName', 'authorPhotoURL', 'body',
-            'createdAt'
+            'contentType', 'attachments', 'reactions', 'createdAt'
           ]);
 
         allow update, delete: if false;

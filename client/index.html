@@ -21,23 +21,52 @@
             requested === "dark" ||
             (requested !== "light" && stored === "dark");
           var pageColor = dark ? "#0B0F0E" : "#FFFFFF";
+          var manifestVersion = "?v=42";
           var manifestHref = dark
-            ? "/manifest-dark.webmanifest"
-            : "/manifest-light.webmanifest";
+            ? "/manifest-dark.webmanifest" + manifestVersion
+            : "/manifest-light.webmanifest" + manifestVersion;
           document.documentElement.classList.toggle("dark", dark);
           document.documentElement.style.colorScheme = dark ? "dark" : "light";
           document.documentElement.style.backgroundColor = pageColor;
+          document.documentElement.style.setProperty("--savanna-system-bar-color", pageColor);
           document.write(
-            '<meta name="theme-color" content="#DDAC2C"><meta name="apple-mobile-web-app-status-bar-style" content="default" +
+            '<meta name="theme-color" content="' + pageColor + '"><meta name="apple-mobile-web-app-status-bar-style" content="' + (dark ? "black-translucent" : "default") + '" +
               '"><link rel="manifest" href="' +
               manifestHref +
               '">'
           );
         } catch (e) {
           document.write(
-            '<meta name="theme-color" content="#DDAC2C"><meta name="apple-mobile-web-app-status-bar-style" content="default"><link rel="manifest" href="/manifest-light.webmanifest">'
+            '<meta name="theme-color" content="#FFFFFF"><meta name="apple-mobile-web-app-status-bar-style" content="default"><link rel="manifest" href="/manifest-light.webmanifest?v=42">'
           );
         }
+      })();
+    </script>
+    <script>
+      (function () {
+        window.__SAVANNA_BOOT_ERRORS__ = [];
+        function remember(message) {
+          try {
+            window.__SAVANNA_BOOT_ERRORS__.push(String(message || "Unknown boot error").slice(0, 240));
+          } catch (e) {}
+        }
+        window.addEventListener(
+          "error",
+          function (event) {
+            if (event.error && event.error.message) {
+              remember(event.error.message);
+              return;
+            }
+            if (event.target && event.target !== window) {
+              remember("Could not load " + (event.target.src || event.target.href || "a required app file"));
+            }
+          },
+          true
+        );
+        window.addEventListener("unhandledrejection", function (event) {
+          var reason = event.reason;
+          remember(reason && reason.message ? reason.message : reason);
+        });
       })();
     </script>
     <meta name="application-name" content="Savanna" data-page-node-id="NCPHs1PlKBh3On2rcOdcfJ" />
@@ -86,37 +115,16 @@
       #splash .savanna-splash-mark {
         position: relative;
         display: block;
-        width: min(62vmin, 320px);
+        /* Kept in step with the boot fallback in this file ("Refresh Savanna"),
+           which renders the same mark at 96px. If one changes, change both —
+           otherwise the logo jumps size at the moment the splash is retired. */
+        width: 96px;
+        height: 96px;
         aspect-ratio: 1;
-        height: auto;
-        animation:
-          sv-mark-intro 0.85s cubic-bezier(0.22, 1, 0.36, 1) both,
-          sv-mark-breathe 3.8s ease-in-out 0.85s infinite;
+        /* The chat bubble itself stays still; only the three dots animate. */
       }
-      @keyframes sv-mark-intro {
-        0% {
-          opacity: 0;
-          transform: scale(0.72) rotate(-8deg);
-        }
-        70% {
-          opacity: 1;
-          transform: scale(1.04) rotate(1deg);
-        }
-        100% {
-          opacity: 1;
-          transform: scale(1) rotate(0deg);
-        }
-      }
-      @keyframes sv-mark-breathe {
-        0%,
-        100% {
-          transform: translateY(0) rotate(0deg) scale(1);
-        }
-        50% {
-          transform: translateY(-6px) rotate(-1deg) scale(1.025);
-        }
-      }
-      #splash .savanna-splash-mark > img {
+      #splash .savanna-splash-mark > svg {
+        display: block;
         position: absolute;
         inset: 0;
         width: 100%;
@@ -126,12 +134,32 @@
       .dark #splash {
         background: #111b21;
       }
-      html:not(.dark) #splash .savanna-splash-mark > img {
-        filter: brightness(0);
+      #splash .savanna-message-icon {
+        color: #FFFFFF;
+      }
+      html:not(.dark) #splash .savanna-message-icon {
+        color: #151A17;
+      }
+      #splash .savanna-message-dot {
+        animation: sv-message-dot 1.5s linear infinite;
+      }
+      #splash .savanna-message-dot-2 {
+        animation-delay: 0.15s;
+      }
+      #splash .savanna-message-dot-3 {
+        animation-delay: 0.3s;
+      }
+      @keyframes sv-message-dot {
+        0%, 10% { opacity: 1; }
+        11%, 20% { opacity: 0; }
+        21%, 50% { opacity: 1; }
+        60%, 70% { opacity: 0; }
+        71%, 100% { opacity: 1; }
       }
       @media (prefers-reduced-motion: reduce) {
-        #splash .savanna-splash-mark {
+        #splash .savanna-message-dot {
           animation: none;
+          opacity: 1;
         }
       }
     </style>
@@ -147,7 +175,12 @@
   <body data-page-node-id="5H7o70quHZSFODS1CHW9ek">
     <div id="splash" aria-hidden="true" data-page-node-id="hWGWJyKoYr0pt5rO2AylJu">
       <div class="savanna-splash-mark" role="img" aria-label="Savanna" data-page-node-id="PscG1PKlQBDolGQf1UMD8k">
-        <img src="/savanna_megaphone_vector.svg" alt="" data-page-node-id="u0OLaERKMFT4OEbJEs22Ia" />
+        <svg class="savanna-message-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="u0OLaERKMFT4OEbJEs22Ia" aria-hidden="true">
+          <path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719" />
+          <path class="savanna-message-dot savanna-message-dot-1" d="M8 12h.01" />
+          <path class="savanna-message-dot savanna-message-dot-2" d="M12 12h.01" />
+          <path class="savanna-message-dot savanna-message-dot-3" d="M16 12h.01" />
+        </svg>
       </div>
       <!-- Legacy inline bird mark retained only as a migration reference. -->
       <template data-page-node-id="TY6g0i33l57jEzKNuT97PD">
@@ -391,6 +424,129 @@
       </svg>
       </template>
     </div>
+    <script>
+      (function () {
+        function rootHasBooted() {
+          var root = document.getElementById("root");
+          return Boolean(root && root.childElementCount > 0);
+        }
+
+        function hideSplashFallback() {
+          var splash = document.getElementById("splash");
+          if (!splash || rootHasBooted()) return;
+          splash.classList.add("hide");
+          window.setTimeout(function () {
+            if (splash.parentNode) splash.parentNode.removeChild(splash);
+          }, 600);
+        }
+
+        function recoverAppStorage() {
+          var jobs = [];
+          if ("serviceWorker" in navigator) {
+            jobs.push(
+              navigator.serviceWorker
+                .getRegistrations()
+                .then(function (registrations) {
+                  return Promise.all(
+                    registrations.map(function (registration) {
+                      return registration.unregister();
+                    })
+                  );
+                })
+                .catch(function () {})
+            );
+          }
+          if ("caches" in window) {
+            jobs.push(
+              caches
+                .keys()
+                .then(function (keys) {
+                  return Promise.all(
+                    keys
+                      .filter(function (key) {
+                        return key.indexOf("savanna-shell-") === 0;
+                      })
+                      .map(function (key) {
+                        return caches.delete(key);
+                      })
+                  );
+                })
+                .catch(function () {})
+            );
+          }
+          Promise.all(jobs).finally(function () {
+            window.location.reload();
+          });
+        }
+
+        function showBootFallback() {
+          if (rootHasBooted() || document.getElementById("savanna-boot-fallback")) return;
+          hideSplashFallback();
+
+          var dark = document.documentElement.classList.contains("dark");
+          var bootErrors = Array.isArray(window.__SAVANNA_BOOT_ERRORS__)
+            ? window.__SAVANNA_BOOT_ERRORS__.slice(-2)
+            : [];
+          var detail = bootErrors.length
+            ? "Startup detail: " + bootErrors.join(" | ")
+            : "The app shell did not finish loading. Reset once to fetch a clean copy.";
+          var fallback = document.createElement("div");
+          fallback.id = "savanna-boot-fallback";
+          fallback.setAttribute("role", "alert");
+          fallback.style.cssText = [
+            "position:fixed",
+            "inset:0",
+            "z-index:9998",
+            "display:flex",
+            "align-items:center",
+            "justify-content:center",
+            "padding:24px",
+            "background:" + (dark ? "#0B0F0E" : "#FFFFFF"),
+            "color:" + (dark ? "#E9EDEF" : "#151A17"),
+            "font-family:'DM Sans',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",
+            "text-align:center"
+          ].join(";");
+
+          var bubbleFill = dark ? "#FFFFFF" : "#151A17";
+          fallback.innerHTML =
+            '<div style="max-width:360px">' +
+            '<svg viewBox="0 0 24 24" width="96" height="96" aria-hidden="true" fill="none" stroke="' + bubbleFill + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block;margin:0 auto 18px">' +
+              '<path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719" />' +
+              '<path d="M8 12h.01" />' +
+              '<path d="M12 12h.01" />' +
+              '<path d="M16 12h.01" />' +
+            '</svg>' +
+            '<h1 style="margin:0;font-size:28px;line-height:1.05;font-weight:700">Refresh Savanna</h1>' +
+            '<p style="margin:12px 0 22px;color:' +
+            (dark ? "#AEBAC1" : "#5F6861") +
+            ';font-size:15px;line-height:1.6">' +
+            detail.replace(/[<>&"]/g, function (char) {
+              return { "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[char];
+            }) +
+            '</p>' +
+            '<button type="button" id="savanna-boot-refresh" style="border:0;border-radius:999px;background:rgba(217,164,65,.2);color:#D9A441;font-weight:800;font-size:16px;padding:14px 24px;width:100%">Refresh app</button>' +
+            '</div>';
+
+          document.body.appendChild(fallback);
+
+          // The 8s timer can fire a beat before React finishes mounting — a slow
+          // connection where the bundle lands at 9s, say. Without this the
+          // overlay would sit on top of a perfectly healthy app forever and the
+          // only way out would look like a reload loop.
+          var poll = window.setInterval(function () {
+            if (!rootHasBooted()) return;
+            window.clearInterval(poll);
+            if (fallback.parentNode) fallback.parentNode.removeChild(fallback);
+          }, 500);
+
+          var button = document.getElementById("savanna-boot-refresh");
+          if (button) button.addEventListener("click", recoverAppStorage);
+        }
+
+        window.setTimeout(hideSplashFallback, 6500);
+        window.setTimeout(showBootFallback, 8000);
+      })();
+    </script>
     <div id="root" data-page-node-id="PXM6rgaxmbZTXvhhuwSGC3"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

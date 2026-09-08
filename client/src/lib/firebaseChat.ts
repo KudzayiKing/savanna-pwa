@@ -25,6 +25,7 @@ import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { useEffect, useRef } from "react";
 import { getFirebaseStorage, getFirestoreDb } from "./firebase";
 import { listFirebaseBlockedUserIds } from "./firebaseSafety";
+import { notifySavannaEvent } from "./firebaseNotifications";
 
 export type FirebaseConversationKind = "direct" | "group" | "merchant_support";
 export type FirebaseMessageStatus = "sending" | "sent" | "delivered" | "read" | "failed" | "deleted";
@@ -629,6 +630,11 @@ export async function sendFirebaseMessage(input: {
     }), { merge: true });
   }
   await batch.commit();
+  notifySavannaEvent(input.senderId, {
+    eventType: "conversation.message",
+    conversationId: input.conversationId,
+    messageId: messageRef.id,
+  });
 }
 
 export async function listFirebaseConversations(user?: AppUser | null) {
@@ -721,6 +727,11 @@ export async function sendFirebaseAttachment(input: {
     }), { merge: true });
   }
   await batch.commit();
+  notifySavannaEvent(input.sender.id, {
+    eventType: "conversation.message",
+    conversationId: input.conversationId,
+    messageId: messageRef.id,
+  });
 }
 
 export async function sendFirebaseSticker(input: {
@@ -790,6 +801,11 @@ export async function sendFirebaseSticker(input: {
     }), { merge: true });
   }
   await batch.commit();
+  notifySavannaEvent(input.sender.id, {
+    eventType: "conversation.message",
+    conversationId: input.conversationId,
+    messageId: messageRef.id,
+  });
 }
 
 export async function joinFirebaseConversationInvite(user: AppUser, code: string) {

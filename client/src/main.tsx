@@ -20,6 +20,11 @@ import "./index.css";
  */
 installErrorCapture();
 
+window.addEventListener("vite:preloadError", event => {
+  event.preventDefault();
+  window.location.reload();
+});
+
 /**
  * Fades out the pre-React splash overlay declared in index.html.
  *
@@ -62,17 +67,14 @@ retireSplash();
  * Registers the offline shell, and surfaces updates as a prompt rather than
  * silently swapping the app out from under the running tab.
  *
- * The worker no longer calls skipWaiting() during install. Activating
- * immediately would replace the cached shell while the previous bundle is still
- * executing, so any chunk loaded afterwards would 404 against the new cache.
- * Instead the worker waits, we offer a reload, and the swap happens only once
- * the user accepts.
+ * The worker waits while the current page is running. Once the new worker is
+ * ready, the page shows an update prompt and applies it only when the user asks.
  */
 function registerServiceWorker() {
   // Keep in step with CACHE_NAME in client/public/service-worker.js. The query
   // string is what forces the browser to refetch the worker script rather than
   // serving a cached copy of it.
-  const WORKER_URL = "/service-worker.js?v=30";
+  const WORKER_URL = "/service-worker.js?v=42";
 
   const announceUpdateReady = (worker: ServiceWorker) => {
     window.dispatchEvent(new CustomEvent("savanna:pwa-update-ready", {

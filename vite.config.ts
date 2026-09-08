@@ -340,9 +340,32 @@ function buildPlugins(mode: string): PluginOption[] {
  *
  * Leaving unmatched modules to Rollup avoids this — its automatic chunking is
  * derived from the module graph and cannot produce a cycle.
+ *
+ * That is not sufficient on its own, though: a shared module that Rollup places
+ * automatically can still close a cycle between two hand-assigned chunks. `idb`
+ * did exactly that once messaging pulled `@firebase/installations` into the
+ * build — see the rule below, and `scripts/check-chunk-cycles.mjs`, which now
+ * fails the build if any cycle reappears.
  */
 function manualChunks(id: string) {
   if (!id.includes("node_modules")) return undefined;
+  // `idb` and `tslib` are depended on by BOTH sides of the Firebase split, so
+  // they have to be pinned to the base chunk.
+  //
+  // Left to Rollup, `idb` was placed in `vendor-firebase` because
+  // `@firebase/installations` (pulled in by `firebase/messaging` for web push)
+  // is the module that made it reachable. But `@firebase/app` in
+  // `vendor-firebase-core` imports `openDB` from `idb` too, which closed this
+  // loop in the emitted output:
+  //
+  //   vendor-firebase-core -> vendor-firebase       (openDB)
+  //   vendor-firebase      -> vendor-firebase-core  (@firebase/util, helpers)
+  //
+  // Production only: dev has no chunking, so the cycle never existed there. In
+  // a build, one side of the cycle evaluates before the other's bindings are
+  // initialised, `main.tsx` throws before `createRoot`, `#root` stays empty and
+  // index.html falls back to the "Refresh Savanna" screen.
+  if (id.includes("/idb/") || id.includes("/tslib/")) return "vendor-firebase-core";
   if (id.includes("/@firebase/firestore") || id.includes("/firebase/firestore")) return "vendor-firestore";
   if (id.includes("/@firebase/auth") || id.includes("/firebase/auth")) return "vendor-firebase-auth";
   if (id.includes("/@firebase/storage") || id.includes("/firebase/storage")) return "vendor-firebase-storage";

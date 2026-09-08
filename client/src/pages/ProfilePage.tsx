@@ -9,12 +9,20 @@ import { WallpaperSection } from "@/components/WallpaperSection";
 import { startLogin } from "@/const";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useFirebaseMessageMemories, useFirebaseMessageMemoryMutations, type FirebaseMessageMemory } from "@/lib/firebaseChat";
+import {
+  SAVANNA_NOTIFICATION_DEFAULTS,
+  SAVANNA_NOTIFICATION_LABELS,
+  useSavannaNotificationActions,
+  useSavannaNotificationDevice,
+  useSavannaNotificationSettings,
+  type SavannaNotificationSettings,
+} from "@/lib/firebaseNotifications";
 import { createFirebaseBlock, createFirebaseSafetyReport } from "@/lib/firebaseSafety";
 import { useFirebaseStories, useFirebaseStoryAnalytics, type FirebaseStory } from "@/lib/firebaseStories";
 import { SAVANNA_MEMORY_TAG_LABELS, type SavannaMemoryTag } from "@/lib/savannaRecall";
-import { normalizeUsername, updateUserProfile } from "@/lib/userProfile";
+import { normalizeUsername, updateUserProfile, type AppUser } from "@/lib/userProfile";
 import { cn } from "@/lib/utils";
-import { AtSign, Ban, BarChart3, Bookmark, CalendarClock, Check, Clock3, Eye, EyeOff, Heart, KeyRound, Loader2, LogOut, MessageCircle, Moon, Search, Send, ShieldCheck, Smartphone, Store, Sun, Trash2, UserRound } from "lucide-react";
+import { AtSign, Ban, BarChart3, BellRing, Bookmark, CalendarClock, Check, Clock3, Eye, EyeOff, Heart, KeyRound, Loader2, LogOut, MessageCircle, Moon, Search, Send, ShieldCheck, Smartphone, Store, Sun, Trash2, UserRound } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { toast } from "sonner";
 import { Link } from "wouter";
@@ -75,6 +83,116 @@ function StoryPerformanceRow({ story }: { story: FirebaseStory }) {
         <span className="hidden items-center gap-1 sm:inline-flex"><Bookmark className="size-3" />{data?.saveCount ?? 0}</span>
       </span>
     </Link>
+  );
+}
+
+function NotificationSettingsCard({ user }: { user: AppUser }) {
+  const settingsQuery = useSavannaNotificationSettings(user);
+  const deviceQuery = useSavannaNotificationDevice(user);
+  const actions = useSavannaNotificationActions(user);
+  const [draft, setDraft] = useState<SavannaNotificationSettings>(SAVANNA_NOTIFICATION_DEFAULTS);
+
+  useEffect(() => {
+    if (settingsQuery.data) setDraft(settingsQuery.data);
+  }, [settingsQuery.data]);
+
+  const device = deviceQuery.data;
+  const enabledOnDevice = Boolean(device?.enabled && device.token);
+  const permissionLabel = device?.permission === "granted"
+    ? "Allowed"
+    : device?.permission === "denied"
+      ? "Blocked"
+      : device?.permission === "unsupported"
+        ? "Unsupported"
+        : "Not enabled";
+
+  const enable = () => {
+    actions.enable.mutate(undefined, {
+      onSuccess: () => toast.success("Notifications enabled on this device"),
+      onError: error => toast.error(error.message),
+    });
+  };
+
+  const disable = () => {
+    actions.disable.mutate(undefined, {
+      onSuccess: () => toast.success("Notifications disabled on this device"),
+      onError: error => toast.error(error.message),
+    });
+  };
+
+  const save = () => {
+    actions.saveSettings.mutate(draft, {
+      onSuccess: () => toast.success("Notification preferences saved"),
+      onError: error => toast.error(error.message),
+    });
+  };
+
+  return (
+    <section className="savanna-profile-card rounded-[28px] border border-[#eadfca] bg-white p-6 shadow-[0_14px_35px_rgba(94,58,11,0.04)] sm:p-8">
+      <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+        <div className="flex items-start gap-3">
+          <span className="grid size-10 place-items-center rounded-xl bg-[#D9A441]/20 text-[#D9A441]"><BellRing className="size-5" /></span>
+          <div>
+            <h2 className="font-display text-2xl font-semibold tracking-[-0.045em] text-[#151A17]">Notifications</h2>
+            <p className="mt-1 text-sm text-[#5F6861] dark:text-[#AEBAC1]">Choose what Savanna can send to this installed app or browser.</p>
+          </div>
+        </div>
+        <span className="inline-flex w-fit items-center rounded-full bg-[#D9A441]/20 px-3 py-1.5 text-xs font-semibold text-[#D9A441]">
+          {permissionLabel}
+        </span>
+      </div>
+
+      <div className="savanna-profile-card-muted rounded-2xl bg-[#D9A441]/10 p-4">
+        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+          <div>
+            <p className="text-sm font-semibold text-[#151A17] dark:text-[#E9EDEF]">{device?.platform ?? "This browser"}</p>
+            <p className="mt-1 text-xs leading-5 text-[#5F6861] dark:text-[#AEBAC1]">
+              {enabledOnDevice ? "Push is active for this device." : "Enable push to receive updates when Savanna is closed."}
+            </p>
+          </div>
+          {enabledOnDevice ? (
+            <Button type="button" variant="outline" onClick={disable} disabled={actions.disable.isPending} className="shrink-0 rounded-xl border-0 bg-[#D9A441]/20 text-[#9a6410] shadow-none hover:bg-[#D9A441]/30 dark:text-[#D9A441]">
+              {actions.disable.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+              Disable
+            </Button>
+          ) : (
+            <Button type="button" onClick={enable} disabled={actions.enable.isPending || device?.permission === "unsupported"} className="savanna-brand-token shrink-0 rounded-xl shadow-none">
+              {actions.enable.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <BellRing className="mr-2 size-4" />}
+              Enable push
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-5 space-y-3">
+        <div className="flex items-center justify-between gap-4 rounded-2xl bg-[#D9A441]/10 p-4">
+          <div>
+            <Label htmlFor="notifications-master" className="text-sm font-semibold">All notifications</Label>
+            <p className="mt-1 text-xs leading-5 text-[#5F6861] dark:text-[#AEBAC1]">Master switch for message and community pushes.</p>
+          </div>
+          <Switch id="notifications-master" checked={draft.enabled} onCheckedChange={checked => setDraft(current => ({ ...current, enabled: checked }))} />
+        </div>
+        {SAVANNA_NOTIFICATION_LABELS.map(item => (
+          <div key={item.key} className="flex items-center justify-between gap-4 rounded-2xl bg-[#D9A441]/10 p-4">
+            <div>
+              <Label htmlFor={`notifications-${item.key}`} className="text-sm font-semibold">{item.label}</Label>
+              <p className="mt-1 text-xs leading-5 text-[#5F6861] dark:text-[#AEBAC1]">{item.description}</p>
+            </div>
+            <Switch
+              id={`notifications-${item.key}`}
+              checked={draft[item.key]}
+              disabled={!draft.enabled}
+              onCheckedChange={checked => setDraft(current => ({ ...current, [item.key]: checked }))}
+            />
+          </div>
+        ))}
+      </div>
+
+      <Button type="button" onClick={save} disabled={actions.saveSettings.isPending || settingsQuery.isLoading || deviceQuery.isLoading} className="savanna-brand-token mt-5 rounded-xl shadow-none">
+        {actions.saveSettings.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Check className="mr-2 size-4" />}
+        Save notifications
+      </Button>
+    </section>
   );
 }
 
@@ -430,6 +548,8 @@ export default function ProfilePage() {
           <div><p className="text-sm font-semibold text-[#151A17] dark:text-[#E9EDEF]">Appearance</p><p className="mt-1 text-xs text-[#5F6861] dark:text-[#9AA1A6]">Choose how Savanna looks on this device.</p></div>
           <Button type="button" variant="outline" onClick={toggleTheme} className="shrink-0 rounded-xl border-0 bg-[#D9A441]/20 text-[#9a6410] hover:bg-[#D9A441]/30 dark:bg-[#2A3942] dark:text-[#F2C14E] dark:hover:bg-[#2A3942]">{theme === "light" ? <Moon className="mr-2 size-4" /> : <Sun className="mr-2 size-4" />}Use {theme === "light" ? "dark" : "light"} mode</Button>
         </section>
+
+        {user ? <NotificationSettingsCard user={user} /> : null}
 
         <WallpaperSection />
 

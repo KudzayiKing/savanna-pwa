@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" role="img" aria-label="Savanna">
+  <title>Savanna</title>
+  <style>
+    .savanna-bubble { fill: #FFFFFF; }
+    .savanna-line { fill: #D9A441; }
+  </style>
+  <path class="savanna-bubble" d="M510 80c225 0 410 162 420 368 11 223-177 395-404 398-78 1-147-13-204-44L107 926c-30 17-62-11-47-44l106-234c-64-67-98-150-90-242C95 218 282 80 510 80Z" />
+  <rect class="savanna-line savanna-line-1" x="238" y="326" width="540" height="78" rx="39" />
+  <rect class="savanna-line savanna-line-2" x="238" y="461" width="540" height="78" rx="39" />
+  <rect class="savanna-line savanna-line-3" x="238" y="596" width="315" height="78" rx="39" />
+</svg>

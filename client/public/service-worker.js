@@ -1,13 +1,11 @@
 // Bump on every change to this file: the cache name is the only thing that
 // tells a returning client its shell is stale.
-const CACHE_NAME = "savanna-shell-v30";
+const CACHE_NAME = "savanna-shell-v42";
 const SHELL_URLS = [
   "/",
-  "/manifest.webmanifest",
-  "/manifest-light.webmanifest",
-  "/manifest-dark.webmanifest",
-  "/savanna_megaphone_vector.svg",
-  "/savanna_megaphone_icon.svg",
+  "/manifest.webmanifest?v=42",
+  "/manifest-light.webmanifest?v=42",
+  "/manifest-dark.webmanifest?v=42",
   "/icons/icon.svg",
   "/icons/icon-maskable.svg",
 ];
@@ -109,10 +107,8 @@ async function precacheShell(cache) {
 
 self.addEventListener("install", event => {
   event.waitUntil(openCache().then(precacheShell));
-  // Deliberately no skipWaiting(): activating over a running tab would swap
-  // the shell out from under code that is already executing, which breaks
-  // lazily-loaded chunks. The page is told an update is waiting and decides
-  // when to apply it.
+  // Do not activate over a running page. The page shows an update prompt once
+  // React boots; if React cannot boot, index.html has a manual cache reset.
 });
 
 self.addEventListener("activate", event => {
@@ -253,6 +249,68 @@ self.addEventListener("fetch", event => {
         if (cached) return cached;
         throw new Error("Offline and no cached copy");
       }
+    })()
+  );
+});
+
+function readNotificationPayload(event) {
+  if (!event.data) return {};
+  try {
+    return event.data.json();
+  } catch {
+    return { notification: { title: "Savanna", body: event.data.text() } };
+  }
+}
+
+function normalizeNotificationPayload(payload) {
+  const notification = payload.notification || {};
+  const data = payload.data || notification.data || {};
+  const title = notification.title || data.title || "Savanna";
+  const body = notification.body || data.body || "You have a new update.";
+  const url = data.url || payload.fcmOptions?.link || payload.webpush?.fcmOptions?.link || "/messages";
+
+  return {
+    title,
+    options: {
+      body,
+      icon: notification.icon || "/icons/icon-192.png",
+      badge: notification.badge || "/icons/icon-192.png",
+      tag: notification.tag || data.tag || "savanna-notification",
+      renotify: notification.renotify ?? true,
+      requireInteraction: notification.requireInteraction ?? false,
+      data: {
+        ...data,
+        url,
+      },
+    },
+  };
+}
+
+self.addEventListener("push", event => {
+  const payload = readNotificationPayload(event);
+  const { title, options } = normalizeNotificationPayload(payload);
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener("notificationclick", event => {
+  event.notification.close();
+  const targetUrl = new URL(event.notification.data?.url || "/messages", self.location.origin).href;
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      const matchingWindow = windows.find(client => {
+        try {
+          return new URL(client.url).pathname === new URL(targetUrl).pathname;
+        } catch {
+          return false;
+        }
+      });
+      if (matchingWindow) {
+        await matchingWindow.focus();
+        if ("navigate" in matchingWindow) await matchingWindow.navigate(targetUrl);
+        return;
+      }
+      await self.clients.openWindow(targetUrl);
     })()
   );
 });
