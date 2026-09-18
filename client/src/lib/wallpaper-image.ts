@@ -27,21 +27,35 @@ export const MAX_CUSTOM_WALLPAPER_BYTES = 12 * 1024 * 1024;
 
 /**
  * Ceiling for the *stored* data URL, well under the 2,097,152-char hard limit.
- * 1.4M chars leaves room for the property name, the `url("")` wrapper and any
- * browser-side accounting, while still holding a crisp full-screen photo.
+ * 1.8M chars leaves ~300K of headroom for the property name and the `url("")`
+ * wrapper while still holding a detailed full-screen photo at a usable quality.
  */
-export const MAX_STORED_WALLPAPER_CHARS = 1_400_000;
+export const MAX_STORED_WALLPAPER_CHARS = 1_800_000;
 
 export type WallpaperSlot = "portrait" | "landscape";
 
 /**
- * Target pixel ceilings per slot. These match the shipped Savanna art
- * (portrait 941x1672, landscape 1672x941) closely enough that a downscaled
- * upload sits alongside the bundled wallpapers without looking soft.
+ * Pixel ceilings per slot, chosen to match the box each wallpaper actually
+ * fills — measured from the real markup rather than assumed:
+ *
+ * - Web (`background-size: cover` on `.savanna-desktop-conversation-panel`):
+ *   the panel is `grid-cols-[470px_minmax(0,1fr)]` with `h-screen`, so it is
+ *   (viewport width - 470) x viewport height. Across 1024x768 .. 3440x1440 that
+ *   is an aspect ratio of **0.72 to 2.06, typically ~1.2 (6:5)** — much squarer
+ *   than the 16:9 people reach for first. A 16:9 export only shows ~64% of its
+ *   width here.
+ * - Phones (`.savanna-mobile-conversation`, `h-[100dvh]`): the panel is the
+ *   whole viewport, so ~0.45-0.46 on every real handset. That is close to 1:2;
+ *   a 9:16 export shows ~82% of its width.
+ *
+ * These are bounding boxes, not crops — the source ratio is preserved, but a box
+ * whose ratio matches the container lets the image keep far more pixels. A 6:5
+ * photo in a 16:9 box was being squeezed to 1080px tall; in a 6:5 box it keeps
+ * 1500px.
  */
 const SLOT_MAX: Record<WallpaperSlot, { width: number; height: number }> = {
-  portrait: { width: 1080, height: 1920 },
-  landscape: { width: 1920, height: 1080 },
+  portrait: { width: 1080, height: 2160 },
+  landscape: { width: 1800, height: 1500 },
 };
 
 const JPEG_QUALITIES = [0.85, 0.72, 0.6];

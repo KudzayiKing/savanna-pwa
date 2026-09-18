@@ -1137,7 +1137,7 @@ describe("Savanna PWA assets", () => {
     // background at all — no error, just `background-image: none`.
     expect(wallpaperSection).toContain("encodeWallpaperForSlot(file, slot)");
     expect(wallpaperSection).toContain("inlineStyleAccepts(");
-    expect(wallpaperImage).toContain("MAX_STORED_WALLPAPER_CHARS = 1_400_000");
+    expect(wallpaperImage).toContain("MAX_STORED_WALLPAPER_CHARS = 1_800_000");
     expect(wallpaperImage).toContain('imageOrientation: "from-image"');
     expect(wallpaperImage).toContain("inlineStyleAccepts");
     // Portrait and landscape uploads are independent; each borrows the other
