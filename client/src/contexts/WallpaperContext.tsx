@@ -1,5 +1,4 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { useTheme } from "./ThemeContext";
 import { MAX_CUSTOM_WALLPAPER_BYTES, type WallpaperSlot } from "@/lib/wallpaper-image";
 
 export { MAX_CUSTOM_WALLPAPER_BYTES };
@@ -12,7 +11,7 @@ export type { WallpaperSlot };
  */
 const WALLPAPER_STORAGE_KEY = "savanna-wallpaper:v1";
 
-export type WallpaperKind = "default" | "color" | "savanna-mobile" | "savanna-web" | "custom";
+export type WallpaperKind = "default" | "color" | "savanna-light" | "savanna-dark" | "custom";
 
 export type WallpaperSetting = {
   kind: WallpaperKind;
@@ -27,11 +26,14 @@ export type WallpaperSetting = {
 };
 
 export type SavannaWallpaperOption = {
-  id: "savanna-mobile" | "savanna-web";
+  id: "savanna-light" | "savanna-dark";
   label: string;
   description: string;
-  lightImage: string;
-  darkImage: string;
+  /** Portrait cut (852x1846). Used on phones, and for the picker preview. */
+  mobileImage: string;
+  /** Landscape cut (1377x1148). Used on desktop. */
+  webImage: string;
+  /** Preview thumbnail shape. The portrait cut is far taller than any card. */
   aspect: string;
 };
 
@@ -42,29 +44,35 @@ const DEFAULT_SETTING: WallpaperSetting = {
   customLandscape: null,
 };
 
-const KINDS: WallpaperKind[] = ["default", "color", "savanna-mobile", "savanna-web", "custom"];
+const KINDS: WallpaperKind[] = ["default", "color", "savanna-light", "savanna-dark", "custom"];
 
 /**
- * The bundled Savanna artwork. The mobile cut is portrait (941x1672) and the
- * web cut is landscape (1672x941); each ships in a light and dark variant and
- * the active one is swapped automatically when the user toggles the theme.
+ * The bundled artwork, offered as a light and a dark rendition.
+ *
+ * Each rendition ships as two cuts — a portrait one for phones and a landscape
+ * one for desktop — and choosing a rendition applies both. The person picks the
+ * artwork they like; the device decides which cut is drawn.
+ *
+ * The filenames are spelled exactly as supplied, casing included: `_Web_Dark`
+ * and `_mobile_Dark` are capitalised while `_Web_light` and `_mobile_light` are
+ * not, so these must never be assembled from a template.
  */
 export const SAVANNA_WALLPAPERS: SavannaWallpaperOption[] = [
   {
-    id: "savanna-mobile",
-    label: "Savanna (mobile)",
-    description: "Portrait art for phone chats.",
-    lightImage: "/savanna_light_wallpaper.webp",
-    darkImage: "/savanna_dark_wallpaper.webp",
-    aspect: "aspect-[9/16]",
+    id: "savanna-light",
+    label: "Light",
+    description: "Engraved African Heritage",
+    mobileImage: "/Engraved_African_Heritage_Panorama_mobile_light.webp",
+    webImage: "/Engraved_African_Heritage_Panorama_Web_light.webp",
+    aspect: "aspect-[4/5]",
   },
   {
-    id: "savanna-web",
-    label: "Savanna (web)",
-    description: "Landscape art for desktop chats.",
-    lightImage: "/savanna_light_wallpaper_web.webp",
-    darkImage: "/savanna_dark_wallpaper_web.webp",
-    aspect: "aspect-video",
+    id: "savanna-dark",
+    label: "Dark",
+    description: "Engraved African Heritage",
+    mobileImage: "/Engraved_African_Heritage_Panorama_mobile_Dark.webp",
+    webImage: "/Engraved_African_Heritage_Panorama_Web_Dark.webp",
+    aspect: "aspect-[4/5]",
   },
 ];
 
@@ -93,7 +101,19 @@ function readStoredSetting(): WallpaperSetting {
     const raw = localStorage.getItem(WALLPAPER_STORAGE_KEY);
     if (!raw) return DEFAULT_SETTING;
     const parsed = JSON.parse(raw) as Record<string, unknown> | null;
-    if (!parsed || !KINDS.includes(parsed.kind as WallpaperKind)) return DEFAULT_SETTING;
+    if (!parsed) return DEFAULT_SETTING;
+
+    // The bundled options used to be named for the device (`savanna-mobile`,
+    // `savanna-web`) rather than the rendition. Both referred to the same
+    // artwork and differed only in which cut was drawn, so either one maps onto
+    // the light rendition — the closest thing to "whatever was showing".
+    const LEGACY_KINDS: Record<string, WallpaperKind> = {
+      "savanna-mobile": "savanna-light",
+      "savanna-web": "savanna-light",
+    };
+    const rawKind = parsed.kind as string;
+    const kind = LEGACY_KINDS[rawKind] ?? (rawKind as WallpaperKind);
+    if (!KINDS.includes(kind)) return DEFAULT_SETTING;
 
     // Older builds stored a single `customImage`. Treat it as the portrait
     // slot — the landscape slot then borrows it, which is exactly how that
@@ -101,7 +121,7 @@ function readStoredSetting(): WallpaperSetting {
     const legacy = typeof parsed.customImage === "string" ? parsed.customImage : null;
 
     return {
-      kind: parsed.kind as WallpaperKind,
+      kind,
       color: typeof parsed.color === "string" ? parsed.color : null,
       customPortrait:
         typeof parsed.customPortrait === "string" ? parsed.customPortrait : legacy,
@@ -118,7 +138,7 @@ type WallpaperContextValue = {
   activeImage: string | null;
   activeColor: string | null;
   setColor: (color: string | null) => void;
-  setSavannaWallpaper: (kind: "savanna-mobile" | "savanna-web") => void;
+  setSavannaWallpaper: (kind: "savanna-light" | "savanna-dark") => void;
   setCustomImage: (slot: WallpaperSlot, dataUrl: string) => void;
   clearCustomImage: (slot: WallpaperSlot) => void;
   resetWallpaper: () => void;
@@ -127,7 +147,6 @@ type WallpaperContextValue = {
 const WallpaperContext = createContext<WallpaperContextValue | undefined>(undefined);
 
 export function WallpaperProvider({ children }: { children: ReactNode }) {
-  const { theme } = useTheme();
   const [setting, setSetting] = useState<WallpaperSetting>(readStoredSetting);
   const [prefersLandscapeWallpaper, setPrefersLandscapeWallpaper] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -174,12 +193,15 @@ export function WallpaperProvider({ children }: { children: ReactNode }) {
       root.style.removeProperty("--savanna-wallpaper-color");
     }
     let image = "none";
-    if (setting.kind === "savanna-mobile" || setting.kind === "savanna-web") {
-      // Both bundled cuts are published together so a chat opened on a phone
-      // shows the portrait art while the same choice on a desktop shows the
-      // landscape art; the CSS media query picks between them.
-      const portraitImage = theme === "dark" ? SAVANNA_WALLPAPERS[0].darkImage : SAVANNA_WALLPAPERS[0].lightImage;
-      const landscapeImage = theme === "dark" ? SAVANNA_WALLPAPERS[1].darkImage : SAVANNA_WALLPAPERS[1].lightImage;
+    if (setting.kind === "savanna-light" || setting.kind === "savanna-dark") {
+      // Both cuts of the chosen rendition are published together, so a chat
+      // opened on a phone shows the portrait art while the same choice on a
+      // desktop shows the landscape art; the CSS media query picks between
+      // them. The choice is explicit and does not follow the light/dark theme.
+      const option =
+        SAVANNA_WALLPAPERS.find(candidate => candidate.id === setting.kind) ?? SAVANNA_WALLPAPERS[0];
+      const portraitImage = option.mobileImage;
+      const landscapeImage = option.webImage;
       root.style.setProperty("--savanna-wallpaper-image-portrait", `url("${portraitImage}")`);
       root.style.setProperty("--savanna-wallpaper-image-landscape", `url("${landscapeImage}")`);
       image = `url("${prefersLandscapeWallpaper ? landscapeImage : portraitImage}")`;
@@ -205,13 +227,13 @@ export function WallpaperProvider({ children }: { children: ReactNode }) {
       root.style.removeProperty("--savanna-wallpaper-image-landscape");
     }
     root.style.setProperty("--savanna-wallpaper-image", image);
-  }, [prefersLandscapeWallpaper, setting, theme]);
+  }, [prefersLandscapeWallpaper, setting]);
 
   const setColor = useCallback((color: string | null) => {
     setSetting(color ? { kind: "color", color, customPortrait: null, customLandscape: null } : DEFAULT_SETTING);
   }, []);
 
-  const setSavannaWallpaper = useCallback((kind: "savanna-mobile" | "savanna-web") => {
+  const setSavannaWallpaper = useCallback((kind: "savanna-light" | "savanna-dark") => {
     setSetting({ kind, color: null, customPortrait: null, customLandscape: null });
   }, []);
 
@@ -239,16 +261,17 @@ export function WallpaperProvider({ children }: { children: ReactNode }) {
   const resetWallpaper = useCallback(() => setSetting(DEFAULT_SETTING), []);
 
   const value = useMemo<WallpaperContextValue>(() => {
-    const activeImage =
-      setting.kind === "savanna-mobile" || setting.kind === "savanna-web"
-        ? prefersLandscapeWallpaper
-          ? theme === "dark" ? SAVANNA_WALLPAPERS[1].darkImage : SAVANNA_WALLPAPERS[1].lightImage
-          : theme === "dark" ? SAVANNA_WALLPAPERS[0].darkImage : SAVANNA_WALLPAPERS[0].lightImage
-        : setting.kind === "custom"
-          ? (prefersLandscapeWallpaper
-              ? setting.customLandscape ?? setting.customPortrait
-              : setting.customPortrait ?? setting.customLandscape)
-          : null;
+    const bundled =
+      setting.kind === "savanna-light" || setting.kind === "savanna-dark"
+        ? SAVANNA_WALLPAPERS.find(candidate => candidate.id === setting.kind) ?? SAVANNA_WALLPAPERS[0]
+        : null;
+    const activeImage = bundled
+      ? prefersLandscapeWallpaper ? bundled.webImage : bundled.mobileImage
+      : setting.kind === "custom"
+        ? (prefersLandscapeWallpaper
+            ? setting.customLandscape ?? setting.customPortrait
+            : setting.customPortrait ?? setting.customLandscape)
+        : null;
     return {
       setting,
       activeImage,
@@ -259,7 +282,7 @@ export function WallpaperProvider({ children }: { children: ReactNode }) {
       clearCustomImage,
       resetWallpaper,
     };
-  }, [prefersLandscapeWallpaper, setting, theme, setColor, setSavannaWallpaper, setCustomImage, clearCustomImage, resetWallpaper]);
+  }, [prefersLandscapeWallpaper, setting, setColor, setSavannaWallpaper, setCustomImage, clearCustomImage, resetWallpaper]);
 
   return <WallpaperContext.Provider value={value}>{children}</WallpaperContext.Provider>;
 }

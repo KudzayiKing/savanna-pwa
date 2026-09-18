@@ -59,7 +59,7 @@ type WallpaperSectionProps = {
 
 export function WallpaperSection({
   title = "Wallpaper",
-  description = "Pick the backdrop behind your chats on this device. It follows your light and dark mode.",
+  description = "Pick the backdrop behind your chats on this device — the light or the dark rendition, a color, or your own image.",
   compact = false,
 }: WallpaperSectionProps) {
   const { setting, setColor, setSavannaWallpaper, setCustomImage, clearCustomImage, resetWallpaper } = useWallpaper();
@@ -154,7 +154,12 @@ export function WallpaperSection({
         </div>
 
         <div>
-          <p className="text-sm font-semibold text-[#151A17] dark:text-[#E9EDEF]">Savanna wallpapers</p>
+          <p className="text-sm font-semibold text-[#151A17] dark:text-[#E9EDEF]">Wallpapers</p>
+          <p className="mt-1 text-xs text-[#5F6861] dark:text-[#9AA1A6]">
+            Pick a light or a dark rendition. Each one ships a portrait cut for phones and a
+            landscape cut for desktop, so choosing one covers both — the previews show the
+            portrait cut.
+          </p>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             {SAVANNA_WALLPAPERS.map(option => {
               const active = setting.kind === option.id;
@@ -169,10 +174,10 @@ export function WallpaperSection({
                     active ? "border-[#D9A441] bg-[#D9A441]/10" : "border-[#eadfca] hover:bg-[#D9A441]/5 dark:border-[#2A3942]",
                   )}
                 >
-                  <span className="grid grid-cols-2 gap-2">
-                    <span className={cn("block w-full rounded-xl bg-cover bg-center", option.aspect)} style={{ backgroundImage: `url(${option.lightImage})` }} />
-                    <span className={cn("block w-full rounded-xl bg-cover bg-center", option.aspect)} style={{ backgroundImage: `url(${option.darkImage})` }} />
-                  </span>
+                  <span
+                    className={cn("block w-full rounded-xl bg-cover bg-center", option.aspect)}
+                    style={{ backgroundImage: `url(${option.mobileImage})` }}
+                  />
                   <span className="mt-2 flex items-center justify-between gap-2 px-1 pb-1">
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-semibold text-[#151A17] dark:text-[#E9EDEF]">{option.label}</span>

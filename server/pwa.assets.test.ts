@@ -1155,7 +1155,39 @@ describe("Savanna PWA assets", () => {
     expect(styles).toContain(':root[data-wallpaper="custom"] body .savanna-app .savanna-mobile-conversation');
     expect(wallpaperContext).toContain('window.matchMedia("(min-width: 768px), (orientation: landscape)")');
     expect(wallpaperContext).toContain("prefersLandscapeWallpaper ? landscapeImage : portraitImage");
-    expect(wallpaperContext).toContain("setting.kind === \"savanna-mobile\" || setting.kind === \"savanna-web\"");
+    // The bundled options are named for the rendition (light / dark), not for
+    // the device. Each carries both cuts, and picking one publishes both so the
+    // phone and the desktop each draw the right one.
+    expect(wallpaperContext).toContain("savanna-light");
+    expect(wallpaperContext).toContain("savanna-dark");
+    expect(wallpaperContext).toContain("mobileImage");
+    expect(wallpaperContext).toContain("webImage");
+    expect(wallpaperContext).toContain("Engraved_African_Heritage_Panorama_mobile_light.webp");
+    expect(wallpaperContext).toContain("Engraved_African_Heritage_Panorama_Web_light.webp");
+    expect(wallpaperContext).toContain("Engraved_African_Heritage_Panorama_mobile_Dark.webp");
+    expect(wallpaperContext).toContain("Engraved_African_Heritage_Panorama_Web_Dark.webp");
+    // The casing differs between the light and dark files (`_Web_light` vs
+    // `_Web_Dark`), so these paths must never be assembled from a template.
+    expect(wallpaperContext).not.toContain("Panorama_Web_${");
+    expect(wallpaperContext).not.toContain("Panorama_mobile_${");
+    // A setting written by the old device-named build migrates onto the light
+    // rendition instead of silently resetting the person's wallpaper.
+    expect(wallpaperContext).toContain("LEGACY_KINDS");
+    expect(wallpaperContext).toContain('"savanna-mobile": "savanna-light"');
+    expect(wallpaperContext).toContain('"savanna-web": "savanna-light"');
+    // The picker previews the portrait cut (it is the readable shape in a card)
+    // and a single tap applies both cuts.
+    expect(wallpaperSection).toContain("option.mobileImage");
+    expect(wallpaperSection).toContain("setSavannaWallpaper(option.id)");
+    // All four cuts must actually ship, or the picker offers art that 404s.
+    for (const asset of [
+      "Engraved_African_Heritage_Panorama_mobile_light.webp",
+      "Engraved_African_Heritage_Panorama_Web_light.webp",
+      "Engraved_African_Heritage_Panorama_mobile_Dark.webp",
+      "Engraved_African_Heritage_Panorama_Web_Dark.webp",
+    ]) {
+      await expect(access(resolve(projectRoot, "client/public", asset)), `wallpaper missing from client/public: ${asset}`).resolves.toBeUndefined();
+    }
     expect(styles).toContain("@media (min-width: 768px), (orientation: landscape)");
     expect(styles).toContain(":root:has(body .savanna-app .savanna-desktop-messages)");
     expect(styles).toContain("body:has(.savanna-desktop-messages)");
