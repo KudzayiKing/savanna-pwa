@@ -1,8 +1,117 @@
 import { access, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { inflateSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 
 const projectRoot = resolve(import.meta.dirname, "..");
+
+/** Corner radius of the icon tile, as a fraction of its size (224/1024). */
+const TILE_RADIUS_RATIO = 224 / 1024;
+
+type Rgba = [number, number, number, number];
+
+type DecodedPng = {
+  width: number;
+  height: number;
+  at: (x: number, y: number) => Rgba;
+};
+
+/**
+ * Minimal 8-bit PNG decoder for the two formats these icons use: RGBA (the
+ * transparent-corner tiles) and RGB (the full-bleed maskable icon, which has no
+ * transparency to carry). Deliberately dependency-free — pulling an image library
+ * into the suite to check six files is a poor trade, and the five standard
+ * scanline filters are all that is needed.
+ */
+function decodePng(buffer: Buffer): DecodedPng {
+  if (buffer.readUInt32BE(0) !== 0x89504e47) throw new Error("not a PNG");
+  let offset = 8;
+  let width = 0;
+  let height = 0;
+  let bitDepth = 0;
+  let colorType = 0;
+  const idat: Buffer[] = [];
+  while (offset + 8 <= buffer.length) {
+    const length = buffer.readUInt32BE(offset);
+    const type = buffer.toString("ascii", offset + 4, offset + 8);
+    const data = buffer.subarray(offset + 8, offset + 8 + length);
+    if (type === "IHDR") {
+      width = data.readUInt32BE(0);
+      height = data.readUInt32BE(4);
+      bitDepth = data[8];
+      colorType = data[9];
+    } else if (type === "IDAT") {
+      idat.push(data);
+    } else if (type === "IEND") {
+      break;
+    }
+    offset += 12 + length;
+  }
+  const channels = colorType === 6 ? 4 : colorType === 2 ? 3 : 0;
+  if (bitDepth !== 8 || channels === 0) {
+    throw new Error(`expected 8-bit RGB or RGBA, got depth ${bitDepth} / colour type ${colorType}`);
+  }
+
+  const raw = inflateSync(Buffer.concat(idat));
+  const bpp = channels;
+  const stride = width * bpp;
+  const out = Buffer.alloc(height * stride);
+  for (let y = 0; y < height; y += 1) {
+    const filter = raw[y * (stride + 1)];
+    const line = raw.subarray(y * (stride + 1) + 1, y * (stride + 1) + 1 + stride);
+    const prior = y > 0 ? out.subarray((y - 1) * stride, y * stride) : null;
+    const target = out.subarray(y * stride, (y + 1) * stride);
+    for (let i = 0; i < stride; i += 1) {
+      const a = i >= bpp ? target[i - bpp] : 0;
+      const b = prior ? prior[i] : 0;
+      const c = prior && i >= bpp ? prior[i - bpp] : 0;
+      let value = line[i];
+      if (filter === 1) value += a;
+      else if (filter === 2) value += b;
+      else if (filter === 3) value += (a + b) >> 1;
+      else if (filter === 4) {
+        const p = a + b - c;
+        const pa = Math.abs(p - a);
+        const pb = Math.abs(p - b);
+        const pc = Math.abs(p - c);
+        value += pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
+      }
+      target[i] = value & 0xff;
+    }
+  }
+
+  return {
+    width,
+    height,
+    at: (x, y) => {
+      const i = y * stride + x * bpp;
+      // An RGB icon is opaque by definition.
+      return channels === 4
+        ? [out[i], out[i + 1], out[i + 2], out[i + 3]]
+        : [out[i], out[i + 1], out[i + 2], 255];
+    },
+  };
+}
+
+/** The mark is gold on a near-black tile, so it is identified by hue, not alpha. */
+function isInk([r, g, b, a]: Rgba) {
+  return a >= 40 && r - b > 25 && r > 90;
+}
+
+/** Signed distance from a pixel centre to the tile edge. Positive means inside. */
+function clearanceToTile(x: number, y: number, size: number, radius: number) {
+  if (x < radius && y < radius) return radius - Math.hypot(x - radius, y - radius);
+  if (x > size - radius && y < radius) {
+    return radius - Math.hypot(x - (size - radius), y - radius);
+  }
+  if (x < radius && y > size - radius) {
+    return radius - Math.hypot(x - radius, y - (size - radius));
+  }
+  if (x > size - radius && y > size - radius) {
+    return radius - Math.hypot(x - (size - radius), y - (size - radius));
+  }
+  return Math.min(x, y, size - x, size - y);
+}
 
 describe("Savanna PWA assets", () => {
   it("declares an installable standalone manifest with branded icons", async () => {
@@ -49,6 +158,60 @@ describe("Savanna PWA assets", () => {
 
     // Without a maskable icon Android crops the mark to an arbitrary shape.
     expect(manifest.icons.some(icon => (icon.purpose ?? "").includes("maskable"))).toBe(true);
+  });
+
+  // Icons fail silently. A mark that runs past the tile's edge, or a `sizes`
+  // string that lies, still loads perfectly — you find out when it is already on
+  // someone's home screen. The mark's binding constraint is not the circle: it is
+  // the speech-bubble tail, which reaches diagonally into the tile's rounded
+  // bottom-left corner, so a size that looks comfortable at 512px can clip at
+  // 32px. Hence a pixel-level check rather than a spot check of file sizes.
+  it("keeps the mark inside its tile at every icon size", async () => {
+    const cases = [
+      { file: "favicon-32.png", size: 32, maskable: false },
+      { file: "icon-192.png", size: 192, maskable: false },
+      { file: "icon-512.png", size: 512, maskable: false },
+      { file: "apple-touch-icon.png", size: 180, maskable: false },
+      { file: "icon-maskable-512.png", size: 512, maskable: true },
+    ];
+
+    for (const { file, size, maskable } of cases) {
+      const png = decodePng(await readFile(resolve(projectRoot, "client/public/icons", file)));
+
+      expect(png.width, `${file} must be square`).toBe(png.height);
+      expect(png.width, `${file} must be the size its name claims`).toBe(size);
+
+      const radius = TILE_RADIUS_RATIO * size;
+      const mid = size / 2;
+      const safeRadius = 0.4 * size;
+      let tightest = Number.POSITIVE_INFINITY;
+      let furthest = 0;
+
+      for (let y = 0; y < size; y += 1) {
+        for (let x = 0; x < size; x += 1) {
+          if (!isInk(png.at(x, y))) continue;
+          tightest = Math.min(tightest, clearanceToTile(x + 0.5, y + 0.5, size, radius));
+          furthest = Math.max(furthest, Math.hypot(x + 0.5 - mid, y + 0.5 - mid));
+        }
+      }
+
+      expect(Number.isFinite(tightest), `${file} draws no mark at all`).toBe(true);
+
+      // 3% of the tile is the floor: enough that the tail still reads as inset
+      // rather than cropped. At 32px that is about one pixel.
+      expect(
+        tightest,
+        `${file} mark is ${(tightest / size * 100).toFixed(1)}% from the tile edge`,
+      ).toBeGreaterThanOrEqual(0.03 * size);
+
+      if (maskable) {
+        // Android may mask to a circle of 80% diameter, so no ink may sit outside it.
+        expect(
+          furthest,
+          `${file} mark reaches r=${furthest.toFixed(1)}, outside the safe r=${safeRadius}`,
+        ).toBeLessThanOrEqual(safeRadius);
+      }
+    }
   });
 
   it("keeps the offline service worker away from sensitive API traffic", async () => {
