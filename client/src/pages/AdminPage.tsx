@@ -119,6 +119,16 @@ const reviewStatuses: AdminReviewStatus[] = ["pending", "approved", "paused", "r
 /** Mirrors AdminAccountStatus in firebaseAdmin.ts. */
 const accountStatuses: AdminAccountStatus[] = ["active", "suspended", "banned"];
 
+/**
+ * Type-shape reference for `AdminDashboard` — the list fields that exist, the
+ * shape of `health`, and the kinds of value each holds.
+ *
+ * It is deliberately NOT used as a render fallback. This console drives
+ * moderation decisions, and an empty payload rendered while a query is still
+ * in flight is indistinguishable from a real "0 users / 0 reports". The UI
+ * below renders `dashboard.data` directly and shows an explicit
+ * loading / error / empty state instead, so no number on screen is a guess.
+ */
 const previewDashboard: AdminDashboard = {
   users: [],
   reports: [],
@@ -202,6 +212,22 @@ function MetricCard({ label, value, icon: Icon, hint }: { label: string; value: 
       </div>
       <p className="mt-4 text-xs font-semibold uppercase tracking-[0.14em] text-[#8a765d] dark:text-[#AEBAC1]">{label}</p>
       {hint ? <p className="mt-1 text-[11px] leading-4 text-[#8a765d] dark:text-[#9AA1A6]">{hint}</p> : null}
+    </article>
+  );
+}
+
+/** Placeholder card matching `MetricCard`'s footprint while counts are in flight. */
+function MetricCardSkeleton() {
+  return (
+    <article
+      aria-hidden="true"
+      className="rounded-[24px] border border-[#eadfca] bg-white/76 p-4 shadow-[0_18px_44px_rgba(64,45,20,0.06)] backdrop-blur-xl dark:border-[#26343A] dark:bg-[#111B21]/78"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <span className="size-10 animate-pulse rounded-2xl bg-[#D9A441]/15" />
+        <span className="h-8 w-16 animate-pulse rounded-xl bg-[#151A17]/10 dark:bg-white/10" />
+      </div>
+      <span className="mt-4 block h-3 w-24 animate-pulse rounded-full bg-[#151A17]/10 dark:bg-white/10" />
     </article>
   );
 }
@@ -1310,7 +1336,21 @@ function AdminConsole({ user }: { user: AppUser }) {
   const content = useAdminContent(user);
   const investigation = useUserInvestigation(user, investigating);
 
-  const data = dashboard.data ?? previewDashboard;
+  // Undefined until the query actually resolves. Every consumer below is
+  // gated on it, so a pending or failed load shows a skeleton or an error —
+  // never a row of zeros that looks like a real count.
+  const data = dashboard.data;
+
+  /**
+   * Tabs whose rows come out of the dashboard payload. Content, errors and
+   * analytics run their own queries with their own loading/error states, so a
+   * dashboard failure must not blank out tabs that still work.
+   */
+  const dashboardBackedTab = activeTab === "overview" || activeTab === "users"
+    || activeTab === "reports" || activeTab === "shops"
+    || activeTab === "communities" || activeTab === "audit";
+  const dashboardLoading = dashboard.isLoading || (!data && !dashboard.error);
+
   const busy = mutations.updateUserStatus.isPending
     || mutations.updateReportStatus.isPending
     || mutations.updateStorefrontReview.isPending
@@ -1703,7 +1743,7 @@ function AdminConsole({ user }: { user: AppUser }) {
         </div>
       </header>
 
-      <AdminCountryMap users={data.users} />
+      {data ? <AdminCountryMap users={data.users} /> : null}
 
       <nav className="savanna-admin-tabs flex gap-2 overflow-x-auto pb-1" aria-label="Admin sections">
         {tabs.map(tab => (
@@ -1722,21 +1762,68 @@ function AdminConsole({ user }: { user: AppUser }) {
         ))}
       </nav>
 
-      {dashboard.isLoading ? (
-        <div className="grid min-h-64 place-items-center">
-          <Loader2 className="size-6 animate-spin text-[#D9A441]" />
-        </div>
-      ) : dashboard.error ? (
-        <EmptyState title="Admin data could not load." copy="Check that this account has an admin custom claim, then confirm the Firestore rules were deployed." />
+      {dashboardBackedTab && dashboardLoading ? (
+        <section
+          className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+          role="status"
+          aria-live="polite"
+          aria-busy="true"
+        >
+          <span className="sr-only">Loading admin dashboard…</span>
+          {[0, 1, 2, 3, 4].map(slot => <MetricCardSkeleton key={slot} />)}
+        </section>
       ) : null}
 
-      {activeTab === "overview" ? (
+      {dashboardBackedTab && dashboard.error ? (
+        <div className="rounded-[28px] border border-[#D85C5C]/30 bg-[#D85C5C]/6 p-6 text-center">
+          <span className="mx-auto grid size-12 place-items-center rounded-2xl bg-[#D85C5C]/12 text-[#D85C5C]">
+            <AlertTriangle className="size-5" />
+          </span>
+          <h3 className="mt-4 font-display text-2xl text-[#151A17] dark:text-[#E9EDEF]">Admin data could not load.</h3>
+          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#5F6861] dark:text-[#AEBAC1]">
+            {isPermissionError(dashboard.error)
+              ? "The rules deny reading one of the admin collections for this account. Deploy the latest firestore.rules and try again."
+              : "The dashboard query failed. Counts are hidden rather than shown as zeros, so nothing here can be mistaken for a real number."}
+          </p>
+          <Button
+            type="button"
+            onClick={() => void dashboard.refetch()}
+            disabled={dashboard.isFetching}
+            className="mt-5 rounded-full bg-[#D9A441] text-[#151A17] hover:bg-[#C79333]"
+          >
+            {dashboard.isFetching ? <Loader2 className="mr-2 size-4 animate-spin" /> : <RefreshCw className="mr-2 size-4" />}
+            {dashboard.isFetching ? "Retrying…" : "Try again"}
+          </Button>
+        </div>
+      ) : null}
+
+      {activeTab === "overview" && data ? (
         <>
           <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-            <MetricCard label="Users tracked" value={data.users.length} icon={Users} hint="Most recently updated page" />
-            <MetricCard label="Open reports" value={openReports.length} icon={Flag} />
-            <MetricCard label="Shops to review" value={pendingShops.length} icon={Store} />
-            <MetricCard label="Communities" value={data.communities.length} icon={Activity} />
+            <MetricCard
+              label="Users tracked"
+              value={data.users.length}
+              icon={Users}
+              hint={data.users.length ? "Most recently updated page" : "No users indexed yet"}
+            />
+            <MetricCard
+              label="Open reports"
+              value={openReports.length}
+              icon={Flag}
+              hint={data.reports.length ? undefined : "No reports yet"}
+            />
+            <MetricCard
+              label="Shops to review"
+              value={pendingShops.length}
+              icon={Store}
+              hint={data.storefronts.length ? undefined : "No shops yet"}
+            />
+            <MetricCard
+              label="Communities"
+              value={data.communities.length}
+              icon={Activity}
+              hint={data.communities.length ? undefined : "No communities yet"}
+            />
             {/* Errors sit alongside the moderation counts on purpose: a spike
                 here is the first sign that a deploy broke something, and it
                 should be visible without hunting for the Errors tab. */}
@@ -1772,7 +1859,7 @@ function AdminConsole({ user }: { user: AppUser }) {
         </>
       ) : null}
 
-      {activeTab === "users" ? (
+      {activeTab === "users" && data ? (
         <section className="space-y-4">
           <FilterBar>
             <SearchField
@@ -1820,7 +1907,7 @@ function AdminConsole({ user }: { user: AppUser }) {
         </section>
       ) : null}
 
-      {activeTab === "reports" ? (
+      {activeTab === "reports" && data ? (
         <section className="space-y-4">
           <FilterBar>
             <SearchField
@@ -1916,7 +2003,7 @@ function AdminConsole({ user }: { user: AppUser }) {
         </section>
       ) : null}
 
-      {activeTab === "shops" ? (
+      {activeTab === "shops" && data ? (
         <section className="space-y-4">
           <FilterBar>
             <SearchField
@@ -1957,7 +2044,7 @@ function AdminConsole({ user }: { user: AppUser }) {
         </section>
       ) : null}
 
-      {activeTab === "communities" ? (
+      {activeTab === "communities" && data ? (
         <section className="space-y-4">
           <FilterBar>
             <SearchField
@@ -1997,7 +2084,7 @@ function AdminConsole({ user }: { user: AppUser }) {
         </section>
       ) : null}
 
-      {activeTab === "audit" ? (
+      {activeTab === "audit" && data ? (
         <section className="space-y-4">
           <FilterBar>
             <SearchField

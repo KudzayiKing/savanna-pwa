@@ -92,6 +92,17 @@ const FORGE_BASE_URL =
   "https://forge.butterfly-effect.dev";
 const MAPS_PROXY_URL = `${FORGE_BASE_URL}/v1/maps/proxy`;
 
+/**
+ * Optional cloud map id.
+ *
+ * `mapId` selects a cloud-based map style and unlocks advanced markers
+ * (pin customisation, collision behaviour) and vector/vector-with-labels
+ * rendering. Without it the map still renders in its basic raster form, which
+ * is why the option is omitted entirely when no id is configured rather than
+ * sent as a placeholder — a bogus id can make map creation fail outright.
+ */
+const MAP_ID = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID;
+
 function loadMapScript() {
   return new Promise(resolve => {
     const script = document.createElement("script");

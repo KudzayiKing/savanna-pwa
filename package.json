@@ -5,7 +5,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "NODE_ENV=development tsx watch server/_core/dev.ts",
-    "build": "vite build && node scripts/check-chunk-cycles.mjs && esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist && esbuild server/_core/netlify.ts --platform=node --bundle --format=esm --target=node20 --outfile=netlify/functions/api.mjs",
+    "build": "vite build && node scripts/check-chunk-cycles.mjs && esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist && esbuild server/_core/netlify.ts --platform=node --bundle --format=esm --target=node20 --outfile=netlify/functions/api.mjs && esbuild server/_core/firebaseApi.ts --platform=node --bundle --format=cjs --target=node20 --outfile=functions/api.js",
     "start": "NODE_ENV=production node dist/index.js",
     "check": "tsc --noEmit",
     "check:bundle": "node scripts/check-prod-bundle.mjs",

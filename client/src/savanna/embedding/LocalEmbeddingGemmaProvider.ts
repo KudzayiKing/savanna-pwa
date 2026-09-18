@@ -1,5 +1,5 @@
 import { captureError } from "@/lib/observability";
-import { SAVANNA_EMBEDDING_GEMMA_MODEL_ID, SAVANNA_EMBEDDING_GEMMA_WEB_MODEL_ID } from "../inference/InferenceProvider";
+import { configuredEmbeddingGemmaModelId, SAVANNA_EMBEDDING_GEMMA_MODEL_ID } from "../inference/InferenceProvider";
 import type { EmbeddingProvider, EmbeddingRequest, EmbeddingResponse } from "./EmbeddingProvider";
 
 const FALLBACK_EMBEDDING_DIMENSIONS = 64;
@@ -62,7 +62,7 @@ export class LocalEmbeddingGemmaProvider implements EmbeddingProvider {
     const { pipeline, env } = await import("@huggingface/transformers");
     env.allowLocalModels = true;
     env.allowRemoteModels = true;
-    const model = import.meta.env.VITE_SAVANNA_EMBEDDING_GEMMA_MODEL_ID || SAVANNA_EMBEDDING_GEMMA_WEB_MODEL_ID;
+    const model = configuredEmbeddingGemmaModelId();
     this.extractor = await pipeline("feature-extraction", model, {
       device: typeof navigator !== "undefined" && "gpu" in navigator ? "webgpu" : "wasm",
       dtype: "q8",

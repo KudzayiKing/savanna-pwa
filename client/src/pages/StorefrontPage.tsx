@@ -29,7 +29,7 @@ export default function StorefrontPage() {
   const storyComposerHref = `/stories?compose=1&storefrontId=${encodeURIComponent(storefront.id)}&storefrontSlug=${encodeURIComponent(storefront.slug)}&storefrontName=${encodeURIComponent(storefront.name)}`;
 
   return <SavannaShell>
-    <div className="space-y-6">
+    <div className="savanna-route-shops savanna-storefront-page space-y-6">
       <Link href="/shops" className="inline-flex items-center gap-1 text-sm font-semibold text-[#D9A441]"><ArrowLeft className="size-4" /> All shops</Link>
 
       <section className="overflow-hidden rounded-[30px] border border-[#DDE3DC] bg-white shadow-[0_12px_30px_rgba(21,26,23,0.06)]">

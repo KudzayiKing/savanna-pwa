@@ -1,13 +1,30 @@
 // Bump on every change to this file: the cache name is the only thing that
 // tells a returning client its shell is stale.
-const CACHE_NAME = "savanna-shell-v42";
+const CACHE_NAME = "savanna-shell-v45";
 const SHELL_URLS = [
   "/",
-  "/manifest.webmanifest?v=42",
-  "/manifest-light.webmanifest?v=42",
-  "/manifest-dark.webmanifest?v=42",
+  "/manifest.webmanifest?v=45",
+  "/manifest-light.webmanifest?v=45",
+  "/manifest-dark.webmanifest?v=45",
   "/icons/icon.svg",
   "/icons/icon-maskable.svg",
+];
+
+// Resolved shell URLs. The trim below must never evict these: they are both
+// the offline entry point and the oldest entries in the cache, so a naive
+// oldest-first eviction would delete the shell before anything else.
+const SHELL_HREFS = new Set(
+  SHELL_URLS.map(url => new URL(url, self.location.origin).href)
+);
+
+// Cross-origin media the app actually renders: Firebase Storage avatars and
+// chat images, plus the sticker CDN. Everything else off-origin — Firebase
+// Auth, Firestore, any other *.googleapis.com call — speaks POST/gRPC and
+// carries credentials, so it is never intercepted at all and falls straight
+// through to the network.
+const MEDIA_HOSTS = [
+  "firebasestorage.googleapis.com",
+  "pub-610daaff40ac42f18aa2de55bc3970b2.r2.dev",
 ];
 
 // Runtime cache ceiling. Images are cached opportunistically as the user
@@ -17,12 +34,29 @@ const MAX_RUNTIME_ENTRIES = 120;
 
 /**
  * Hashed build output is immutable — Vite puts a content hash in the filename,
- * so a given URL can never change meaning. Serving it cache-first (rather than
+ * so a given URL can never change meaning. Serving it from cache (rather than
  * the network-first path used elsewhere) is what makes a cold offline start
  * work: once the shell has been cached, the app can boot with no network.
  */
 function isImmutableAsset(url) {
   return url.pathname.startsWith("/assets/");
+}
+
+/**
+ * Same-origin static GETs: hashed bundles, icons, stickers, wallpapers, the
+ * manifests, fonts and images. All are revalidated in the background, so a
+ * reload is instant but still self-corrects after a deploy.
+ */
+function isSameOriginStatic(request, url) {
+  if (isImmutableAsset(url)) return true;
+  return (
+    url.pathname.startsWith("/icons/") ||
+    url.pathname.startsWith("/stickers/") ||
+    url.pathname.endsWith(".webmanifest") ||
+    ["style", "script", "image", "font", "manifest", "audio", "video"].includes(
+      request.destination
+    )
+  );
 }
 
 // Vite's dev server serves mutable modules from these prefixes. They must
@@ -46,8 +80,35 @@ function isCacheable(request, url) {
   );
 }
 
+function carriesCredentials(request) {
+  return (
+    request.credentials === "include" ||
+    request.headers.has("authorization") ||
+    request.headers.has("cookie")
+  );
+}
+
+/**
+ * Cross-origin media is only touched when the host is explicitly allowlisted
+ * and the request is an unauthenticated GET. Opaque `no-cors` responses are
+ * still skipped at write time (see `putSafely`): the browser hides their
+ * status and headers, so one cannot be validated before it is stored.
+ */
+function isCacheableMedia(request, url) {
+  return (
+    request.method === "GET" &&
+    url.origin !== self.location.origin &&
+    MEDIA_HOSTS.includes(url.hostname) &&
+    !carriesCredentials(request)
+  );
+}
+
 async function putSafely(cache, request, response) {
   if (!response || !response.ok) return response;
+  // An opaque response reports status 0 and exposes no headers, so it cannot
+  // be validated — storing one risks replaying a failed or user-specific
+  // fetch as if it were good content.
+  if (response.type === "opaque") return response;
   // A response body can only be consumed once; the copy is what goes to disk.
   cache.put(request, response.clone()).catch(() => {});
   return response;
@@ -62,10 +123,11 @@ async function putSafely(cache, request, response) {
  */
 async function trimCache(cache) {
   const keys = await cache.keys();
-  const overflow = keys.length - MAX_RUNTIME_ENTRIES;
+  const evictable = keys.filter(key => !SHELL_HREFS.has(key.url));
+  const overflow = evictable.length - MAX_RUNTIME_ENTRIES;
   if (overflow <= 0) return;
   for (let i = 0; i < overflow; i++) {
-    cache.delete(keys[i]).catch(() => {});
+    cache.delete(evictable[i]).catch(() => {});
   }
 }
 
@@ -138,6 +200,25 @@ self.addEventListener("fetch", event => {
   const request = event.request;
   const url = new URL(request.url);
 
+  // Checked before the same-origin gate: allowlisted media fails that gate but
+  // is still worth caching, and a plain `return` below would let it through
+  // uncached. Cache-first — these URLs are stable, and a hit is the difference
+  // between an avatar appearing offline and a blank frame.
+  if (isCacheableMedia(request, url)) {
+    event.respondWith(
+      (async () => {
+        const cache = await openCache();
+        const cached = await cache.match(request);
+        if (cached) return cached;
+        const response = await fetch(request);
+        await putSafely(cache, request, response);
+        await trimCache(cache);
+        return response;
+      })()
+    );
+    return;
+  }
+
   if (!isCacheable(request, url)) {
     return;
   }
@@ -151,7 +232,12 @@ self.addEventListener("fetch", event => {
         const cache = await openCache();
         try {
           const response = await fetch(request);
-          await putSafely(cache, "/", response);
+          // Only the SPA entry becomes the offline fallback. Caching any other
+          // HTML — an /api error page, a captive-portal interstitial — would
+          // make that page the thing the app boots into offline.
+          if ((response.headers.get("content-type") || "").includes("text/html")) {
+            await putSafely(cache, "/", response);
+          }
           return response;
         } catch {
           const cached =
@@ -167,39 +253,8 @@ self.addEventListener("fetch", event => {
     return;
   }
 
-  // Immutable hashed assets: cache first. No revalidation, because the
-  // filename already encodes the content.
-  if (isImmutableAsset(url)) {
-    event.respondWith(
-      (async () => {
-        const cache = await openCache();
-        const cached = await cache.match(request);
-        if (cached) return cached;
-        const response = await fetch(request);
-        await putSafely(cache, request, response);
-        return response;
-      })()
-    );
-    return;
-  }
-
-  if (request.destination === "font") {
-    event.respondWith(
-      (async () => {
-        const cache = await openCache();
-        const cached = await cache.match(request);
-        if (cached) return cached;
-        const response = await fetch(request);
-        await putSafely(cache, request, response);
-        await trimCache(cache);
-        return response;
-      })()
-    );
-    return;
-  }
-
-  if (request.destination === "image") {
-    // Stale-while-revalidate: paint the cached image immediately, refresh it in
+  if (isSameOriginStatic(request, url)) {
+    // Stale-while-revalidate: paint the cached copy immediately, refresh it in
     // the background so the next visit is current.
     //
     // The response must be threaded through to the end of the chain. It used to
@@ -234,8 +289,8 @@ self.addEventListener("fetch", event => {
     return;
   }
 
-  // Everything else (style, script, document subresources): network first,
-  // cache as the offline fallback.
+  // Everything else — same-origin GETs that are not recognisable static
+  // assets: network first, cache as the offline fallback.
   event.respondWith(
     (async () => {
       const cache = await openCache();
@@ -252,6 +307,31 @@ self.addEventListener("fetch", event => {
     })()
   );
 });
+
+/**
+ * Background sync for queued outbox sends.
+ *
+ * The outbox itself lives in the app and is owned elsewhere; the worker's only
+ * job is to announce that connectivity is back so the page can flush. `sync`
+ * does not exist on iOS/Safari, so the listener is attached only when the API
+ * is present — nothing may depend on this firing.
+ */
+if (self.registration && self.registration.sync) {
+  self.addEventListener("sync", event => {
+    if (event.tag !== "savanna-outbox") return;
+    event.waitUntil(
+      (async () => {
+        const windows = await self.clients.matchAll({
+          type: "window",
+          includeUncontrolled: true,
+        });
+        for (const client of windows) {
+          client.postMessage({ type: "savanna-outbox-sync" });
+        }
+      })()
+    );
+  });
+}
 
 function readNotificationPayload(event) {
   if (!event.data) return {};

@@ -80,7 +80,11 @@
 
 .dark {
   color-scheme: dark;
-  --savanna-system-bar-color: #0B0F0E;
+  --savanna-system-bar-color: #121212;
+  --obsidian: #121212;
+  --obsidian-surface: #1e1e1e;
+  --dark-highlight: #2c2c2c;
+  --dark-border: #3a3a3a;
   --background: var(--obsidian);
   --foreground: var(--warm-white);
   --card: var(--obsidian-surface);
@@ -95,8 +99,8 @@
   --muted-foreground: var(--muted-ivory);
   --accent: var(--gold);
   --accent-foreground: var(--ink);
-  --border: var(--deep-gold);
-  --input: var(--deep-gold);
+  --border: var(--dark-border);
+  --input: var(--dark-border);
   --ring: var(--bright-gold);
 }
 
@@ -127,7 +131,7 @@ body::before {
 }
 
 .dark body::before {
-  background: #0B0F0E;
+  background: #121212;
 }
 
 /* Paint the home-indicator/gesture-bar safe area with the active page theme.
@@ -189,6 +193,24 @@ button:not(:disabled), a {
   transition: color 160ms cubic-bezier(0.23, 1, 0.32, 1), background-color 160ms cubic-bezier(0.23, 1, 0.32, 1), border-color 160ms cubic-bezier(0.23, 1, 0.32, 1), transform 160ms cubic-bezier(0.23, 1, 0.32, 1), box-shadow 160ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
+.savanna-app :is(input, textarea)::placeholder {
+  color: #9aa1a6 !important;
+  opacity: 1 !important;
+}
+
+.savanna-app
+  :is(
+    label:has(input),
+    .savanna-route-search,
+    .savanna-memory-search-field,
+    .savanna-username-field,
+    .savanna-chat-search-with-gold-icon
+  )
+  svg {
+  color: #9aa1a6 !important;
+  stroke: currentColor !important;
+}
+
 .font-display { font-family: var(--font-display); }
 
 .skip-link {
@@ -217,6 +239,21 @@ button:not(:disabled), a {
   display: none;
   width: 0;
   height: 0;
+}
+
+/*
+ * Segmented Story ring (client/src/components/StoryRing.tsx). The SVG strokes
+ * with currentColor, so the gold is set here. Keep the ring OUTSIDE any
+ * `.savanna-brand-token` element — its `*` descendant rule forces colour with
+ * !important and would win.
+ */
+.savanna-story-ring {
+  color: var(--gold, #D9A441);
+  display: block;
+}
+
+.dark .savanna-story-ring {
+  color: var(--chat-gold, #D9A441);
 }
 
 .savanna-admin-tabs,
@@ -248,7 +285,7 @@ button:not(:disabled), a {
 }
 
 .dark .savanna-app {
-  background: #0B0F0E !important;
+  background: #121212 !important;
   color: #FDFBF5 !important;
 }
 
@@ -257,11 +294,11 @@ button:not(:disabled), a {
 .dark .savanna-app [class*="bg-[#f6f7f3]"],
 .dark .savanna-app [class*="bg-[#faf4e8]"],
 .dark .savanna-app [class*="bg-[#f7f6f1]"] {
-  background-color: #151B19 !important;
+  background-color: #1e1e1e !important;
 }
 
 .dark .savanna-app [class~="bg-white"] {
-  background-color: #151B19 !important;
+  background-color: #1e1e1e !important;
 }
 
 .dark .savanna-app [class*="bg-[#fffaf0]"],
@@ -277,12 +314,12 @@ button:not(:disabled), a {
 .dark .savanna-app [class*="bg-[#dfe7d8]"],
 .dark .savanna-app [class*="bg-[#e8dfc9]"],
 .dark .savanna-app [class*="bg-white"] {
-  background-color: #151B19 !important;
+  background-color: #1e1e1e !important;
 }
 
 .dark .savanna-app [class~="border-[#eadfca]"],
 .dark .savanna-app [class~="border-[#ead2a4]"] {
-  border-color: #A87820 !important;
+  border-color: #3a3a3a !important;
 }
 
 .dark .savanna-app [class~="text-[#3d2d1a]"],
@@ -510,12 +547,14 @@ button:not(:disabled), a {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
 }
 
-/* Current mobile reference layer: WhatsApp-dark surfaces with Savanna Gold actions. */
+/* Neutral dark surfaces with Savanna Gold actions. */
 .dark {
-  --obsidian: #111B21;
-  --obsidian-surface: #202C33;
-  --warm-white: #E9EDEF;
-  --muted-ivory: #B9B09F;
+  --obsidian: #121212;
+  --obsidian-surface: #1e1e1e;
+  --warm-white: #F5F5F5;
+  --muted-ivory: #B8B8B8;
+  --border: #3a3a3a;
+  --input: #3a3a3a;
   --background: var(--obsidian);
   --foreground: var(--warm-white);
   --card: var(--obsidian-surface);
@@ -529,7 +568,7 @@ button:not(:disabled), a {
 }
 
 .dark .savanna-app {
-  color: #E9EDEF !important;
+  color: #F5F5F5 !important;
 }
 
 .dark .savanna-app [class~="bg-[#24482f]"],
@@ -545,7 +584,7 @@ button:not(:disabled), a {
 .dark .savanna-app [class~="bg-[#1b3b25]"][class~="text-white"],
 .dark .savanna-app [class~="bg-[#213822]"][class~="text-white"],
 .dark .savanna-app [class~="bg-[#5d3a0c]"][class~="text-white"] {
-  color: #111B21 !important;
+  color: #121212 !important;
 }
 
 .dark .savanna-app [class~="hover:bg-[#1b3b25]"]:hover,
@@ -564,7 +603,7 @@ button:not(:disabled), a {
 .dark .savanna-app [class*="bg-[#17120d]"],
 .dark .savanna-app .bg-\[\#0B0F0E\],
 .dark .savanna-app [class*="bg-[#0b0f0e]"] {
-  background-color: #111B21 !important;
+  background-color: #121212 !important;
 }
 
 .dark .savanna-app [class*="bg-[#201913]"],
@@ -575,27 +614,27 @@ button:not(:disabled), a {
 .dark .savanna-app [class*="bg-[#151B19]"],
 .dark .savanna-app [class*="bg-white"],
 .dark .savanna-app [class*="bg-[#f4f0e8]"] {
-  background-color: #202C33 !important;
+  background-color: #1e1e1e !important;
 }
 
 .dark .savanna-app [class*="bg-[#2b2118]"],
 .dark .savanna-app [class*="bg-[#f4f0e8]"],
 .dark .savanna-app [class*="bg-[#eff2eb]"] {
-  background-color: #2A3942 !important;
+  background-color: #2c2c2c !important;
 }
 
 .dark .savanna-app [class*="border-[#eadfca]"],
 .dark .savanna-app [class*="border-[#ead2a4]"],
 .dark .savanna-app [class*="border-[#3b2d20]"],
 .dark .savanna-app [class*="border-[#5b4833]"] {
-  border-color: #A87820 !important;
+  border-color: #3a3a3a !important;
 }
 
 .dark .savanna-app [class~="text-[#cdb99b]"],
 .dark .savanna-app [class~="text-[#dac7a9]"],
 .dark .savanna-app .text-\[\#f2e7d5\],
 .dark .savanna-app [class~="text-[#fff8ed]"] {
-  color: #E9EDEF !important;
+  color: #F5F5F5 !important;
 }
 
 .dark .savanna-app .text-\[\#a5947e\],
@@ -624,30 +663,30 @@ button:not(:disabled), a {
   }
 }
 
-/* Mobile reference overrides with explicit WhatsApp-dark surface roles. */
+/* Mobile reference overrides with explicit neutral dark surface roles. */
 @media (max-width: 1023px) {
   .dark .savanna-app > header.sticky,
   .dark .savanna-app > header.sticky > section {
-    background-color: #111B21 !important;
+    background-color: #121212 !important;
     border-color: transparent !important;
   }
 
   .dark .savanna-app [class*="dark:bg-[#17120d]"] {
-    background-color: #111B21 !important;
+    background-color: #121212 !important;
   }
 
   .dark .savanna-app [class*="dark:bg-[#21180f]"],
   .dark .savanna-app [class*="dark:bg-[#201913]"] {
-    background-color: #202C33 !important;
+    background-color: #1e1e1e !important;
   }
 
   .dark .savanna-app [class*="dark:bg-[#2a2119]"],
   .dark .savanna-app [class*="dark:bg-[#2b2118]"] {
-    background-color: #2A3942 !important;
+    background-color: #2c2c2c !important;
   }
 
   .dark .savanna-app nav[aria-label="Mobile navigation"] {
-    background-color: #111B21 !important;
+    background-color: #121212 !important;
     border: 0 !important;
   }
 
@@ -682,13 +721,13 @@ button:not(:disabled), a {
 .dark [class*="bg-[#fffaf0]"],
 .dark [class*="dark:bg-[#21180f]"],
 .dark [class*="dark:bg-[#201913]"] {
-  background-color: #202C33 !important;
+  background-color: #1e1e1e !important;
 }
 
 .dark [class~="text-[#3d2d1a]"],
 .dark [class~="text-[#2c2114]"],
 .dark [class~="text-[#263126]"] {
-  color: #E9EDEF !important;
+  color: #F5F5F5 !important;
 }
 
 .dark [class~="text-[#7b4a0d]"],
@@ -700,7 +739,7 @@ button:not(:disabled), a {
 .dark [class~="border-[#ead2a4]"],
 .dark [class~="border-[#5b4833]"],
 .dark [class~="border-[#eadfca]"] {
-  border-color: #A87820 !important;
+  border-color: #3a3a3a !important;
 }
 
 @media (max-width: 1023px) {
@@ -774,7 +813,7 @@ button:not(:disabled), a {
   }
 
   .dark .savanna-app [aria-label="Start a new chat"] {
-    color: #111B21 !important;
+    color: #121212 !important;
   }
 
   .dark .savanna-app [aria-label="Send message"],
@@ -791,7 +830,7 @@ button:not(:disabled), a {
   }
 
   .dark .savanna-app main [class~="bg-[#5d3a0c]"] svg {
-    color: #111B21 !important;
+    color: #121212 !important;
   }
 
   .savanna-app [aria-label="Delivered"] {
@@ -799,16 +838,16 @@ button:not(:disabled), a {
   }
 }
 
-/* Supplied dark chat palette: Savanna keeps Gold for brand actions. */
+/* Supplied neutral dark chat palette: Savanna keeps Gold for brand actions. */
 .dark {
-  --chat-bg: #0A1014;
-  --chat-shadow: #050A0E;
-  --chat-surface: #131A1E;
-  --chat-search: #23282C;
-  --chat-border: #2C3336;
-  --chat-icon-muted: #5C6366;
-  --chat-text-secondary: #9AA1A6;
-  --chat-text-primary: #F0F2F5;
+  --chat-bg: #121212;
+  --chat-shadow: #0a0a0a;
+  --chat-surface: #1e1e1e;
+  --chat-search: #2c2c2c;
+  --chat-border: #3a3a3a;
+  --chat-icon-muted: #8a8a8a;
+  --chat-text-secondary: #b8b8b8;
+  --chat-text-primary: #f5f5f5;
   --chat-gold: #D9A441;
   --chat-gold-dark: #A87820;
   --chat-read-blue: #53BDEB;
@@ -2547,31 +2586,31 @@ body:has(.savanna-login-screen) {
 /* Desktop web routes share the Messages dark workspace: icon rail, chat canvas,
    dark surfaces, search controls, and Gold actions. Mobile keeps its own rules. */
 @media (min-width: 1024px) {
-  .dark .savanna-app:has(:is(.savanna-route-shops, .savanna-route-learn, .savanna-route-orders, .savanna-profile-page)) {
+  .dark .savanna-app:has(:is(.savanna-route-shops, .savanna-route-learn, .savanna-route-orders, .savanna-profile-page, .savanna-public-profile-page)) {
     background: var(--chat-bg) !important;
     color: var(--chat-text-primary) !important;
   }
 
-  .dark .savanna-app :is(.savanna-route-shops, .savanna-route-learn, .savanna-route-orders, .savanna-profile-page) {
+  .dark .savanna-app :is(.savanna-route-shops, .savanna-route-learn, .savanna-route-orders, .savanna-profile-page, .savanna-public-profile-page) {
     color: var(--chat-text-primary) !important;
   }
 
-  .dark .savanna-app :is(.savanna-route-shops, .savanna-route-learn, .savanna-route-orders, .savanna-profile-page)
+  .dark .savanna-app :is(.savanna-route-shops, .savanna-route-learn, .savanna-route-orders, .savanna-profile-page, .savanna-public-profile-page)
     :is(h1, h2, h3, label, .font-display, .font-semibold) {
     color: var(--chat-text-primary) !important;
   }
 
-  .dark .savanna-app :is(.savanna-route-shops, .savanna-route-learn, .savanna-route-orders, .savanna-profile-page)
+  .dark .savanna-app :is(.savanna-route-shops, .savanna-route-learn, .savanna-route-orders, .savanna-profile-page, .savanna-public-profile-page)
     :is(p, span, .text-muted-foreground) {
     color: var(--chat-text-secondary) !important;
   }
 
-  .dark .savanna-app :is(.savanna-route-shops, .savanna-route-learn, .savanna-route-orders, .savanna-profile-page)
+  .dark .savanna-app :is(.savanna-route-shops, .savanna-route-learn, .savanna-route-orders, .savanna-profile-page, .savanna-public-profile-page)
     :is(.savanna-route-eyebrow, .savanna-order-amount, .text-\[\#7b4a0d\], .text-\[\#9a6410\], .text-\[\#31583a\]) {
     color: var(--chat-gold) !important;
   }
 
-  .dark .savanna-app :is(.savanna-route-shops, .savanna-route-learn, .savanna-route-orders, .savanna-profile-page)
+  .dark .savanna-app :is(.savanna-route-shops, .savanna-route-learn, .savanna-route-orders, .savanna-profile-page, .savanna-public-profile-page)
     :is([class~="bg-white"], [class*="bg-[#fffaf0]"], [class*="bg-[#fffdf8]"], [class*="bg-[#fbf4e8]"], [class*="bg-[#f5f7f3]"], [class*="bg-[#f5f7f2]"], .savanna-discovery-card, .savanna-discovery-empty) {
     background-color: var(--chat-surface) !important;
     background-image: none !important;
@@ -2590,39 +2629,39 @@ body:has(.savanna-login-screen) {
     box-shadow: none !important;
   }
 
-  .dark .savanna-app :is(.savanna-route-shops, .savanna-route-learn, .savanna-route-orders, .savanna-profile-page)
+  .dark .savanna-app :is(.savanna-route-shops, .savanna-route-learn, .savanna-route-orders, .savanna-profile-page, .savanna-public-profile-page)
     :is(input, textarea, select) {
     border-color: var(--chat-border) !important;
     background-color: var(--chat-search) !important;
     color: var(--chat-text-primary) !important;
   }
 
-  .dark .savanna-app :is(.savanna-route-shops, .savanna-route-learn, .savanna-route-orders, .savanna-profile-page)
+  .dark .savanna-app :is(.savanna-route-shops, .savanna-route-learn, .savanna-route-orders, .savanna-profile-page, .savanna-public-profile-page)
     input::placeholder,
-  .dark .savanna-app :is(.savanna-route-shops, .savanna-route-learn, .savanna-route-orders, .savanna-profile-page)
+  .dark .savanna-app :is(.savanna-route-shops, .savanna-route-learn, .savanna-route-orders, .savanna-profile-page, .savanna-public-profile-page)
     textarea::placeholder {
-    color: var(--chat-text-secondary) !important;
+    color: #9aa1a6 !important;
     opacity: 1;
   }
 
-  .dark .savanna-app :is(.savanna-route-shops, .savanna-route-learn, .savanna-route-orders, .savanna-profile-page)
+  .dark .savanna-app :is(.savanna-route-shops, .savanna-route-learn, .savanna-route-orders, .savanna-profile-page, .savanna-public-profile-page)
     [data-slot="button"]:not([class*="variant-ghost"]) {
     border-color: var(--chat-border) !important;
     box-shadow: none !important;
   }
 
-  .dark .savanna-app :is(.savanna-route-shops, .savanna-route-learn, .savanna-route-orders, .savanna-profile-page)
+  .dark .savanna-app :is(.savanna-route-shops, .savanna-route-learn, .savanna-route-orders, .savanna-profile-page, .savanna-public-profile-page)
     [data-slot="button"][class*="bg-[#"] {
     background-color: var(--chat-gold) !important;
     color: var(--chat-bg) !important;
   }
 
-  .dark .savanna-app :is(.savanna-route-shops, .savanna-route-learn, .savanna-route-orders, .savanna-profile-page)
+  .dark .savanna-app :is(.savanna-route-shops, .savanna-route-learn, .savanna-route-orders, .savanna-profile-page, .savanna-public-profile-page)
     [data-slot="button"][class*="bg-[#"] * {
     color: var(--chat-bg) !important;
   }
 
-  .dark .savanna-app :is(.savanna-route-shops, .savanna-route-learn, .savanna-route-orders, .savanna-profile-page)
+  .dark .savanna-app :is(.savanna-route-shops, .savanna-route-learn, .savanna-route-orders, .savanna-profile-page, .savanna-public-profile-page)
     [data-slot="button"]:hover {
     background-color: var(--chat-gold) !important;
     color: var(--chat-bg) !important;
@@ -2687,8 +2726,8 @@ body:has(.savanna-login-screen) {
   }
 
   .dark .savanna-app .savanna-mobile-messages-canvas [role="tablist"] [role="tab"][aria-selected="true"] {
-    background: #23282C !important;
-    background-color: #23282C !important;
+    background: var(--chat-search) !important;
+    background-color: var(--chat-search) !important;
     color: var(--chat-gold) !important;
   }
 
@@ -2918,30 +2957,30 @@ body:has(.savanna-login-screen) {
 }
 
 
-/* All dark-mode search surfaces use the requested chat-search charcoal. */
+/* All dark-mode search surfaces use the requested highlighted charcoal. */
 .dark .savanna-app :is(
   .savanna-route-search,
   .savanna-desktop-chat-search,
   label:has(input[aria-label*="Search"]),
   input[aria-label*="Search"]
 ) {
-  background-color: #23282C !important;
+  background-color: var(--chat-search) !important;
 }
 
 
-/* Final cascade fix: route search fields must stay #23282C, not the dark surface #131A1E. */
+/* Final cascade fix: route search fields must stay highlighted, not the base surface. */
 .dark .savanna-app :is(.savanna-route-shops, .savanna-route-learn) .savanna-route-search,
 .dark .savanna-app .savanna-desktop-messages .savanna-desktop-chat-search,
 .dark .savanna-app .savanna-mobile-messages-canvas label:has(input[aria-label="Search chats or people"]) {
-  background: #23282C !important;
-  background-color: #23282C !important;
+  background: var(--chat-search) !important;
+  background-color: var(--chat-search) !important;
 }
 
 .dark .savanna-app :is(.savanna-route-shops, .savanna-route-learn) .savanna-route-search input,
 .dark .savanna-app .savanna-desktop-messages .savanna-desktop-chat-search input,
 .dark .savanna-app .savanna-mobile-messages-canvas label:has(input[aria-label="Search chats or people"]) input {
-  background: #23282C !important;
-  background-color: #23282C !important;
+  background: var(--chat-search) !important;
+  background-color: var(--chat-search) !important;
 }
 
 /* Shared glass treatment for persistent navigation chrome in both themes.
@@ -3044,8 +3083,8 @@ body:has(.savanna-login-screen) {
  * pill on the dark surface when the user toggles to dark.
  */
 .dark .savanna-app .savanna-mobile-messages-canvas .savanna-mobile-chat-search {
-  background: #23282C !important;
-  background-color: #23282C !important;
+  background: var(--chat-search) !important;
+  background-color: var(--chat-search) !important;
 }
 
 .dark .savanna-app .savanna-glass-header,
@@ -3296,30 +3335,24 @@ body:has(.savanna-login-screen) {
 }
 
 .dark .savanna-app .savanna-profile-page .savanna-profile-topbar {
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--chat-surface) 62%, transparent), color-mix(in srgb, var(--chat-bg) 44%, transparent)),
-    linear-gradient(180deg, color-mix(in srgb, var(--chat-gold) 10%, transparent), transparent) !important;
-  background-color: color-mix(in srgb, var(--chat-surface) 52%, transparent) !important;
-  border-color: color-mix(in srgb, var(--chat-border) 72%, rgba(255, 255, 255, 0.18)) !important;
+  background: color-mix(in srgb, var(--chat-surface) 72%, transparent) !important;
+  background-color: color-mix(in srgb, var(--chat-surface) 72%, transparent) !important;
+  border-color: var(--chat-border) !important;
   box-shadow: none !important;
 }
 
 .dark .savanna-app .savanna-profile-page .savanna-profile-header {
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--chat-surface) 70%, transparent), color-mix(in srgb, var(--chat-bg) 38%, transparent)),
-    linear-gradient(180deg, color-mix(in srgb, var(--chat-gold) 9%, transparent), transparent) !important;
-  background-color: color-mix(in srgb, var(--chat-surface) 58%, transparent) !important;
-  border: 1px solid color-mix(in srgb, var(--chat-border) 76%, rgba(255, 255, 255, 0.16)) !important;
+  background: var(--chat-surface) !important;
+  background-color: var(--chat-surface) !important;
+  border: 1px solid var(--chat-border) !important;
   box-shadow: none !important;
 }
 
 @media (max-width: 1023px) {
   .dark .savanna-app .savanna-profile-page .savanna-profile-header {
-    background:
-      linear-gradient(135deg, color-mix(in srgb, var(--chat-surface) 64%, transparent), color-mix(in srgb, var(--chat-bg) 42%, transparent)),
-      linear-gradient(180deg, color-mix(in srgb, var(--chat-gold) 10%, transparent), transparent) !important;
-    background-color: color-mix(in srgb, var(--chat-surface) 52%, transparent) !important;
-    border-color: color-mix(in srgb, var(--chat-border) 72%, rgba(255, 255, 255, 0.18)) !important;
+    background: var(--chat-surface) !important;
+    background-color: var(--chat-surface) !important;
+    border-color: var(--chat-border) !important;
   }
 }
 
@@ -3412,16 +3445,14 @@ body:has(.savanna-login-screen) {
 }
 
 .dark .savanna-app .savanna-public-profile-page .savanna-public-profile-topbar {
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--chat-surface) 62%, transparent), color-mix(in srgb, var(--chat-bg) 44%, transparent)),
-    linear-gradient(180deg, color-mix(in srgb, var(--chat-gold) 10%, transparent), transparent) !important;
-  background-color: color-mix(in srgb, var(--chat-surface) 52%, transparent) !important;
-  border-color: color-mix(in srgb, var(--chat-border) 72%, rgba(255, 255, 255, 0.18)) !important;
+  background: color-mix(in srgb, var(--chat-surface) 72%, transparent) !important;
+  background-color: color-mix(in srgb, var(--chat-surface) 72%, transparent) !important;
+  border-color: var(--chat-border) !important;
   box-shadow: none !important;
 }
 
 .dark .savanna-app .savanna-public-profile-page .savanna-public-profile-identity {
-  color: var(--chat-text);
+  color: var(--chat-text-primary);
 }
 
 .savanna-app .savanna-route-stories {
@@ -3450,13 +3481,66 @@ body:has(.savanna-login-screen) {
 }
 
 .dark .savanna-app .savanna-route-communities {
-  color: var(--chat-text) !important;
+  color: var(--chat-text-primary) !important;
 }
 
 .dark .savanna-app .savanna-route-communities .savanna-community-card {
   background: var(--chat-surface) !important;
   border-color: var(--chat-border) !important;
   box-shadow: none !important;
+}
+
+.dark .savanna-app .savanna-merchant-studio-page {
+  color: var(--chat-text-primary) !important;
+}
+
+.dark .savanna-app .savanna-merchant-studio-page
+  :is(section, article, [class~="bg-white"], [class~="bg-[#F6F5F5]"], [class~="bg-[#f6f5f5]"]) {
+  background: var(--chat-surface) !important;
+  background-color: var(--chat-surface) !important;
+  border-color: var(--chat-border) !important;
+  box-shadow: none !important;
+}
+
+.dark .savanna-app .savanna-merchant-studio-page
+  :is(input, textarea, select, button#shop-visibility, [role="menu"]) {
+  background: var(--chat-search) !important;
+  background-color: var(--chat-search) !important;
+  border-color: var(--chat-border) !important;
+  color: var(--chat-text-primary) !important;
+}
+
+.dark .savanna-app .savanna-merchant-studio-page
+  :is(input, textarea)::placeholder {
+  color: #9aa1a6 !important;
+  opacity: 1 !important;
+}
+
+.dark .savanna-app .savanna-merchant-studio-page
+  :is(h1, h2, h3, label, [class~="text-[#151A17]"], [class~="text-[#151a17]"]) {
+  color: var(--chat-text-primary) !important;
+}
+
+.dark .savanna-app .savanna-merchant-studio-page label {
+  width: fit-content !important;
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+.dark .savanna-app .savanna-merchant-studio-page
+  :is(p, [class~="text-[#5F6861]"], [class~="text-[#5f6861]"]) {
+  color: var(--chat-text-secondary) !important;
+}
+
+.dark .savanna-app .savanna-merchant-studio-page
+  :is(.bg-\[\#D9A441\]\/20, [class~="bg-[#D9A441]/20"]) {
+  background: color-mix(in srgb, var(--chat-gold) 20%, transparent) !important;
+  background-color: color-mix(in srgb, var(--chat-gold) 20%, transparent) !important;
+}
+
+.dark .savanna-app .savanna-merchant-studio-page
+  :is(.text-\[\#D9A441\], [class~="text-[#D9A441]"]) {
+  color: var(--chat-gold) !important;
 }
 
 .savanna-app :is([class~="bg-[#24482f]"], [class~="bg-[#31583a]"], [class~="bg-[#1b3b25]"])[class~="text-white"] {
@@ -3610,21 +3694,26 @@ body .savanna-app .savanna-chat-search-with-gold-icon input {
   color: #151A17 !important;
 }
 
+body .savanna-app .savanna-desktop-chat-search input::placeholder,
+body .savanna-app .savanna-chat-search-with-gold-icon input::placeholder,
+body .savanna-app input[aria-label="Search conversations"]::placeholder {
+  color: #9aa1a6 !important;
+  opacity: 1 !important;
+}
+
 .dark body .savanna-app .savanna-chat-search-with-gold-icon input {
   color: #F0F2F5 !important;
 }
 
 /* Mobile filter tabs live inside .savanna-mobile-messages-canvas, so the
-   page-wide [role="tab"] rules (L854 inactive / L2173 active, both !important)
-   out-specify the shared desktop rules below and silently repaint them on
-   phones. Re-scoping the mobile selector through the canvas + [role="tab"]
-   path raises it past those, so phones now match the web treatment: inactive
-   #172127 / #AEBAC1, active 20% gold / #D9A441. */
+   page-wide [role="tab"] rules out-specify the shared desktop rules below.
+   Re-scoping the selector through the canvas + [role="tab"] path keeps
+   phones aligned with the web treatment. */
 .dark body .savanna-app .savanna-mobile-messages-canvas [role="tablist"] [role="tab"].savanna-mobile-message-filter-tab[aria-selected="false"] {
-  background: #172127 !important;
-  background-color: #172127 !important;
+  background: #1e1e1e !important;
+  background-color: #1e1e1e !important;
   border: 0 !important;
-  color: #AEBAC1 !important;
+  color: var(--chat-text-secondary) !important;
 }
 
 .dark body .savanna-app .savanna-mobile-messages-canvas [role="tablist"] [role="tab"].savanna-mobile-message-filter-tab[aria-selected="true"] {
@@ -3635,10 +3724,10 @@ body .savanna-app .savanna-chat-search-with-gold-icon input {
 }
 
 .dark body .savanna-app .savanna-desktop-message-tabs button[data-active="false"] {
-  background: #172127 !important;
-  background-color: #172127 !important;
+  background: #1e1e1e !important;
+  background-color: #1e1e1e !important;
   border: 0 !important;
-  color: #AEBAC1 !important;
+  color: var(--chat-text-secondary) !important;
 }
 
 .dark body .savanna-app .savanna-desktop-message-tabs button[data-active="true"] {

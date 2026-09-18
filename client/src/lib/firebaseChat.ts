@@ -16,16 +16,18 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
   type DocumentData,
   updateDoc,
   where,
   writeBatch,
 } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getFirebaseStorage, getFirestoreDb } from "./firebase";
 import { listFirebaseBlockedUserIds } from "./firebaseSafety";
 import { notifySavannaEvent } from "./firebaseNotifications";
+import { ensureConversationKey, encryptBody, decryptBody, encryptedPreviewText, useConversationE2EEKey } from "./firebaseE2EE";
 
 export type FirebaseConversationKind = "direct" | "group" | "merchant_support";
 export type FirebaseMessageStatus = "sending" | "sent" | "delivered" | "read" | "failed" | "deleted";
@@ -79,6 +81,8 @@ export type FirebaseMessage = {
   senderUserId: string;
   contentType: "text" | "attachment";
   payload: string;
+  encrypted?: boolean;
+  memberIds: string[];
   attachments: FirebaseMessageAttachment[];
   createdAt: Date | string;
   status: FirebaseMessageStatus;
@@ -333,6 +337,8 @@ function mapMessage(id: string, data: DocumentData, viewerId?: string | null): F
     senderUserId: String(data.senderId ?? ""),
     contentType: hasAttachment ? "attachment" : "text",
     payload: typeof data.body === "string" ? data.body : "",
+    encrypted: data.encrypted === true,
+    memberIds: Array.isArray(data.memberIds) ? data.memberIds.map(String) : [],
     attachments: attachment ? [attachment] : [],
     createdAt: toDate(data.createdAt),
     status: messageReceiptStatus(data, viewerId),
@@ -572,9 +578,10 @@ export async function sendFirebaseMessage(input: {
   storyId?: string | null;
   replyTo?: FirebaseMessage["replyTo"];
   memoryPrompt?: string | null;
+  user?: AppUser;
 }) {
   const db = getFirestoreDb();
-  const body = input.body.trim();
+  let body = input.body.trim();
   if (!body && !input.attachmentPath) throw new Error("Write a message first");
   const conversationSnapshot = await getDoc(conversationRef(input.conversationId));
   const conversationData = conversationSnapshot?.data() as DocumentData | undefined;
@@ -582,6 +589,25 @@ export async function sendFirebaseMessage(input: {
   const kind = (conversationData?.kind as FirebaseConversationKind | undefined) ?? "direct";
   const title = typeof conversationData?.title === "string" ? conversationData.title : null;
   const timestamp = serverTimestamp();
+
+  // End-to-end encrypt the body when a conversation key is available. Falls back
+  // to plaintext if the key cannot be established (e.g. a member has not
+  // published a public key yet) so the send never fails.
+  let encrypted = false;
+  let previewText = body || "Attachment";
+  if (input.user && body) {
+    try {
+      const conversationKey = await ensureConversationKey(input.conversationId, memberIds, input.user);
+      if (conversationKey) {
+        body = await encryptBody(conversationKey, body);
+        encrypted = true;
+        previewText = encryptedPreviewText();
+      }
+    } catch {
+      encrypted = false;
+    }
+  }
+
   const messageRef = doc(collection(db, "conversations", input.conversationId, "messages"));
   const batch = writeBatch(db);
 
@@ -589,6 +615,7 @@ export async function sendFirebaseMessage(input: {
     senderId: input.senderId,
     memberIds,
     body,
+    encrypted,
     attachmentPath: input.attachmentPath ?? null,
     storyId: input.storyId ?? null,
     status: input.status ?? "sent",
@@ -609,7 +636,7 @@ export async function sendFirebaseMessage(input: {
     lastMessageAt: timestamp,
     lastMessageId: messageRef.id,
     lastMessageSenderId: input.senderId,
-    lastMessagePreview: body || "Attachment",
+    lastMessagePreview: previewText,
     lastMessageStatus: input.status ?? "sent",
   });
   for (const memberId of memberIds) {
@@ -621,7 +648,7 @@ export async function sendFirebaseMessage(input: {
       lastMessageAt: timestamp,
       lastMessageId: messageRef.id,
       lastMessageSenderId: input.senderId,
-      lastMessagePreview: body || "Attachment",
+      lastMessagePreview: previewText,
       lastMessageStatus: input.status ?? "sent",
       unreadCount: memberId === input.senderId ? 0 : increment(1),
       storefrontId: typeof conversationData?.storefrontId === "string" ? conversationData.storefrontId : null,
@@ -881,6 +908,24 @@ export async function toggleFirebaseMessagePin(input: {
   });
 }
 
+/**
+ * Mute or unmute a conversation for the viewer. The flag lives on the viewer's
+ * own inbox doc (`users/{uid}/conversationRefs/{conversationId}`), which the
+ * push-dispatch Cloud Function reads to skip muted recipients — so it only
+ * affects this device's owner, never the other participants.
+ */
+export async function setFirebaseConversationMuted(user: AppUser, conversationId: string, muted: boolean) {
+  const ref = conversationInboxRef(user.id, conversationId);
+  await setDoc(
+    ref,
+    {
+      mutedUntil: muted ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000) : null,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  );
+}
+
 export async function saveFirebaseMessageMemory(input: {
   user: AppUser;
   conversationId: string;
@@ -1039,6 +1084,7 @@ export async function createSupportConversation(input: {
     senderId: input.viewer.id,
     memberIds: [input.viewer.id, input.ownerUserId],
     body: `I have a question about ${input.storefrontName}.`,
+    user: input.viewer,
   });
 
   return conversationId;
@@ -1131,11 +1177,43 @@ export function useFirebaseMessages(conversationId?: string | null, user?: AppUs
     };
   }, [conversationId, enabled, queryClient, uid]);
 
-  return useQuery({
+  const queryResult = useQuery({
     queryKey,
     queryFn: () => listFirebaseMessages(conversationId, user),
     enabled: enabled && Boolean(conversationId && user),
   });
+
+  // Transparently decrypt end-to-end encrypted messages. The query cache holds
+  // ciphertext; we derive a plaintext copy once the conversation key is ready
+  // so every consumer of `messages.data` renders decrypted text.
+  const rawMessages = queryResult.data;
+  const memberIds = rawMessages?.[0]?.memberIds ?? null;
+  const conversationKey = useConversationE2EEKey(conversationId, memberIds, user);
+  const [decryptedMessages, setDecryptedMessages] = useState<FirebaseMessage[] | undefined>(rawMessages);
+  useEffect(() => {
+    if (!rawMessages) {
+      setDecryptedMessages(undefined);
+      return;
+    }
+    if (!conversationKey) {
+      setDecryptedMessages(rawMessages);
+      return;
+    }
+    let cancelled = false;
+    Promise.all(
+      rawMessages.map(async (message) => {
+        if (!message.encrypted || !message.payload) return message;
+        try {
+          return { ...message, payload: await decryptBody(conversationKey, message.payload) };
+        } catch {
+          return { ...message, payload: encryptedPreviewText() };
+        }
+      }),
+    ).then(result => { if (!cancelled) setDecryptedMessages(result); });
+    return () => { cancelled = true; };
+  }, [rawMessages, conversationKey]);
+
+  return { ...queryResult, data: decryptedMessages ?? rawMessages };
 }
 
 export function useFirebaseMessageMemories(user?: AppUser | null) {
@@ -1210,7 +1288,7 @@ export function useFirebaseChatMutations(user?: AppUser | null) {
     send: useMutation({
       mutationFn: async (input: { conversationId: string; memberIds: string[]; body: string; replyTo?: FirebaseMessage["replyTo"] }) => {
         if (!user) throw new Error("Sign in to send a message");
-        await sendFirebaseMessage({ conversationId: input.conversationId, senderId: user.id, memberIds: input.memberIds, body: input.body, replyTo: input.replyTo });
+        await sendFirebaseMessage({ conversationId: input.conversationId, senderId: user.id, memberIds: input.memberIds, body: input.body, replyTo: input.replyTo, user });
       },
       onSuccess: (_result, input) => invalidateConversation(input.conversationId),
     }),
@@ -1273,6 +1351,7 @@ export async function replyToStoryInFirebase(input: {
     memberIds: [input.viewer.id, input.storyAuthorUserId],
     body: input.body.trim(),
     storyId: input.storyId,
+    user: input.viewer,
   });
 
   return conversationId;

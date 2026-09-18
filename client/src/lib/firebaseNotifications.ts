@@ -81,7 +81,7 @@ export const SAVANNA_NOTIFICATION_LABELS: Array<{
 ];
 
 const DEVICE_ID_KEY = "savanna.notification.deviceId";
-const WORKER_URL = "/service-worker.js?v=38";
+const WORKER_URL = "/service-worker.js?v=45";
 
 const notificationKeys = {
   settings: (uid?: string | null) => ["firebase", "notification-settings", uid ?? "guest"] as const,

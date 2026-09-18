@@ -5,17 +5,37 @@ import {
   InstallSavannaButton,
   PwaStatusBanner,
 } from "@/components/PwaExperience";
+import { CommandPalette } from "@/components/CommandPalette";
 import { MobileStoriesHeader } from "@/components/StoriesPanel";
+import { startPresenceSession } from "@/lib/firebasePresence";
 import {
   AnimatedPlusIcon,
   MessageCircleMoreIcon,
   MobileNavIcon,
   type MobileNavIconName,
 } from "@/components/AnimatedNavIcons";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
-import { ChevronDown, Command, Search } from "lucide-react";
-import { type ReactNode } from "react";
+import {
+  ChevronDown,
+  Command,
+  LogOut,
+  Package,
+  PenLine,
+  Search,
+  Store,
+  UserRound,
+} from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { toast } from "sonner";
 import { Link, useLocation } from "wouter";
 
 const navigation = [
@@ -26,6 +46,142 @@ const navigation = [
 ];
 
 const mobileNavigation = navigation;
+const iconRailRoutes = ["/messages", "/shops", "/stories", "/communities", "/orders", "/profile", "/people", "/admin"];
+
+function routeMatches(location: string, href: string) {
+  return location === href || location.startsWith(`${href}/`);
+}
+
+/**
+ * Creator destinations. Every entry navigates somewhere real — this menu
+ * deliberately stays short rather than listing flows that do not exist yet
+ * (there is no reachable "new community" or "new chat" entry point outside the
+ * Messages drawer, which is internal state the shell cannot open).
+ */
+const creatorItems = [
+  {
+    label: "New story",
+    href: "/stories?compose=1",
+    hint: "Photo, text or product",
+    icon: PenLine,
+  },
+  {
+    label: "New shop",
+    href: "/shops/manage",
+    hint: "Merchant studio",
+    icon: Store,
+  },
+] as const;
+
+const accountItems = [
+  { label: "Profile", href: "/profile", icon: UserRound },
+  { label: "Orders", href: "/orders", icon: Package },
+] as const;
+
+const menuContentClassName =
+  "w-64 rounded-2xl border border-[#eadfca] bg-[#fffaf0] p-1.5 shadow-[0_18px_40px_rgba(49,34,12,0.18)] dark:border-[#3a2f1f] dark:bg-[#221a12]";
+
+const menuItemClassName =
+  "cursor-pointer gap-3 rounded-xl px-3 py-2.5 text-sm text-[#4a3c28] outline-none data-[highlighted]:bg-[#f1dfbf] data-[highlighted]:text-[#5d3a0c] dark:text-[#e8dcc6] dark:data-[highlighted]:bg-[#D9A441]/25 dark:data-[highlighted]:text-[#f7e6c8]";
+
+const menuLabelClassName =
+  "px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#a08a67] dark:text-[#8f7c5f]";
+
+function CreatorMenu({
+  trigger,
+  side = "top",
+  align = "start",
+}: {
+  trigger: ReactNode;
+  side?: "top" | "bottom";
+  align?: "start" | "end";
+}) {
+  const [, navigate] = useLocation();
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+      <DropdownMenuContent
+        side={side}
+        align={align}
+        sideOffset={8}
+        className={menuContentClassName}
+      >
+        <DropdownMenuLabel className={menuLabelClassName}>
+          Create
+        </DropdownMenuLabel>
+        {creatorItems.map(item => {
+          const Icon = item.icon;
+          return (
+            <DropdownMenuItem
+              key={item.href}
+              className={menuItemClassName}
+              onSelect={() => navigate(item.href)}
+            >
+              <Icon className="size-4 shrink-0 text-[#8a765d] dark:text-[#a9977a]" />
+              <span className="min-w-0 flex-1 truncate font-medium">
+                {item.label}
+              </span>
+              <span className="shrink-0 text-[11px] text-[#a08a67] dark:text-[#8f7c5f]">
+                {item.hint}
+              </span>
+            </DropdownMenuItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function AccountMenu({ trigger }: { trigger: ReactNode }) {
+  const [, navigate] = useLocation();
+  const { logout } = useAuth();
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+      <DropdownMenuContent
+        side="top"
+        align="start"
+        sideOffset={8}
+        className={menuContentClassName}
+      >
+        <DropdownMenuLabel className={menuLabelClassName}>
+          Your account
+        </DropdownMenuLabel>
+        {accountItems.map(item => {
+          const Icon = item.icon;
+          return (
+            <DropdownMenuItem
+              key={item.href}
+              className={menuItemClassName}
+              onSelect={() => navigate(item.href)}
+            >
+              <Icon className="size-4 shrink-0 text-[#8a765d] dark:text-[#a9977a]" />
+              <span className="font-medium">{item.label}</span>
+            </DropdownMenuItem>
+          );
+        })}
+        <DropdownMenuSeparator className="my-1 bg-[#eadfca] dark:bg-[#3a2f1f]" />
+        <DropdownMenuItem
+          className={menuItemClassName}
+          onSelect={() => {
+            void logout().then(
+              () => toast.success("Signed out"),
+              (error: unknown) =>
+                toast.error(
+                  error instanceof Error
+                    ? error.message
+                    : "Could not sign out"
+                )
+            );
+          }}
+        >
+          <LogOut className="size-4 shrink-0 text-[#8a765d] dark:text-[#a9977a]" />
+          <span className="font-medium">Sign out</span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 function triggerMobileHaptic() {
   const isMobile =
@@ -57,17 +213,21 @@ export function SavannaShell({
 }: SavannaShellProps) {
   const [location] = useLocation();
   const { isAuthenticated, user } = useAuth();
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const isMessagesWorkspace = location === "/messages";
-  const usesIconRail = [
-    "/messages",
-    "/shops",
-    "/stories",
-    "/communities",
-    "/orders",
-    "/profile",
-    "/admin",
-  ].includes(location);
+  const usesIconRail = iconRailRoutes.some(route => routeMatches(location, route));
+  const profileNavActive = routeMatches(location, "/profile") || routeMatches(location, "/people");
+  const suppressMobileStoriesHeader = routeMatches(location, "/communities");
   const profileAvatarUrl = user?.photoURL ?? null;
+
+  // Broadcast the viewer's presence (online while the tab is visible, offline
+  // on hide/unload). Fire-and-forget; presence is best-effort and the stop
+  // function marks offline on unmount.
+  useEffect(() => {
+    if (!user) return;
+    const stop = startPresenceSession(user);
+    return () => stop();
+  }, [user?.id]);
 
   return (
     <div className="savanna-app min-h-screen bg-[#fcfaf4] text-[#2c2114]">
@@ -77,7 +237,7 @@ export function SavannaShell({
 
       <PwaStatusBanner />
 
-      {hideChrome || hideMobileHeader ? null : <MobileStoriesHeader />}
+      {hideChrome || hideMobileHeader || suppressMobileStoriesHeader ? null : <MobileStoriesHeader />}
 
       <div
         className={cn(
@@ -113,7 +273,7 @@ export function SavannaShell({
                 className="flex flex-1 flex-col items-center gap-3"
               >
                 {navigation.map(item => {
-                  const active = location === item.href;
+                  const active = routeMatches(location, item.href);
                   return (
                     <Link
                       href={item.href}
@@ -150,7 +310,10 @@ export function SavannaShell({
                   href="/profile"
                   title="Your profile"
                   aria-label="Open your profile"
-                  className="grid size-11 place-items-center rounded-2xl transition-colors hover:bg-[#D9A441]/10"
+                  className={cn(
+                    "grid size-11 place-items-center rounded-2xl transition-colors hover:bg-[#D9A441]/10",
+                    profileNavActive ? "bg-[#D9A441]/20 text-[#D9A441]" : ""
+                  )}
                 >
                   {profileAvatarUrl ? (
                     <img
@@ -178,7 +341,7 @@ export function SavannaShell({
 
               <nav aria-label="Primary navigation" className="space-y-1">
                 {navigation.map(item => {
-                  const active = location === item.href;
+                  const active = routeMatches(location, item.href);
                   return (
                     <Link
                       href={item.href}
@@ -210,30 +373,39 @@ export function SavannaShell({
               </nav>
 
               <div className="mt-auto space-y-4">
-                <Button
-                  className="savanna-brand-token h-12 w-full rounded-2xl shadow-none"
-                  aria-label="Open creator menu"
-                >
-                  <AnimatedPlusIcon size={16} className="mr-2" /> Create
-                </Button>
+                <CreatorMenu
+                  trigger={
+                    <Button
+                      className="savanna-brand-token h-12 w-full rounded-2xl shadow-none"
+                      aria-label="Open creator menu"
+                    >
+                      <AnimatedPlusIcon size={16} className="mr-2" /> Create
+                    </Button>
+                  }
+                />
                 <InstallSavannaButton />
-                <button
-                  className="flex w-full items-center gap-3 rounded-2xl p-2 text-left transition-colors hover:bg-[#f1dfbf]"
-                  aria-label="Open account menu"
-                >
-                  <span className="grid size-10 place-items-center rounded-2xl bg-[#f3ddb2] font-semibold text-[#7b4a0d]">
-                    S
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold text-[#3d2d1a]">
-                      Your Savanna
-                    </span>
-                    <span className="block truncate text-xs text-[#8a765d]">
-                      Personal account
-                    </span>
-                  </span>
-                  <ChevronDown className="size-4 text-[#71806d]" />
-                </button>
+                <AccountMenu
+                  trigger={
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-3 rounded-2xl p-2 text-left transition-colors hover:bg-[#f1dfbf]"
+                      aria-label="Open account menu"
+                    >
+                      <span className="grid size-10 place-items-center rounded-2xl bg-[#f3ddb2] font-semibold text-[#7b4a0d]">
+                        S
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold text-[#3d2d1a]">
+                          Your Savanna
+                        </span>
+                        <span className="block truncate text-xs text-[#8a765d]">
+                          Personal account
+                        </span>
+                      </span>
+                      <ChevronDown className="size-4 text-[#71806d]" />
+                    </button>
+                  }
+                />
                 <ConnectionPill />
               </div>
             </>
@@ -252,6 +424,8 @@ export function SavannaShell({
           {!hideDesktopHeader && !usesIconRail ? (
             <div className="savanna-glass-header hidden h-[76px] items-center justify-between border-b border-[#eadfca]/70 bg-[#fcfaf4]/72 px-7 backdrop-blur-xl lg:flex xl:px-10">
               <button
+                type="button"
+                onClick={() => setCommandPaletteOpen(true)}
                 className="group flex h-10 w-[min(440px,42vw)] items-center gap-3 rounded-xl border border-[#d7ddd0] bg-white/65 px-3 text-left text-sm text-[#7a8276] shadow-[0_4px_12px_rgba(39,54,37,0.035)] transition-colors hover:border-[#b7c5b4]"
                 aria-label="Open search and command menu"
               >
@@ -262,9 +436,15 @@ export function SavannaShell({
                 </span>
               </button>
               <div className="flex items-center gap-2">
-                <Button className="savanna-brand-token rounded-xl px-4 shadow-none">
-                  <AnimatedPlusIcon size={16} className="mr-1.5" /> Create
-                </Button>
+                <CreatorMenu
+                  side="bottom"
+                  align="end"
+                  trigger={
+                    <Button className="savanna-brand-token rounded-xl px-4 shadow-none">
+                      <AnimatedPlusIcon size={16} className="mr-1.5" /> Create
+                    </Button>
+                  }
+                />
               </div>
             </div>
           ) : null}
@@ -314,7 +494,7 @@ export function SavannaShell({
           className="savanna-mobile-bottom-nav savanna-glass-bottom-nav fixed bottom-[max(0.75rem,calc(env(safe-area-inset-bottom)+0.5rem))] left-1/2 z-50 flex h-[60px] w-[min(calc(100vw-1.5rem),430px)] items-center justify-between rounded-[34px] px-2 py-2 backdrop-blur-xl lg:hidden"
         >
           {mobileNavigation.map(item => {
-            const active = location === item.href;
+            const active = routeMatches(location, item.href);
             return (
               <Link
                 href={item.href}
@@ -361,6 +541,13 @@ export function SavannaShell({
           })}
         </nav>
       )}
+
+      {/* Mounted for every page the shell wraps, which is what makes ⌘K /
+          Ctrl+K work app-wide. */}
+      <CommandPalette
+        open={commandPaletteOpen}
+        onOpenChange={setCommandPaletteOpen}
+      />
     </div>
   );
 }

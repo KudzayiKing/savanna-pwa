@@ -68,10 +68,12 @@ export interface PlusIconHandle {
   stopAnimation: () => void;
 }
 
-export interface MessageCircleMoreIconHandle {
+export interface MessageCircleIconHandle {
   startAnimation: () => void;
   stopAnimation: () => void;
 }
+
+export interface MessageCircleMoreIconHandle extends MessageCircleIconHandle {}
 
 interface SendHorizontalIconProps
   extends Omit<
@@ -114,7 +116,8 @@ interface PlusIconProps
   color?: string;
 }
 
-interface MessageCircleMoreIconProps extends SendHorizontalIconProps {}
+interface MessageCircleIconProps extends SendHorizontalIconProps {}
+interface MessageCircleMoreIconProps extends MessageCircleIconProps {}
 
 const iconTransition = { duration: 0.42, ease: [0.23, 1, 0.32, 1] as const };
 const MOBILE_NAV_ICON_ACTIVE_PILL_DELAY_MS = 520;
@@ -400,29 +403,155 @@ PlusIcon.displayName = "PlusIcon";
 
 export { PlusIcon };
 
-const MESSAGE_CIRCLE_DOT_VARIANTS: Variants = {
-  normal: {
-    opacity: 1,
-  },
-  animate: (custom: number) => ({
-    opacity: [1, 0, 0, 1, 1, 0, 0, 1],
+const MESSAGE_CIRCLE_SVG_VARIANTS: Variants = {
+  normal: { rotate: 0 },
+  animate: (duration = 1) => ({
+    rotate: [0, -3, 2, 0],
+    transition: { duration: 0.6 * duration, ease: "easeInOut" },
+  }),
+};
+
+const MESSAGE_CIRCLE_POP_VARIANTS: Variants = {
+  normal: { scale: 1 },
+  animate: (duration = 1) => ({
+    scale: [0.5, 1.12, 0.96, 1],
     transition: {
-      opacity: {
-        times: [
-          0,
-          0.1,
-          0.1 + custom * 0.1,
-          0.1 + custom * 0.1 + 0.1,
-          0.5,
-          0.6,
-          0.6 + custom * 0.1,
-          0.6 + custom * 0.1 + 0.1,
-        ],
-        duration: 1.5,
-      },
+      duration: 0.55 * duration,
+      times: [0, 0.55, 0.78, 1],
+      ease: "easeOut",
     },
   }),
 };
+
+const MESSAGE_CIRCLE_PATH_VARIANTS: Variants = {
+  normal: { pathLength: 1, opacity: 1 },
+  animate: (duration = 1) => ({
+    pathLength: [0.25, 1],
+    opacity: [0, 1],
+    transition: { duration: 0.5 * duration, ease: "easeOut" },
+  }),
+};
+
+const MESSAGE_CIRCLE_PATH =
+  "M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719";
+
+const MESSAGE_CIRCLE_MORE_BUBBLE_VARIANTS: Variants = {
+  normal: { scale: 1, opacity: 1 },
+  animate: (duration = 1) => ({
+    scale: [0.3, 1.05, 1],
+    opacity: [0, 1, 1],
+    transition: {
+      duration: 0.55 * duration,
+      times: [0, 0.7, 1],
+      ease: [0.34, 1.4, 0.64, 1],
+    },
+  }),
+};
+
+const MESSAGE_CIRCLE_MORE_DOT_VARIANTS: Variants = {
+  normal: { scale: 1, opacity: 1 },
+  animate: (index: number) => ({
+    scale: [0, 1.3, 1],
+    opacity: [0, 1, 1],
+    transition: {
+      duration: 0.4,
+      delay: 0.26 + index * 0.12,
+      times: [0, 0.6, 1],
+      ease: [0.34, 1.4, 0.64, 1],
+    },
+  }),
+};
+
+const MessageCircleIcon = forwardRef<
+  MessageCircleIconHandle,
+  MessageCircleIconProps
+>(
+  (
+    {
+      onMouseEnter,
+      onMouseLeave,
+      className,
+      size = 28,
+      duration = 1,
+      isAnimated = true,
+      color,
+      style,
+      ...props
+    },
+    ref
+  ) => {
+    const controls = useAnimation();
+    const reduced = useReducedMotion();
+    const isControlled = useRef(false);
+
+    useImperativeHandle(ref, () => {
+      isControlled.current = true;
+      return {
+        startAnimation: () =>
+          reduced ? controls.start("normal") : controls.start("animate"),
+        stopAnimation: () => controls.start("normal"),
+      };
+    });
+
+    const handleEnter = useCallback(
+      (event?: MouseEvent<HTMLDivElement>) => {
+        if (!isAnimated || reduced) return;
+        if (!isControlled.current) controls.start("animate");
+        else onMouseEnter?.(event as MouseEvent<HTMLDivElement>);
+      },
+      [controls, isAnimated, onMouseEnter, reduced]
+    );
+
+    const handleLeave = useCallback(
+      (event: MouseEvent<HTMLDivElement>) => {
+        if (!isControlled.current) {
+          controls.start("normal");
+        } else {
+          onMouseLeave?.(event);
+        }
+      },
+      [controls, onMouseLeave]
+    );
+
+    return (
+      <LazyMotion features={domMin} strict>
+        <m.div
+          className={cn("inline-flex items-center justify-center", className)}
+          onMouseEnter={handleEnter}
+          onMouseLeave={handleLeave}
+          {...props}
+          style={{ color, ...style }}
+        >
+          <m.svg
+            fill="none"
+            height={size}
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            viewBox="0 0 24 24"
+            width={size}
+            xmlns="http://www.w3.org/2000/svg"
+            animate={controls}
+            custom={duration}
+            initial="normal"
+            variants={MESSAGE_CIRCLE_SVG_VARIANTS}
+          >
+            <m.g
+              custom={duration}
+              variants={MESSAGE_CIRCLE_POP_VARIANTS}
+              style={{ transformBox: "view-box", originX: "4px", originY: "19px" }}
+            >
+              <m.path d={MESSAGE_CIRCLE_PATH} custom={duration} variants={MESSAGE_CIRCLE_PATH_VARIANTS} />
+            </m.g>
+          </m.svg>
+        </m.div>
+      </LazyMotion>
+    );
+  }
+);
+
+MessageCircleIcon.displayName = "MessageCircleIcon";
 
 const MessageCircleMoreIcon = forwardRef<
   MessageCircleMoreIconHandle,
@@ -484,40 +613,36 @@ const MessageCircleMoreIcon = forwardRef<
           {...props}
           style={{ color, ...style }}
         >
-          <svg
-            fill="none"
+          <m.svg
+            xmlns="http://www.w3.org/2000/svg"
+            width={size}
             height={size}
+            viewBox="0 0 24 24"
+            fill="none"
             stroke="currentColor"
+            strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
-            strokeWidth="2"
-            viewBox="0 0 24 24"
-            width={size}
-            xmlns="http://www.w3.org/2000/svg"
+            animate={controls}
+            custom={duration}
+            initial="normal"
           >
-            <path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719" />
             <m.path
-              animate={controls}
-              custom={0}
-              d="M8 12h.01"
-              initial="normal"
-              variants={MESSAGE_CIRCLE_DOT_VARIANTS}
+              d={MESSAGE_CIRCLE_PATH}
+              variants={MESSAGE_CIRCLE_MORE_BUBBLE_VARIANTS}
+              custom={duration}
+              style={{ transformBox: "view-box", originX: "4px", originY: "20px" }}
             />
-            <m.path
-              animate={controls}
-              custom={1}
-              d="M12 12h.01"
-              initial="normal"
-              variants={MESSAGE_CIRCLE_DOT_VARIANTS}
-            />
-            <m.path
-              animate={controls}
-              custom={2}
-              d="M16 12h.01"
-              initial="normal"
-              variants={MESSAGE_CIRCLE_DOT_VARIANTS}
-            />
-          </svg>
+            {[8, 12, 16].map((x, index) => (
+              <m.path
+                key={x}
+                d={`M${x} 12h.01`}
+                custom={index}
+                variants={MESSAGE_CIRCLE_MORE_DOT_VARIANTS}
+                style={{ transformBox: "view-box", originX: `${x}px`, originY: "12px" }}
+              />
+            ))}
+          </m.svg>
         </m.div>
       </LazyMotion>
     );
@@ -526,7 +651,7 @@ const MessageCircleMoreIcon = forwardRef<
 
 MessageCircleMoreIcon.displayName = "MessageCircleMoreIcon";
 
-export { MessageCircleMoreIcon };
+export { MessageCircleIcon, MessageCircleMoreIcon };
 
 export function AnimatedSearchIcon({
   size = 18,
@@ -1553,31 +1678,31 @@ export function MobileNavIcon({ name, active, size = 22 }: MobileNavIconProps) {
         strokeLinejoin="round"
         style={{ overflow: "visible" }}
         {...iconInteraction}
+        initial="idle"
+        animate={state}
+        variants={{
+          idle: { rotate: 0 },
+          active: { rotate: [0, -3, 2, 0] },
+        }}
+        transition={{ duration: 0.6, ease: "easeInOut" }}
       >
-        <motion.path
-          d="M3.2 16.2a2 2 0 0 1 .1 1.15l-1.05 3.25a1 1 0 0 0 1.23 1.17l3.38-1a2 2 0 0 1 1.1.1 10 10 0 1 0-4.75-4.67"
-          initial="idle"
-          animate={state}
+        <motion.g
           variants={{
-            idle: { pathLength: 1, opacity: 1 },
-            active: { pathLength: [0.28, 1], opacity: [0.35, 1] },
+            idle: { scale: 1 },
+            active: { scale: [0.5, 1.12, 0.96, 1] },
           }}
-          transition={iconTransition}
-        />
-        {[8, 12, 16].map((x, index) => (
+          transition={{ duration: 0.55, times: [0, 0.55, 0.78, 1], ease: "easeOut" }}
+          style={{ transformBox: "view-box", originX: "4px", originY: "19px" }}
+        >
           <motion.path
-            key={x}
-            d={`M${x} 12h.01`}
-            initial="idle"
-            animate={state}
+            d={MESSAGE_CIRCLE_PATH}
             variants={{
-              idle: { scale: 1, opacity: 1 },
-              active: { scale: [0, 1.28, 1], opacity: [0, 1, 1] },
+              idle: { pathLength: 1, opacity: 1 },
+              active: { pathLength: [0.25, 1], opacity: [0, 1] },
             }}
-            transition={{ ...iconTransition, delay: 0.12 + index * 0.08 }}
-            style={{ transformBox: "view-box", transformOrigin: `${x}px 12px` }}
+            transition={{ duration: 0.5, ease: "easeOut" }}
           />
-        ))}
+        </motion.g>
       </motion.svg>
     );
   }

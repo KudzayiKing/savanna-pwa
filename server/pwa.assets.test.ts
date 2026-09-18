@@ -31,8 +31,8 @@ describe("Savanna PWA assets", () => {
     expect(manifest.gcm_sender_id).toBe("103953800507");
     expect(JSON.parse(lightSource).theme_color).toBe("#FFFFFF");
     expect(JSON.parse(lightSource).gcm_sender_id).toBe("103953800507");
-    expect(JSON.parse(darkSource).background_color).toBe("#0B0F0E");
-    expect(JSON.parse(darkSource).theme_color).toBe("#0B0F0E");
+    expect(JSON.parse(darkSource).background_color).toBe("#121212");
+    expect(JSON.parse(darkSource).theme_color).toBe("#121212");
     expect(JSON.parse(darkSource).gcm_sender_id).toBe("103953800507");
     expect(JSON.parse(darkSource).start_url).toBe("/");
     expect(manifest.icons.map(icon => icon.sizes)).toEqual(expect.arrayContaining(["192x192", "512x512"]));
@@ -73,9 +73,9 @@ describe("Savanna PWA assets", () => {
 
     // Automatic controller swaps caused Android installed PWAs to loop between
     // the splash and the boot fallback. Recovery is now a visible manual reset.
-    expect(worker).toContain('const CACHE_NAME = "savanna-shell-v42";');
+    expect(worker).toContain('const CACHE_NAME = "savanna-shell-v45";');
     expect(worker).toContain('"/icons/icon.svg"');
-    expect(main).toContain('const WORKER_URL = "/service-worker.js?v=42";');
+    expect(main).toContain('const WORKER_URL = "/service-worker.js?v=45";');
     expect(main).toContain('"savanna:pwa-update-ready"');
     expect(main).toContain('"vite:preloadError"');
     expect(worker).toContain('addEventListener("message"');
@@ -535,12 +535,12 @@ describe("Savanna PWA assets", () => {
     expect(html).toContain("document.write(");
     expect(html).toContain('name="apple-mobile-web-app-status-bar-style" content="');
     expect(html).toContain('(dark ? "black-translucent" : "default")');
-    expect(html).toContain('dark ? "#0B0F0E" : "#FFFFFF"');
+    expect(html).toContain('dark ? "#121212" : "#FFFFFF"');
     expect(html).toContain('document.documentElement.style.colorScheme = dark ? "dark" : "light";');
     expect(html).toContain("var manifestHref = dark");
     expect(html).toContain('"/manifest-dark.webmanifest"');
     expect(html).toContain('"/manifest-light.webmanifest"');
-    expect(themeContext).toContain('const pageColor = theme === "dark" ? "#0B0F0E" : "#FFFFFF";');
+    expect(themeContext).toContain('const pageColor = theme === "dark" ? "#121212" : "#FFFFFF";');
     expect(themeContext).toContain('const appleStatusStyle = theme === "dark" ? "black-translucent" : "default";');
     expect(themeContext).toContain("function needsApplePwaStatusBarReload()");
     expect(themeContext).toContain("window.location.reload()");
@@ -559,13 +559,13 @@ describe("Savanna PWA assets", () => {
     expect(styles).toContain("height: env(safe-area-inset-top, 0px);");
     expect(styles).toContain("background: #FFFFFF;");
     expect(styles).toContain(".dark body::before");
-    expect(styles).toContain("background: #0B0F0E;");
+    expect(styles).toContain("background: #121212;");
     expect(styles).toContain("body::after {");
     expect(styles).toContain(".dark body::after");
     expect(styles).toContain("height: env(safe-area-inset-bottom, 0px);");
     expect(styles).toContain(".savanna-pwa-gesture-bar {");
     expect(styles).toContain("html.dark .savanna-pwa-gesture-bar {");
-    expect(styles).toContain("--savanna-system-bar-color: #0B0F0E;");
+    expect(styles).toContain("--savanna-system-bar-color: #121212;");
     expect(statusBarBlock).not.toContain("backdrop-filter");
     expect(statusBarBlock).not.toContain("-webkit-backdrop-filter");
     expect(styles).toContain(':root:not(.dark) .savanna-app .savanna-mobile-header.savanna-glass-header [aria-label="Open profile"]');
@@ -594,9 +594,9 @@ describe("Savanna PWA assets", () => {
     expect(styles).toContain('"Ramabhadra"');
     expect(html).toContain("family=Ramabhadra");
     expect(styles).toContain("--ivory: #FFFFFF;");
-    expect(styles).toContain("--obsidian: #111B21;");
+    expect(styles).toContain("--obsidian: #151A17;");
     expect(styles).toContain("--obsidian-surface: #202C33;");
-    expect(styles).toContain("--warm-white: #E9EDEF;");
+    expect(styles).toContain("--warm-white: #FFFFFF;");
     expect(styles).toContain("--gold: #D9A441;");
     expect(styles).toContain("--bright-gold: #E8B64A;");
     expect(styles).toContain("--deep-gold: #A87820;");
@@ -723,6 +723,7 @@ describe("Savanna PWA assets", () => {
       readFile(resolve(projectRoot, "server/_core/netlify.ts"), "utf8"),
     ]);
 
+    expect(shell).toContain("suppressMobileStoriesHeader");
     expect(shell).toContain("<MobileStoriesHeader />");
     expect(shell).toContain("const mobileNavigation = navigation;");
     expect(shell).toContain("navigation.map(item =>");
@@ -785,6 +786,12 @@ describe("Savanna PWA assets", () => {
     expect(stories).toContain("src={ownStoryAvatarUrl}");
     expect(stories).toContain('className="size-full rounded-full object-cover"');
     expect(stories).toContain('absolute -bottom-0.5 -right-0.5 grid size-5');
+    // Segmented gold Story ring: one arc per Story, one continuous ring for one.
+    expect(stories).toContain('from "@/components/StoryRing"');
+    expect(stories).toContain("<StoryRing");
+    expect(stories).toContain("count={group.items.length}");
+    expect(stories).toContain("count={ownStoryCount}");
+    expect(styles).toContain(".savanna-story-ring");
     expect(stories).not.toContain("Preview Stories — development only");
     expect(styles).not.toContain("border: 1px dashed");
     expect(stories).toContain('const previewStoriesEnabled = import.meta.env.DEV && !followingStories.length');
@@ -826,7 +833,8 @@ describe("Savanna PWA assets", () => {
     expect(stories).not.toContain('Switch to ${theme');
     expect(stories).toContain("flex shrink-0 flex-col items-center gap-1");
     expect(stories).toContain("const groupedStories = useMemo");
-    expect(stories).toContain("Open ${group.authorName}'s Stories");
+    expect(stories).toContain("Open ${group.authorName}'s ${group.items.length} Stories");
+    expect(stories).toContain("Open ${group.authorName}'s Story");
     expect(stories).toContain("story.discovery?.label");
     expect(stories).toContain("Around you Stories");
     expect(stories).toContain('aria-label="Collapsed Stories cluster"');
@@ -1236,6 +1244,7 @@ describe("Savanna PWA assets", () => {
     expect(savannaOrchestrator).toContain("savannaMemorySource");
     expect(inferenceProvider).toContain('export type SavannaInferenceProviderId = "local-gemma" | "cloud-gemma" | "mock"');
     expect(inferenceProvider).toContain('SAVANNA_LOCAL_GEMMA_CHECKPOINT_ID = "google/gemma-4-E2B-it-qat-mobile-transformers"');
+    expect(inferenceProvider).toContain('SAVANNA_MODEL_BASE_URL = "https://pub-610daaff40ac42f18aa2de55bc3970b2.r2.dev/models"');
     expect(inferenceProvider).toContain("SAVANNA_LOCAL_GEMMA_WEB_MODEL_URL");
     expect(inferenceProvider).toContain("gemma-4-E2B-it-web.litertlm");
     expect(inferenceProvider).toContain("SAVANNA_EMBEDDING_GEMMA_WEB_MODEL_ID");
@@ -1252,22 +1261,23 @@ describe("Savanna PWA assets", () => {
     expect(embeddingProvider).toContain('export type EmbeddingProviderId = "local-embedding-gemma" | "local-hash"');
     expect(localEmbeddingGemmaProvider).toContain('@huggingface/transformers');
     expect(localEmbeddingGemmaProvider).toContain('pipeline("feature-extraction"');
-    expect(localEmbeddingGemmaProvider).toContain("SAVANNA_EMBEDDING_GEMMA_WEB_MODEL_ID");
+    expect(localEmbeddingGemmaProvider).toContain("configuredEmbeddingGemmaModelId");
     expect(localEmbeddingGemmaProvider).toContain("localHashEmbedding");
     expect(translationProvider).toContain('export type TranslationProviderId = "local-translate-gemma" | "cloud-translation" | "passthrough"');
     expect(localTranslateGemmaProvider).toContain("SAVANNA_TRANSLATE_GEMMA_MODEL_ID");
-    expect(localTranslateGemmaProvider).toContain("SAVANNA_TRANSLATE_GEMMA_WEB_MODEL_URL");
-    expect(localTranslateGemmaProvider).toContain("SAVANNA_MEDIAPIPE_GENAI_RUNTIME_URL");
+    expect(localTranslateGemmaProvider).toContain("configuredTranslateGemmaModelUrl");
+    expect(localTranslateGemmaProvider).toContain("configuredMediaPipeGenAiRuntimeUrl");
     expect(localTranslateGemmaProvider).toContain("FilesetResolver.forGenAiTasks");
     expect(localTranslateGemmaProvider).toContain("LlmInference.createFromOptions");
     expect(localTranslateGemmaProvider).toContain('caches.open("savanna-translategemma-models-v1")');
     expect(cloudTranslationProvider).toContain('"/api/ai/translate"');
     expect(savannaWorker).toContain("Engine.create");
-    expect(savannaWorker).toContain("SAVANNA_LOCAL_GEMMA_WEB_MODEL_URL");
+    expect(savannaWorker).toContain("configuredLocalGemmaModelUrl");
     expect(savannaWorker).toContain('caches.open("savanna-litertlm-models-v1")');
     expect(savannaWorker).toContain("@vite-ignore");
     expect(savannaWorker).toContain("sendMessage");
     expect(viteEnv).toContain("VITE_SAVANNA_INFERENCE");
+    expect(viteEnv).toContain("VITE_SAVANNA_MODEL_BASE_URL");
     expect(viteEnv).toContain("VITE_SAVANNA_LOCAL_GEMMA_MODEL_URL");
     expect(viteEnv).toContain("VITE_SAVANNA_LITERT_LM_RUNTIME_URL");
     expect(viteEnv).toContain("VITE_SAVANNA_EMBEDDING_GEMMA_MODEL_ID");
@@ -1276,11 +1286,12 @@ describe("Savanna PWA assets", () => {
     expect(viteEnv).toContain("VITE_SAVANNA_MEDIAPIPE_GENAI_RUNTIME_URL");
     expect(viteEnv).toContain("VITE_SAVANNA_MEDIAPIPE_GENAI_WASM_URL");
     expect(envExample).toContain("VITE_SAVANNA_INFERENCE=auto");
-    expect(envExample).toContain("VITE_SAVANNA_LOCAL_GEMMA_MODEL_URL=https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it-web.litertlm");
+    expect(envExample).toContain("VITE_SAVANNA_MODEL_BASE_URL=https://pub-610daaff40ac42f18aa2de55bc3970b2.r2.dev/models");
+    expect(envExample).toContain("VITE_SAVANNA_LOCAL_GEMMA_MODEL_URL=https://pub-610daaff40ac42f18aa2de55bc3970b2.r2.dev/models/gemma-4-E2B-it-web.litertlm");
     expect(envExample).toContain("VITE_SAVANNA_LITERT_LM_RUNTIME_URL=https://cdn.jsdelivr.net/npm/@litert-lm/core/+esm");
-    expect(envExample).toContain("VITE_SAVANNA_EMBEDDING_GEMMA_MODEL_ID=onnx-community/embeddinggemma-300m-ONNX");
+    expect(envExample).toContain("VITE_SAVANNA_EMBEDDING_GEMMA_MODEL_ID=https://pub-610daaff40ac42f18aa2de55bc3970b2.r2.dev/models/embeddinggemma-300m-ONNX");
     expect(envExample).toContain("VITE_SAVANNA_TRANSLATE_GEMMA_MODEL_ID=google/translategemma-4b-it");
-    expect(envExample).toContain("VITE_SAVANNA_TRANSLATE_GEMMA_MODEL_URL=https://huggingface.co/litert-community/TranslateGemma-4B-IT/resolve/main/translategemma-4b-it-int8-web.task");
+    expect(envExample).toContain("VITE_SAVANNA_TRANSLATE_GEMMA_MODEL_URL=https://pub-610daaff40ac42f18aa2de55bc3970b2.r2.dev/models/translategemma-4b-it-int8-web.task");
     expect(envExample).toContain("VITE_SAVANNA_MEDIAPIPE_GENAI_RUNTIME_URL=https://cdn.jsdelivr.net/npm/@mediapipe/tasks-genai/+esm");
     expect(envExample).toContain("VITE_SAVANNA_MEDIAPIPE_GENAI_WASM_URL=https://cdn.jsdelivr.net/npm/@mediapipe/tasks-genai/wasm");
     expect(envExample).toContain("The PWA never needs GEMMA_API_KEY or GEMMA_*_ENDPOINT for local inference.");
@@ -1451,9 +1462,12 @@ describe("Savanna PWA assets", () => {
     expect(profile).toContain("savanna-username-field");
     expect(shell).toContain("hideMobileHeader?: boolean");
     expect(shell).toContain("hideDesktopHeader?: boolean");
-    expect(shell).toContain("hideChrome || hideMobileHeader ? null : <MobileStoriesHeader />");
+    expect(shell).toContain("hideChrome || hideMobileHeader || suppressMobileStoriesHeader ? null : <MobileStoriesHeader />");
     expect(shell).toContain("MessageCircleMoreIcon");
     expect(shell).toContain("savanna-rail-message-icon");
+    expect(animatedIcons).toContain("const MessageCircleMoreIcon = forwardRef");
+    expect(animatedIcons).toContain("[8, 12, 16].map");
+    expect(animatedIcons).toContain("MESSAGE_CIRCLE_MORE_DOT_VARIANTS");
     expect(shell).toContain("!hideDesktopHeader && !usesIconRail");
     expect(styles).toContain(".savanna-app .savanna-profile-page .savanna-profile-card");
     expect(styles).toContain(".savanna-app .savanna-profile-page .savanna-profile-topbar");
@@ -1469,10 +1483,10 @@ describe("Savanna PWA assets", () => {
     expect(styles).toContain(".dark .savanna-app .savanna-profile-page .savanna-memory-search-field");
     expect(styles).toContain(".dark .savanna-app .savanna-profile-page .savanna-memory-search-field input");
     expect(styles).toContain("outline: 0 !important;");
-    expect(styles).toContain("#2A3942");
-    expect(styles).toContain("--chat-bg: #0A1014");
-    expect(styles).toContain("--chat-surface: #131A1E");
-    expect(styles).toContain("--chat-search: #23282C");
+    expect(styles).toContain('[class*="bg-[#2A3942]"]');
+    expect(styles).toContain("--chat-bg: #121212");
+    expect(styles).toContain("--chat-surface: #1e1e1e");
+    expect(styles).toContain("--chat-search: #2c2c2c");
     expect(styles).toContain("--chat-gold: #D9A441");
     expect(styles).toContain("--chat-gold-dark: #A87820");
     expect(styles).toContain("--chat-read-blue: #53BDEB");
@@ -1742,7 +1756,7 @@ describe("Savanna PWA assets", () => {
     }
     expect(styles).toContain(".savanna-chat-search-with-gold-icon .savanna-chat-search-icon");
     expect(styles).toContain(".savanna-mobile-message-filter-tab[aria-selected=\"false\"]");
-    expect(styles).toContain("background: #172127 !important;");
+    expect(styles).toContain("background: #1e1e1e !important;");
     expect(styles).toContain(".savanna-emoji-picker .epr-header");
     expect(styles).toContain("padding-right: 54px !important;");
     expect(styles).toContain(".savanna-emoji-picker .epr-search-container::before");

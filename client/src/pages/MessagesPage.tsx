@@ -7,6 +7,7 @@ import { ConversationHeader } from "@/components/ConversationHeader";
 import { SafetyActions } from "@/components/SafetyActions";
 import { SavannaShell } from "@/components/SavannaShell";
 import { StoryComposer } from "@/components/StoriesPanel";
+import { StoryRing } from "@/components/StoryRing";
 import { WallpaperSection } from "@/components/WallpaperSection";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -14,6 +15,18 @@ import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { useIsMobile } from "@/hooks/useMobile";
+import { useNetworkState } from "@/hooks/useNetworkState";
+import {
+  clearDraft,
+  enqueueOutbox,
+  loadDraft,
+  loadOutbox,
+  newOutboxId,
+  removeFromOutbox,
+  saveDraft,
+  type OutboxItem,
+  type OutboxReplyTo,
+} from "@/lib/chatPersistence";
 import { startLogin } from "@/const";
 import {
   FIREBASE_MESSAGE_REACTIONS,
@@ -22,6 +35,7 @@ import {
   useFirebaseConversations,
   useFirebaseMessageMemories,
   useFirebaseMessages,
+  setFirebaseConversationMuted,
   type FirebaseConversationKind,
   type FirebaseConversationListItem,
   type FirebaseMessage,
@@ -31,6 +45,8 @@ import {
 } from "@/lib/firebaseChat";
 import { useFirebaseCommunityMutations, type FirebaseCommunityVisibility } from "@/lib/firebaseCommunities";
 import { useFirebaseStories } from "@/lib/firebaseStories";
+import { useConversationPresence, signalTyping } from "@/lib/firebasePresence";
+import { useCall } from "@/contexts/CallContext";
 import { translateWithTranslateGemma } from "@/lib/gemmaAi";
 import { isSavannaFollowUpDue, parseSavannaInvocation, type SavannaRecallAnswer, type SavannaRecallSource } from "@/lib/savannaRecall";
 import { generateAnswer } from "@/savanna/orchestrator/SavannaOrchestrator";
@@ -59,14 +75,6 @@ type PrivateAttachmentItem = FirebaseMessage["attachments"][number];
 const previewConversations: ConversationListItem[] = [];
 const desktopPreviewMessages: never[] = [];
 
-type PresenceSnapshot = {
-  headline: string;
-  subline: string;
-  online: boolean;
-  typing: boolean;
-  groupActivityCount: number;
-};
-
 function initialCommunityForm() {
   return {
     name: "",
@@ -80,41 +88,20 @@ function conversationTitle(conversation: Pick<ConversationListItem, "kind" | "ti
   return conversation.title || (conversation.kind === "group" ? "Group chat" : "Private chat");
 }
 
-function hashId(id: string) {
-  return id.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
-}
-
 function isPreviewConversationId(id: string) {
   return id.startsWith("preview-");
 }
 
-function getConversationPresence(conversation: Pick<ConversationListItem, "id" | "kind" | "title">, index = 0): PresenceSnapshot {
-  if (conversation.kind === "group") {
-    return {
-      headline: "38 people active",
-      subline: "Group activity is moving now",
-      online: true,
-      typing: false,
-      groupActivityCount: 38,
-    };
-  }
-
-  if (conversation.kind === "merchant_support") {
-    return {
-      headline: "Active 2m ago",
-      subline: "Shop support is nearby",
-      online: false,
-      typing: false,
-      groupActivityCount: 18,
-    };
-  }
-
-  const snapshots: PresenceSnapshot[] = [
-    { headline: "Online", subline: "Here now", online: true, typing: false, groupActivityCount: 12 },
-    { headline: "Typing...", subline: "Writing back", online: true, typing: true, groupActivityCount: 12 },
-    { headline: "Active 2m ago", subline: "Recently around", online: false, typing: false, groupActivityCount: 9 },
-  ];
-  return snapshots[Math.abs(hashId(conversation.id) + index) % snapshots.length];
+/**
+ * Renders the live presence headline for a chat-list row. Lives outside
+ * `renderChatRow` (a plain function, not a component) so the presence/typing
+ * hooks it depends on are invoked from a real component boundary.
+ */
+function ChatRowPresence({ conversation, viewerId, muted }: { conversation: ConversationListItem; viewerId?: string | null; muted: boolean }) {
+  const presence = useConversationPresence(conversation, viewerId);
+  if (muted) return <span className="ml-auto shrink-0 text-[11px] text-[#5f6861] dark:text-[#9AA1A6]">Muted</span>;
+  if (!presence.headline) return null;
+  return <span className="ml-auto shrink-0 text-[11px] text-[#5f6861] dark:text-[#9AA1A6]">{presence.headline}</span>;
 }
 
 function isStickerAttachment({ url, fileName, mimeType }: { url: string | null; fileName: string; mimeType: string }) {
@@ -182,7 +169,9 @@ function ChatListDeliveryIcon({ status }: { status: FirebaseMessageStatus }) {
   return <AnimatedCheckIcon className={grey} size={13} aria-label="Sent" />;
 }
 
-function DesktopStoryRail({ items, onCreateStory }: { items: Array<{ id: string | number; label: string }>; onCreateStory: () => void }) {
+type DesktopStoryItem = { id: string | number; label: string; count: number };
+
+function DesktopStoryRail({ items, onCreateStory, onOpenAuthor }: { items: DesktopStoryItem[]; onCreateStory: () => void; onOpenAuthor: (id: string | number) => void }) {
   return (
     <div className="savanna-desktop-story-rail" aria-label="Stories">
       <div className="flex gap-3 overflow-x-auto pb-1">
@@ -193,12 +182,32 @@ function DesktopStoryRail({ items, onCreateStory }: { items: Array<{ id: string 
           <span className="max-w-11 truncate text-center text-[10px] text-[#5f6861]">Your</span>
         </button>
         {items.map(item => (
-          <div key={item.id} className="flex w-11 shrink-0 flex-col items-center gap-1">
-            <span aria-label={`${item.label}'s Story`} className="savanna-brand-token grid size-11 place-items-center rounded-full text-xs font-semibold">
-              {item.label.slice(0, 1).toUpperCase()}
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => onOpenAuthor(item.id)}
+            className="flex w-11 shrink-0 flex-col items-center gap-1 text-left"
+          >
+            {/* One arc per Story: 1 Story = one continuous gold ring. */}
+            <span
+              aria-label={
+                item.count === 1
+                  ? `${item.label}'s Story`
+                  : `${item.label}'s ${item.count} Stories`
+              }
+              className="relative grid size-11 place-items-center rounded-full"
+            >
+              <StoryRing
+                count={item.count}
+                strokeWidth={3.5}
+                className="pointer-events-none absolute inset-0"
+              />
+              <span className="savanna-brand-token absolute inset-[4px] grid place-items-center rounded-full text-xs font-semibold">
+                {item.label.slice(0, 1).toUpperCase()}
+              </span>
             </span>
             <span className="max-w-11 truncate text-center text-[10px] text-[#5f6861]">{item.label.split(" ")[0]}</span>
-          </div>
+          </button>
         ))}
       </div>
     </div>
@@ -207,6 +216,8 @@ function DesktopStoryRail({ items, onCreateStory }: { items: Array<{ id: string 
 
 export default function MessagesPage() {
   const { user, isAuthenticated, loading } = useAuth();
+  const call = useCall();
+  const { isOnline } = useNetworkState();
   const [, navigate] = useLocation();
   const conversations = useFirebaseConversations(user);
   const messageMemories = useFirebaseMessageMemories(user);
@@ -216,6 +227,7 @@ export default function MessagesPage() {
   const isPreviewConversation = Boolean(selectedConversationId && isPreviewConversationId(selectedConversationId));
   const chatMutations = useFirebaseChatMutations(user);
   const [draft, setDraft] = useState("");
+  const [outbox, setOutbox] = useState<OutboxItem[]>(() => loadOutbox());
   const [attachment, setAttachment] = useState<File | null>(null);
   const [replyTo, setReplyTo] = useState<FirebaseMessage | null>(null);
   const [activeMessageActions, setActiveMessageActions] = useState<string | null>(null);
@@ -327,6 +339,46 @@ export default function MessagesPage() {
     if (!conversations.data.some(conversation => conversation.id === selectedConversationId)) setSelectedConversationId(null);
   }, [conversations.data, selectedConversationId]);
   useEffect(() => { setReplyTo(null); }, [selectedConversationId]);
+
+  // Restore the saved draft for the conversation being opened (durable across
+  // reloads and chat switches). Preview conversations are not persisted.
+  useEffect(() => {
+    if (!selectedConversationId || isPreviewConversation) {
+      setDraft("");
+      return;
+    }
+    setDraft(loadDraft(selectedConversationId));
+  }, [selectedConversationId, isPreviewConversation]);
+
+  // Replay the offline outbox when connectivity returns (and on mount, in case
+  // messages were queued while the tab was closed). `inFlight` guards against
+  // double delivery under React StrictMode's double-invoked effects.
+  const outboxInFlight = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!isOnline) return;
+    const pending = outbox;
+    pending.forEach((item) => {
+      if (outboxInFlight.current.has(item.id)) return;
+      outboxInFlight.current.add(item.id);
+      chatMutations.send.mutate(
+        {
+          conversationId: item.conversationId,
+          memberIds: item.memberIds,
+          body: item.body,
+          replyTo: item.replyTo,
+        },
+        {
+          onSuccess: () => {
+            outboxInFlight.current.delete(item.id);
+            setOutbox(removeFromOutbox(item.id));
+          },
+          onError: () => {
+            outboxInFlight.current.delete(item.id);
+          },
+        },
+      );
+    });
+  }, [isOnline, outbox, chatMutations]);
   useEffect(() => { setMediaTrayOpen(false); }, [selectedConversationId]);
   useEffect(() => { lastAutoScrolledMessageId.current = null; }, [selectedConversationId]);
   useEffect(() => {
@@ -500,9 +552,25 @@ export default function MessagesPage() {
     || conversation.kind === chatFilter
     || tabMembership[chatFilter]?.includes(conversation.id)
   );
-  const desktopStoryItems = desktopStories.data?.length ? desktopStories.data.slice(0, 8).map(story => ({ id: story.id, label: story.authorName })) : import.meta.env.DEV ? previewConversations.map(conversation => ({ id: conversation.id, label: conversationTitle(conversation) })) : [];
+  /**
+   * One chip per author, not per Story: `count` is how many live Stories that
+   * author has, and the ring is split into that many arcs.
+   */
+  const desktopStoryItems = useMemo<DesktopStoryItem[]>(() => {
+    const source = desktopStories.data ?? [];
+    if (source.length) {
+      const groups = new Map<string, DesktopStoryItem>();
+      for (const story of source) {
+        const existing = groups.get(story.authorUserId);
+        if (existing) existing.count += 1;
+        else groups.set(story.authorUserId, { id: story.authorUserId, label: story.authorName, count: 1 });
+      }
+      return Array.from(groups.values()).slice(0, 8);
+    }
+    return import.meta.env.DEV ? previewConversations.map(conversation => ({ id: conversation.id, label: conversationTitle(conversation), count: 1 })) : [];
+  }, [desktopStories.data]);
   const selected = conversationSource.find(conversation => conversation.id === selectedConversationId) ?? (isPreviewConversation ? previewConversations.find(conversation => conversation.id === selectedConversationId) : undefined);
-  const selectedPresence = selected ? getConversationPresence(selected, filteredChatList.findIndex(conversation => conversation.id === selected.id)) : null;
+  const selectedPresence = useConversationPresence(selected, user?.id);
   const selectedSavannaAnswers = selectedConversationId ? savannaAnswers[selectedConversationId] ?? [] : [];
   const threadSearchMatches = useMemo(() => {
     const query = threadSearchQuery.trim().toLowerCase();
@@ -1084,8 +1152,12 @@ export default function MessagesPage() {
     );
   };
 
-  const startVideoCall = () => toast.info("Video calling arrives with the next release.");
-  const startVoiceCall = () => toast.info("Voice calling arrives with the next release.");
+  const startVideoCall = () => {
+    if (selected) call.startCall(selected, "video");
+  };
+  const startVoiceCall = () => {
+    if (selected) call.startCall(selected, "audio");
+  };
 
   /** Shared avatar tile so the group glyph and direct chats look identical everywhere. */
   const conversationAvatar = (conversation: Pick<ConversationListItem, "kind">) =>
@@ -1157,7 +1229,15 @@ export default function MessagesPage() {
       {customTabs.length ? (
         <DropdownMenuItem onSelect={() => window.setTimeout(saveSelectedToTab, 0)}>Save chat to a tab</DropdownMenuItem>
       ) : null}
-      <DropdownMenuItem onSelect={() => toast.info("Notification controls arrive with the next release.")}>Mute notifications</DropdownMenuItem>
+      <DropdownMenuItem onSelect={() => {
+        if (!user) return;
+        const next = !Boolean(selected.mutedUntil);
+        void setFirebaseConversationMuted(user, selected.id, next)
+          .then(() => toast.success(next ? `Muted ${conversationTitle(selected)}` : `Unmuted ${conversationTitle(selected)}`))
+          .catch((error: unknown) => toast.error(error instanceof Error ? error.message : "Could not update mute setting"));
+      }}>
+        {Boolean(selected.mutedUntil) ? "Unmute notifications" : "Mute notifications"}
+      </DropdownMenuItem>
     </>
   ) : null;
 
@@ -1660,7 +1740,12 @@ export default function MessagesPage() {
                 <StickerIcon ref={stickerIcon} size={20} />
               </Button>
             )}
-            <Input ref={draftInput} value={draft} onChange={event => setDraft(event.target.value)} disabled={Boolean(attachment)} placeholder={attachment ? attachment.name : "Message or @Savanna"} aria-label="Message draft" className="min-w-0 flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0" />
+            <Input ref={draftInput} value={draft} onChange={event => {
+              setDraft(event.target.value);
+              if (event.target.value.trim() && selectedConversationId && user) {
+                signalTyping(selectedConversationId, user);
+              }
+            }} disabled={Boolean(attachment)} placeholder={attachment ? attachment.name : "Message or @Savanna"} aria-label="Message draft" className="min-w-0 flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0" />
             {attachment ? <Button type="button" variant="ghost" onClick={() => setAttachment(null)} size="icon" className="size-8 shrink-0 rounded-lg" aria-label="Remove attachment"><X className="size-4" /></Button> : null}
             <Button type="button" variant="ghost" size="icon" onClick={() => attachmentInput.current?.click()} className={cn("shrink-0 rounded-xl", actionSize)} aria-label="Attach private media">
               <Paperclip className="size-4" />
@@ -1917,7 +2002,6 @@ export default function MessagesPage() {
 
   const renderChatRow = (conversation: ConversationListItem, index: number) => {
     const active = selectedConversationId === conversation.id;
-    const presence = getConversationPresence(conversation, index);
     const previewStatus = conversation.previewStatus;
     const unreadCount = Math.max(0, conversation.unreadCount);
     const unreadLabel = unreadCount > 99 ? "99+" : String(unreadCount);
@@ -1975,7 +2059,7 @@ export default function MessagesPage() {
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-2">
             <span className="truncate text-sm font-semibold text-[#3d2d1a] dark:text-[#fff8ed]">{conversationTitle(conversation)}</span>
-            <span className="ml-auto shrink-0 text-[11px] text-[#5f6861] dark:text-[#9AA1A6]">{conversation.mutedUntil ? "Muted" : presence.headline}</span>
+            <ChatRowPresence conversation={conversation} viewerId={user?.id} muted={Boolean(conversation.mutedUntil)} />
           </span>
           <span className="mt-1 flex items-center gap-2 text-xs text-[#5f6861] dark:text-[#9AA1A6]">
             <span className="flex min-w-0 flex-1 items-center gap-1 truncate">
@@ -2022,7 +2106,7 @@ export default function MessagesPage() {
   }
 
   if (isMobile && mobileDetail && selected) {
-    const presence = selectedPresence ?? getConversationPresence(selected);
+    const presence = selectedPresence;
     return (
       <SavannaShell hideChrome>
         <div className="savanna-mobile-conversation flex h-[100dvh] flex-col overflow-hidden bg-[#faf7f0] dark:bg-[#17120d]">
@@ -2128,11 +2212,11 @@ export default function MessagesPage() {
           </header>
           <label className="savanna-desktop-chat-search savanna-chat-search-with-gold-icon mt-5 flex h-11 items-center gap-2 rounded-2xl px-3 text-sm">
             <AnimatedSearchIcon size={17} className="savanna-chat-search-icon shrink-0" />
-            <input value={conversationSearch} onChange={event => setConversationSearch(event.target.value)} placeholder="Search chats or people" aria-label="Search conversations" className="min-w-0 flex-1 bg-transparent text-[#151A17] outline-none placeholder:text-[#5F6861] dark:text-[#F0F2F5] dark:placeholder:text-[#9AA1A6]" />
+            <input value={conversationSearch} onChange={event => setConversationSearch(event.target.value)} placeholder="Search chats or people" aria-label="Search conversations" className="min-w-0 flex-1 bg-transparent text-[#151A17] outline-none placeholder:text-[#9aa1a6] dark:text-[#F0F2F5] dark:placeholder:text-[#9aa1a6]" />
           </label>
           {renderUsernameResults("desktop")}
           {renderDueFollowUpsPrompt("desktop")}
-          <DesktopStoryRail items={desktopStoryItems} onCreateStory={() => setStoryComposerOpen(true)} />
+          <DesktopStoryRail items={desktopStoryItems} onCreateStory={() => setStoryComposerOpen(true)} onOpenAuthor={(id) => navigate(`/stories?author=${encodeURIComponent(String(id))}`)} />
           <div className="savanna-desktop-message-tabs savanna-animated-filter-tabs flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Desktop chat filters">
             {filterTabs.map(([value, label]) => {
               const isActive = chatFilter === value;
@@ -2165,7 +2249,7 @@ export default function MessagesPage() {
                 className="savanna-desktop-chat-header gap-3 px-6 py-4"
                 title={conversationTitle(selected)}
                 avatar={conversationAvatar(selected)}
-                presenceLabel={selectedPresence ? `${selectedPresence.headline} · ${selectedPresence.subline}` : "Conversation members only"}
+                presenceLabel={selectedPresence.headline ? `${selectedPresence.headline} · ${selectedPresence.subline}` : "Conversation members only"}
                 onAvatarClick={peerProfileOpener(selected)}
                 onVideoCall={startVideoCall}
                 onVoiceCall={startVoiceCall}

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 
 type Theme = "light" | "dark";
-const MANIFEST_VERSION = "?v=38";
+const MANIFEST_VERSION = "?v=45";
 
 interface ThemeContextType {
   theme: Theme;
@@ -53,7 +53,7 @@ export function ThemeProvider({
 
   useEffect(() => {
     const root = document.documentElement;
-    const pageColor = theme === "dark" ? "#0B0F0E" : "#FFFFFF";
+    const pageColor = theme === "dark" ? "#121212" : "#FFFFFF";
     const appleStatusStyle = theme === "dark" ? "black-translucent" : "default";
     if (theme === "dark") {
       root.classList.add("dark");

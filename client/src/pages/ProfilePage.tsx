@@ -18,6 +18,15 @@ import {
   type SavannaNotificationSettings,
 } from "@/lib/firebaseNotifications";
 import { createFirebaseBlock, createFirebaseSafetyReport } from "@/lib/firebaseSafety";
+import {
+  formatSessionLastSeen,
+  sessionId,
+  useFirebaseSessions,
+  useRevokeOtherSessions,
+  useRevokeSession,
+  useSessionGuard,
+  type FirebaseSession,
+} from "@/lib/firebaseSessions";
 import { useFirebaseStories, useFirebaseStoryAnalytics, type FirebaseStory } from "@/lib/firebaseStories";
 import { SAVANNA_MEMORY_TAG_LABELS, type SavannaMemoryTag } from "@/lib/savannaRecall";
 import { normalizeUsername, updateUserProfile, type AppUser } from "@/lib/userProfile";
@@ -56,6 +65,104 @@ function formatMemoryDate(value: Date | string) {
 function formatFollowUpDate(value: Date | string | null) {
   if (!value) return null;
   return new Date(value).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+}
+
+function DeviceSessionsPanel({ user }: { user: AppUser }) {
+  const sessions = useFirebaseSessions(user);
+  const revokeSession = useRevokeSession();
+  const revokeOthers = useRevokeOtherSessions();
+  // Also registers this browser so it shows up in the list below.
+  useSessionGuard(user);
+
+  const currentSessionId = sessionId();
+  const list: FirebaseSession[] = sessions.data ?? [];
+
+  return (
+    <div className="space-y-3">
+      {sessions.isLoading ? (
+        <div className="space-y-3" aria-hidden>
+          {[0, 1, 2].map(row => (
+            <div key={row} className="savanna-profile-card-muted h-[78px] animate-pulse rounded-2xl bg-[#D9A441]/10" />
+          ))}
+        </div>
+      ) : null}
+
+      {!sessions.isLoading && list.length === 0 ? (
+        <p className="rounded-2xl border border-dashed border-[#eadfca] p-4 text-sm text-[#5F6861]">
+          No signed-in devices recorded yet. This browser is added the moment it registers.
+        </p>
+      ) : null}
+
+      {list.map(session => {
+        const isCurrent = session.id === currentSessionId;
+        const isRevoked = Boolean(session.revokedAt);
+        const isPending = revokeSession.isPending && revokeSession.variables?.sessionId === session.id;
+        return (
+          <div
+            key={session.id}
+            className="savanna-profile-card-muted flex flex-col justify-between gap-3 rounded-2xl bg-[#D9A441]/10 p-4 sm:flex-row sm:items-center"
+          >
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-[#151A17]">
+                {session.label}
+                {isCurrent ? (
+                  <span className="ml-2 rounded-full bg-[#D9A441]/20 px-2 py-0.5 text-[10px] font-semibold text-[#D9A441]">
+                    This device
+                  </span>
+                ) : null}
+                {isRevoked ? (
+                  <span className="ml-2 rounded-full bg-[#9c5337]/15 px-2 py-0.5 text-[10px] font-semibold text-[#9c5337]">
+                    Signed out
+                  </span>
+                ) : null}
+              </p>
+              <p className="mt-1 text-xs text-[#5F6861]">
+                {session.platform ? `${session.platform} · ` : ""}
+                {isRevoked ? `Revoked ${formatSessionLastSeen(session.revokedAt)}` : formatSessionLastSeen(session.lastSeenAt)}
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              disabled={isRevoked || isPending || revokeSession.isPending}
+              onClick={() =>
+                revokeSession.mutate(
+                  { user, sessionId: session.id },
+                  {
+                    onSuccess: () => toast.success(isCurrent ? "This device was signed out." : "Device signed out."),
+                    onError: error => toast.error(error instanceof Error ? error.message : "Could not sign out that device."),
+                  },
+                )
+              }
+              className="shrink-0 rounded-xl border-[#eadfca] bg-transparent text-[#9a6410] hover:bg-[#D9A441]/10"
+            >
+              {isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <LogOut className="mr-2 size-4" />}
+              {isRevoked ? "Revoked" : "Revoke"}
+            </Button>
+          </div>
+        );
+      })}
+
+      <div className="flex justify-end pt-1">
+        <Button
+          variant="outline"
+          disabled={revokeOthers.isPending || list.length === 0}
+          onClick={() =>
+            revokeOthers.mutate(
+              { user },
+              {
+                onSuccess: result => toast.success(`${result.revokedCount} other device${result.revokedCount === 1 ? "" : "s"} signed out.`),
+                onError: error => toast.error(error instanceof Error ? error.message : "Could not sign out other devices."),
+              },
+            )
+          }
+          className="shrink-0 rounded-xl border-[#e0c4b7] text-[#7a422d] hover:bg-[#fbf0e6]"
+        >
+          {revokeOthers.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <LogOut className="mr-2 size-4" />}
+          Sign out all other devices
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 function StoryPerformanceRow({ story }: { story: FirebaseStory }) {
@@ -280,11 +387,6 @@ export default function ProfilePage() {
   const isLoading = !user;
   const publicProfileHref = user ? `/people/${user.id}` : "/profile";
   const profileInitial = (user?.name || "S").slice(0, 1).toUpperCase();
-  const session = {
-    id: user?.id ?? "current",
-    deviceLabel: "This browser",
-    lastSeenAt: user?.updatedAt ?? new Date(),
-  };
 
   const saveProfile = async () => {
     if (!user) return;
@@ -594,7 +696,7 @@ export default function ProfilePage() {
 
           <section className="savanna-profile-card rounded-[28px] border border-[#eadfca] bg-white p-6 shadow-[0_14px_35px_rgba(94,58,11,0.04)] sm:p-8">
             <div className="mb-6 flex items-start gap-3"><span className="grid size-10 place-items-center rounded-xl bg-[#D9A441]/20 text-[#D9A441]"><Smartphone className="size-5" /></span><div><h2 className="font-display text-2xl font-semibold tracking-[-0.045em] text-[#151A17]">Device sessions</h2><p className="mt-1 text-sm text-[#5F6861]">Review browsers that have recently used your Savanna account.</p></div></div>
-            <div className="space-y-3"><div className="savanna-profile-card-muted flex flex-col justify-between gap-3 rounded-2xl bg-[#D9A441]/10 p-4 sm:flex-row sm:items-center"><div><p className="text-sm font-semibold text-[#151A17]">{session.deviceLabel} <span className="ml-2 rounded-full bg-[#D9A441]/20 px-2 py-0.5 text-[10px] font-semibold text-[#D9A441]">This browser</span></p><p className="mt-1 text-xs text-[#5F6861]">Last active {new Date(session.lastSeenAt).toLocaleString()}</p></div><Button variant="outline" disabled className="rounded-xl border-[#eadfca] bg-transparent text-[#9a6410] hover:bg-[#D9A441]/10">Managed by Firebase Auth</Button></div></div>
+            <DeviceSessionsPanel user={user} />
           </section>
 
           <section className="grid gap-4 md:grid-cols-2">

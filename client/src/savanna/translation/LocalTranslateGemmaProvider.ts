@@ -1,8 +1,8 @@
 import {
-  SAVANNA_MEDIAPIPE_GENAI_RUNTIME_URL,
-  SAVANNA_MEDIAPIPE_GENAI_WASM_URL,
+  configuredMediaPipeGenAiRuntimeUrl,
+  configuredMediaPipeGenAiWasmUrl,
+  configuredTranslateGemmaModelUrl,
   SAVANNA_TRANSLATE_GEMMA_MODEL_ID,
-  SAVANNA_TRANSLATE_GEMMA_WEB_MODEL_URL,
 } from "../inference/InferenceProvider";
 import type { TranslationProvider, TranslationRequest, TranslationResponse } from "./TranslationProvider";
 
@@ -89,14 +89,14 @@ export class LocalTranslateGemmaProvider implements TranslationProvider {
   }
 
   private async load() {
-    const modelUrl = import.meta.env.VITE_SAVANNA_TRANSLATE_GEMMA_MODEL_URL || SAVANNA_TRANSLATE_GEMMA_WEB_MODEL_URL;
+    const modelUrl = configuredTranslateGemmaModelUrl();
     if (this.engine && this.engineModelUrl === modelUrl) return this.engine;
 
     this.engine?.close?.();
     this.engine = null;
 
-    const runtimeUrl = import.meta.env.VITE_SAVANNA_MEDIAPIPE_GENAI_RUNTIME_URL || SAVANNA_MEDIAPIPE_GENAI_RUNTIME_URL;
-    const wasmUrl = import.meta.env.VITE_SAVANNA_MEDIAPIPE_GENAI_WASM_URL || SAVANNA_MEDIAPIPE_GENAI_WASM_URL;
+    const runtimeUrl = configuredMediaPipeGenAiRuntimeUrl();
+    const wasmUrl = configuredMediaPipeGenAiWasmUrl();
     const runtime = await import(/* @vite-ignore */ runtimeUrl) as MediaPipeGenAiModule;
     const fileset = await runtime.FilesetResolver.forGenAiTasks(wasmUrl);
     const model = await this.loadModelBytes(modelUrl);

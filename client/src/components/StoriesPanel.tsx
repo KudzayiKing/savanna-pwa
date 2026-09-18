@@ -1,6 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { AnimatedPlusIcon, UserIcon } from "@/components/AnimatedNavIcons";
 import { SafetyActions } from "@/components/SafetyActions";
+import { StoryRing } from "@/components/StoryRing";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useFirebaseCommunities } from "@/lib/firebaseCommunities";
@@ -1369,6 +1370,23 @@ export function MobileStoriesHeader() {
     }
     return Array.from(groups.values());
   }, [storySource]);
+  /**
+   * The viewer's own group is rendered by the dedicated "Your Story" chip, so it
+   * is pulled out of the rail listing to avoid showing the same person twice.
+   * `railGroups` keeps the ORIGINAL index into `groupedStories` because
+   * `openGroup` looks groups up by that index.
+   */
+  const ownGroupIndex = groupedStories.findIndex(
+    group => group.authorUserId === user?.id
+  );
+  const ownStoryCount = ownGroupIndex >= 0 ? groupedStories[ownGroupIndex].items.length : 0;
+  const railGroups = useMemo(
+    () =>
+      groupedStories
+        .map((group, index) => ({ group, index }))
+        .filter(entry => entry.index !== ownGroupIndex),
+    [groupedStories, ownGroupIndex]
+  );
   // The collapsed cluster is width-animated so the wordmark slides instead of
   // jumping. framer-motion cannot spring to "auto", so measure the cluster.
   useEffect(() => {
@@ -1412,6 +1430,16 @@ export function MobileStoriesHeader() {
     if (user && story && isFirebaseStoryId(story.id))
       view.mutate({ storyId: story.id, user });
   };
+
+  // Deep-link support: `/stories?author=<uid>` (used by the desktop story rail)
+  // opens that author's viewer automatically once their stories have loaded.
+  useEffect(() => {
+    const authorId = new URLSearchParams(window.location.search).get("author");
+    if (!authorId || activeGroupIndex !== null) return;
+    const idx = groupedStories.findIndex(group => group.authorUserId === authorId);
+    if (idx >= 0) openGroup(idx);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupedStories]);
   const moveStory = (direction: -1 | 1) => {
     if (!activeGroup) return;
     const nextIndex = Math.max(
@@ -1459,8 +1487,12 @@ export function MobileStoriesHeader() {
             <motion.button
               key={group.authorUserId}
               onClick={() => openGroup(groupIndex)}
-              aria-label={`Open ${group.authorName}'s Stories`}
-              className={`savanna-brand-token grid size-8 shrink-0 place-items-center rounded-full text-[10px] font-semibold transition-transform hover:scale-105 focus-visible:z-20 ${groupIndex ? "-ml-1.5" : ""}`}
+              aria-label={
+                group.items.length === 1
+                  ? `Open ${group.authorName}'s Story`
+                  : `Open ${group.authorName}'s ${group.items.length} Stories`
+              }
+              className={`relative grid size-8 shrink-0 place-items-center rounded-full transition-transform hover:scale-105 focus-visible:z-20 ${groupIndex ? "-ml-1.5" : ""}`}
               style={{ zIndex: groupIndex + 1 }}
               initial={{ scale: 0.2, opacity: 0, y: 8 }}
               animate={{
@@ -1483,7 +1515,15 @@ export function MobileStoriesHeader() {
                     },
               }}
             >
-              {group.authorName.slice(0, 1).toUpperCase()}
+              {/* Ring sits outside the avatar, which is inset to leave a gap. */}
+              <StoryRing
+                count={group.items.length}
+                strokeWidth={4}
+                className="pointer-events-none absolute inset-0"
+              />
+              <span className="savanna-brand-token absolute inset-[4px] grid place-items-center rounded-full text-[10px] font-semibold">
+                {group.authorName.slice(0, 1).toUpperCase()}
+              </span>
             </motion.button>
           ))
         )}
@@ -1579,19 +1619,33 @@ export function MobileStoriesHeader() {
                       : toast.error("Sign in to share a Story")
                   }
                   aria-label="Add to your Story"
-                  className="savanna-brand-token relative grid size-14 shrink-0 place-items-center overflow-visible rounded-full p-0.5 transition-transform active:scale-95"
+                  className="relative grid size-14 shrink-0 place-items-center overflow-visible rounded-full transition-transform active:scale-95"
                 >
-                  {ownStoryAvatarUrl ? (
-                    <img
-                      src={ownStoryAvatarUrl}
-                      alt=""
-                      className="size-full rounded-full object-cover"
+                  {/* Only ringed once the viewer actually has live Stories. */}
+                  {ownStoryCount > 0 ? (
+                    <StoryRing
+                      count={ownStoryCount}
+                      strokeWidth={3}
+                      className="pointer-events-none absolute inset-0"
                     />
-                  ) : (
-                    <span className="grid size-full place-items-center rounded-full text-xs font-semibold">
-                      {ownStoryInitial}
-                    </span>
-                  )}
+                  ) : null}
+                  {/*
+                   * The avatar is inset so the ring reads as a ring instead of
+                   * merging into the gold disc. A plain absolutely positioned
+                   * <img> would size to its intrinsic width, so the inset lives
+                   * on this wrapper and the image just fills it.
+                   */}
+                  <span className="savanna-brand-token absolute inset-[5px] grid place-items-center overflow-hidden rounded-full">
+                    {ownStoryAvatarUrl ? (
+                      <img
+                        src={ownStoryAvatarUrl}
+                        alt=""
+                        className="size-full rounded-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-xs font-semibold">{ownStoryInitial}</span>
+                    )}
+                  </span>
                   <span
                     aria-hidden="true"
                     className="savanna-brand-token absolute -bottom-0.5 -right-0.5 grid size-5 place-items-center rounded-full"
@@ -1608,7 +1662,7 @@ export function MobileStoriesHeader() {
                   <Loader2 className="size-3.5 animate-spin" />
                 </div>
               ) : (
-                groupedStories.slice(0, 8).map((group, groupIndex) => {
+                railGroups.slice(0, 8).map(({ group, index: groupIndex }) => {
                   return (
                     <motion.div
                       key={group.authorUserId}
@@ -1617,10 +1671,22 @@ export function MobileStoriesHeader() {
                     >
                       <button
                         onClick={() => openGroup(groupIndex)}
-                        aria-label={`Open ${group.authorName}'s Stories`}
-                        className="savanna-brand-token grid size-14 shrink-0 place-items-center rounded-full text-xs font-semibold transition-all duration-300"
+                        aria-label={
+                          group.items.length === 1
+                            ? `Open ${group.authorName}'s Story`
+                            : `Open ${group.authorName}'s ${group.items.length} Stories`
+                        }
+                        className="relative grid size-14 shrink-0 place-items-center rounded-full transition-transform duration-300 active:scale-95"
                       >
-                        {group.authorName.slice(0, 1).toUpperCase()}
+                        {/* One arc per Story: 1 Story = a single gold ring. */}
+                        <StoryRing
+                          count={group.items.length}
+                          strokeWidth={3}
+                          className="pointer-events-none absolute inset-0"
+                        />
+                        <span className="savanna-brand-token absolute inset-[5px] grid place-items-center rounded-full text-xs font-semibold">
+                          {group.authorName.slice(0, 1).toUpperCase()}
+                        </span>
                       </button>
                       <span className="max-w-16 truncate text-center text-[10px] font-medium text-[#5f6861] dark:text-[#9AA1A6]">
                         {group.authorName.split(" ")[0]}

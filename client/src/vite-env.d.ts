@@ -30,6 +30,8 @@ interface ImportMetaEnv {
 
   /** Public inference preference. Secrets stay server-side behind /api/ai/*. */
   readonly VITE_SAVANNA_INFERENCE?: "auto" | "local" | "cloud" | "mock";
+  /** Public base URL for self-hosted Savanna model artifacts. */
+  readonly VITE_SAVANNA_MODEL_BASE_URL?: string;
   /** Public URL for the browser-ready `.litertlm` Gemma model artifact. */
   readonly VITE_SAVANNA_LOCAL_GEMMA_MODEL_URL?: string;
   /** Public URL for Google's LiteRT-LM web runtime module. */

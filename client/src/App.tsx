@@ -1,5 +1,7 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { CallOverlay } from "./components/CallOverlay";
+import { CallProvider } from "./contexts/CallContext";
 import { PwaAppPrompts } from "./components/PwaExperience";
 import { Suspense, lazy } from "react";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -120,11 +122,14 @@ function App() {
     <ErrorBoundary>
       <ThemeProvider defaultTheme="light" switchable>
         <WallpaperProvider>
-          <TooltipProvider>
-            <Toaster />
-            <PwaAppPrompts />
-            <Router />
-          </TooltipProvider>
+          <CallProvider>
+            <TooltipProvider>
+              <Toaster />
+              <PwaAppPrompts />
+              <Router />
+              <CallOverlay />
+            </TooltipProvider>
+          </CallProvider>
         </WallpaperProvider>
       </ThemeProvider>
     </ErrorBoundary>

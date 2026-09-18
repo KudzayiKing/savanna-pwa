@@ -1,6 +1,6 @@
 import {
-  SAVANNA_LITERT_LM_RUNTIME_URL,
-  SAVANNA_LOCAL_GEMMA_WEB_MODEL_URL,
+  configuredLiteRtLmRuntimeUrl,
+  configuredLocalGemmaModelUrl,
 } from "@/savanna/inference/InferenceProvider";
 
 type SavannaWorkerRequest = {
@@ -90,8 +90,8 @@ async function modelBlob(url: string) {
 }
 
 async function loadEngine(payload: SavannaWorkerRequest["payload"] = {}) {
-  const runtimeUrl = payload.runtimeUrl || import.meta.env.VITE_SAVANNA_LITERT_LM_RUNTIME_URL || SAVANNA_LITERT_LM_RUNTIME_URL;
-  const modelUrl = payload.modelUrl || import.meta.env.VITE_SAVANNA_LOCAL_GEMMA_MODEL_URL || SAVANNA_LOCAL_GEMMA_WEB_MODEL_URL;
+  const runtimeUrl = payload.runtimeUrl || configuredLiteRtLmRuntimeUrl();
+  const modelUrl = payload.modelUrl || configuredLocalGemmaModelUrl();
   if (engine && engineModelUrl === modelUrl && engineRuntimeUrl === runtimeUrl) return;
 
   await engine?.delete?.();

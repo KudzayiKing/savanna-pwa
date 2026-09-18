@@ -1,9 +1,9 @@
 import type { InferenceProvider, InferenceRequest, InferenceResponse, SavannaCapabilities } from "./InferenceProvider";
 import {
+  configuredLiteRtLmRuntimeUrl,
+  configuredLocalGemmaModelUrl,
   SAVANNA_EMBEDDING_GEMMA_MODEL_ID,
   SAVANNA_LOCAL_GEMMA_CHECKPOINT_ID,
-  SAVANNA_LOCAL_GEMMA_WEB_MODEL_URL,
-  SAVANNA_LITERT_LM_RUNTIME_URL,
 } from "./InferenceProvider";
 
 declare global {
@@ -36,14 +36,6 @@ type LocalGemmaWorkerResponse = {
   payload?: { text?: string };
   error?: string;
 };
-
-function localModelUrl() {
-  return import.meta.env.VITE_SAVANNA_LOCAL_GEMMA_MODEL_URL || SAVANNA_LOCAL_GEMMA_WEB_MODEL_URL;
-}
-
-function litertRuntimeUrl() {
-  return import.meta.env.VITE_SAVANNA_LITERT_LM_RUNTIME_URL || SAVANNA_LITERT_LM_RUNTIME_URL;
-}
 
 function buildGroundedPrompt(request: InferenceRequest) {
   return JSON.stringify({
@@ -88,8 +80,8 @@ export class LocalGemmaProvider implements InferenceProvider {
       });
     }
     await this.request("load", {
-      modelUrl: localModelUrl(),
-      runtimeUrl: litertRuntimeUrl(),
+      modelUrl: configuredLocalGemmaModelUrl(),
+      runtimeUrl: configuredLiteRtLmRuntimeUrl(),
       maxNumTokens: 4096,
     });
   }

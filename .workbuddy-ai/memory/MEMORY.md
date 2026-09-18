@@ -1,5 +1,34 @@
 # Savanna PWA — long-term project notes
 
+## Story rings: `client/src/components/StoryRing.tsx`
+Segmented gold ring, Instagram-style — 1 Story = one continuous ring, N Stories =
+N arcs with gaps. SVG `stroke-dasharray`/`stroke-dashoffset` on N `<circle>`s
+(rotated `-90°` so arc 1 starts at 12 o'clock), NOT a `conic-gradient` — it has
+to render cleanly at 30px, 44px and 56px. `MAX_SEGMENTS = 12`.
+- **Round-cap correction**: `strokeLinecap="round"` adds `strokeWidth/2` per end,
+  so the dash drawn is `step - gap - strokeWidth`, else the caps close the gap.
+- **Keep `<StoryRing>` a SIBLING of any `.savanna-brand-token` element** —
+  `.savanna-app .savanna-brand-token *` forces `color` with `!important` and will
+  override the ring's gold. Colour lives on `.savanna-story-ring` in `index.css`.
+- Used in `StoriesPanel.tsx` (mobile rail + collapsed cluster) and
+  `MessagesPage.tsx` `DesktopStoryRail`. `DesktopStoryRail` groups by
+  `authorUserId` — it used to make one chip per Story.
+
+## Known-fake / unfinished surfaces (full list: `docs/IMPLEMENTATION_GAPS.md`)
+- **Presence + typing are fabricated**: `MessagesPage.tsx:91-116` hardcodes
+  "38 people active" and picks "Typing..." from a hash of the conversation id.
+  Nothing writes presence; `firestore.rules:581` has a dead `/presence` block.
+- **No E2EE**: messages are plaintext despite `IMPLEMENTATION_PLAN.md:50,77` and
+  `docs/architecture_decisions.md:40` claiming encrypted envelopes.
+- **Learn module is dead code**: `/learn*` all redirect (`App.tsx:88-96`);
+  `LearnPage/CoursePage/CreatorStudioPage` are imported by nothing.
+- **All `/api/*` calls are dead on Firebase Hosting** (returns `index.html`):
+  tRPC `/api/trpc` (`main.tsx:216`), `/api/ai/*` (`gemmaAi.ts:133,148,172`,
+  `CloudTranslationProvider.ts:35`). Fix = HTTPS function + `/api` rewrite, or
+  deploy the Express server elsewhere.
+- Video/voice calling (`MessagesPage.tsx:1121-1122`) and mute notifications
+  (`:1160`) are toasts. Device-sessions screen (`ProfilePage.tsx:596`) is fake.
+
 ## Push notifications: dispatched by a Cloud Function, not Express
 Firebase Hosting is **static**. `firebase.json` has a single rewrite
 (`** → /index.html`), so `/api/**` returns HTML — the Express route in

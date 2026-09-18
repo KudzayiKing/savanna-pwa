@@ -20,8 +20,8 @@
           var dark =
             requested === "dark" ||
             (requested !== "light" && stored === "dark");
-          var pageColor = dark ? "#0B0F0E" : "#FFFFFF";
-          var manifestVersion = "?v=42";
+          var pageColor = dark ? "#121212" : "#FFFFFF";
+          var manifestVersion = "?v=45";
           var manifestHref = dark
             ? "/manifest-dark.webmanifest" + manifestVersion
             : "/manifest-light.webmanifest" + manifestVersion;
@@ -30,14 +30,14 @@
           document.documentElement.style.backgroundColor = pageColor;
           document.documentElement.style.setProperty("--savanna-system-bar-color", pageColor);
           document.write(
-            '<meta name="theme-color" content="' + pageColor + '"><meta name="apple-mobile-web-app-status-bar-style" content="' + (dark ? "black-translucent" : "default") + '" +
+            '<meta name="theme-color" content="' + pageColor + '"><meta name="apple-mobile-web-app-status-bar-style" content="' + (dark ? "black-translucent" : "default") +
               '"><link rel="manifest" href="' +
               manifestHref +
               '">'
           );
         } catch (e) {
           document.write(
-            '<meta name="theme-color" content="#FFFFFF"><meta name="apple-mobile-web-app-status-bar-style" content="default"><link rel="manifest" href="/manifest-light.webmanifest?v=42">'
+            '<meta name="theme-color" content="#FFFFFF"><meta name="apple-mobile-web-app-status-bar-style" content="default"><link rel="manifest" href="/manifest-light.webmanifest?v=45">'
           );
         }
       })();
@@ -132,7 +132,7 @@
         pointer-events: none;
       }
       .dark #splash {
-        background: #111b21;
+        background: #121212;
       }
       #splash .savanna-message-icon {
         color: #FFFFFF;
@@ -501,8 +501,8 @@
             "align-items:center",
             "justify-content:center",
             "padding:24px",
-            "background:" + (dark ? "#0B0F0E" : "#FFFFFF"),
-            "color:" + (dark ? "#E9EDEF" : "#151A17"),
+            "background:" + (dark ? "#121212" : "#FFFFFF"),
+            "color:" + (dark ? "#F5F5F5" : "#151A17"),
             "font-family:'DM Sans',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",
             "text-align:center"
           ].join(";");
@@ -518,7 +518,7 @@
             '</svg>' +
             '<h1 style="margin:0;font-size:28px;line-height:1.05;font-weight:700">Refresh Savanna</h1>' +
             '<p style="margin:12px 0 22px;color:' +
-            (dark ? "#AEBAC1" : "#5F6861") +
+            (dark ? "#B8B8B8" : "#5F6861") +
             ';font-size:15px;line-height:1.6">' +
             detail.replace(/[<>&"]/g, function (char) {
               return { "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[char];

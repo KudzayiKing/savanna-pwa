@@ -203,7 +203,7 @@ export default function MerchantStudioPage() {
 
   return (
     <SavannaShell>
-      <div className="savanna-profile-page mx-auto max-w-[960px] space-y-6">
+      <div className="savanna-route-shops savanna-merchant-studio-page mx-auto max-w-[960px] space-y-6">
         <header>
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#D9A441]">Merchant studio</p>
           <h1 className="mt-1 font-display text-4xl font-semibold tracking-[-0.06em] text-[#151A17]">Your business, clearly presented.</h1>

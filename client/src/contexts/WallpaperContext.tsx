@@ -64,7 +64,7 @@ export const SAVANNA_WALLPAPERS: SavannaWallpaperOption[] = [
 export const WALLPAPER_COLOR_SWATCHES: { label: string; color: string | null }[] = [
   { label: "Default", color: null },
   { label: "Savanna light", color: "#fcfaf4" },
-  { label: "Savanna dark", color: "#0B0F0E" },
+  { label: "Savanna dark", color: "#121212" },
   { label: "Parchment", color: "#f6f0e2" },
   { label: "Fern", color: "#dce6d8" },
   { label: "Dune", color: "#e8dfc9" },
