@@ -1,5 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTheme } from "./ThemeContext";
+import { MAX_CUSTOM_WALLPAPER_BYTES, type WallpaperSlot } from "@/lib/wallpaper-image";
+
+export { MAX_CUSTOM_WALLPAPER_BYTES };
+export type { WallpaperSlot };
 
 /**
  * Wallpaper preferences are device-local (like the theme toggle): they live in
@@ -8,15 +12,18 @@ import { useTheme } from "./ThemeContext";
  */
 const WALLPAPER_STORAGE_KEY = "savanna-wallpaper:v1";
 
-/** Anything larger would be base64-inflated past the ~5MB localStorage budget. */
-export const MAX_CUSTOM_WALLPAPER_BYTES = 3 * 1024 * 1024;
-
 export type WallpaperKind = "default" | "color" | "savanna-mobile" | "savanna-web" | "custom";
 
 export type WallpaperSetting = {
   kind: WallpaperKind;
   color: string | null;
-  customImage: string | null;
+  /**
+   * Uploaded art is stored per orientation. Only one is required: whichever
+   * slot is empty borrows the other, so a single upload still fills both a
+   * phone and a desktop.
+   */
+  customPortrait: string | null;
+  customLandscape: string | null;
 };
 
 export type SavannaWallpaperOption = {
@@ -28,7 +35,12 @@ export type SavannaWallpaperOption = {
   aspect: string;
 };
 
-const DEFAULT_SETTING: WallpaperSetting = { kind: "default", color: null, customImage: null };
+const DEFAULT_SETTING: WallpaperSetting = {
+  kind: "default",
+  color: null,
+  customPortrait: null,
+  customLandscape: null,
+};
 
 const KINDS: WallpaperKind[] = ["default", "color", "savanna-mobile", "savanna-web", "custom"];
 
@@ -80,12 +92,21 @@ function readStoredSetting(): WallpaperSetting {
   try {
     const raw = localStorage.getItem(WALLPAPER_STORAGE_KEY);
     if (!raw) return DEFAULT_SETTING;
-    const parsed = JSON.parse(raw) as Partial<WallpaperSetting> | null;
+    const parsed = JSON.parse(raw) as Record<string, unknown> | null;
     if (!parsed || !KINDS.includes(parsed.kind as WallpaperKind)) return DEFAULT_SETTING;
+
+    // Older builds stored a single `customImage`. Treat it as the portrait
+    // slot — the landscape slot then borrows it, which is exactly how that
+    // image behaved before the slots were split.
+    const legacy = typeof parsed.customImage === "string" ? parsed.customImage : null;
+
     return {
       kind: parsed.kind as WallpaperKind,
       color: typeof parsed.color === "string" ? parsed.color : null,
-      customImage: typeof parsed.customImage === "string" ? parsed.customImage : null,
+      customPortrait:
+        typeof parsed.customPortrait === "string" ? parsed.customPortrait : legacy,
+      customLandscape:
+        typeof parsed.customLandscape === "string" ? parsed.customLandscape : null,
     };
   } catch {
     return DEFAULT_SETTING;
@@ -98,7 +119,8 @@ type WallpaperContextValue = {
   activeColor: string | null;
   setColor: (color: string | null) => void;
   setSavannaWallpaper: (kind: "savanna-mobile" | "savanna-web") => void;
-  setCustomImage: (dataUrl: string) => void;
+  setCustomImage: (slot: WallpaperSlot, dataUrl: string) => void;
+  clearCustomImage: (slot: WallpaperSlot) => void;
   resetWallpaper: () => void;
 };
 
@@ -144,7 +166,8 @@ export function WallpaperProvider({ children }: { children: ReactNode }) {
     // The wallpaper lives behind the chat thread only. The data attribute is
     // what gates the CSS: with no wallpaper chosen the attribute is absent and
     // the thread keeps its regular opaque theme background.
-    root.dataset.wallpaper = setting.kind === "color" ? "color" : "image";
+    root.dataset.wallpaper =
+      setting.kind === "color" ? "color" : setting.kind === "custom" ? "custom" : "image";
     if (setting.kind === "color" && setting.color) {
       root.style.setProperty("--savanna-wallpaper-color", setting.color);
     } else {
@@ -160,26 +183,57 @@ export function WallpaperProvider({ children }: { children: ReactNode }) {
       root.style.setProperty("--savanna-wallpaper-image-portrait", `url("${portraitImage}")`);
       root.style.setProperty("--savanna-wallpaper-image-landscape", `url("${landscapeImage}")`);
       image = `url("${prefersLandscapeWallpaper ? landscapeImage : portraitImage}")`;
+    } else if (setting.kind === "custom") {
+      // An upload fills whichever orientation the person provided and borrows
+      // the other, so a single image still covers both.
+      const portrait = setting.customPortrait ?? setting.customLandscape;
+      const landscape = setting.customLandscape ?? setting.customPortrait;
+      if (portrait && landscape) {
+        // Both slots are published explicitly. This previously relied on
+        // `var(--savanna-wallpaper-image-landscape, var(--savanna-wallpaper-image))`
+        // falling back for custom art — which silently produced no wallpaper at
+        // all once the value was long enough for the browser to drop it.
+        root.style.setProperty("--savanna-wallpaper-image-portrait", `url("${portrait}")`);
+        root.style.setProperty("--savanna-wallpaper-image-landscape", `url("${landscape}")`);
+        image = `url("${prefersLandscapeWallpaper ? landscape : portrait}")`;
+      } else {
+        root.style.removeProperty("--savanna-wallpaper-image-portrait");
+        root.style.removeProperty("--savanna-wallpaper-image-landscape");
+      }
     } else {
       root.style.removeProperty("--savanna-wallpaper-image-portrait");
       root.style.removeProperty("--savanna-wallpaper-image-landscape");
-      if (setting.kind === "custom" && setting.customImage) {
-        image = `url("${setting.customImage}")`;
-      }
     }
     root.style.setProperty("--savanna-wallpaper-image", image);
   }, [prefersLandscapeWallpaper, setting, theme]);
 
   const setColor = useCallback((color: string | null) => {
-    setSetting(color ? { kind: "color", color, customImage: null } : DEFAULT_SETTING);
+    setSetting(color ? { kind: "color", color, customPortrait: null, customLandscape: null } : DEFAULT_SETTING);
   }, []);
 
   const setSavannaWallpaper = useCallback((kind: "savanna-mobile" | "savanna-web") => {
-    setSetting({ kind, color: null, customImage: null });
+    setSetting({ kind, color: null, customPortrait: null, customLandscape: null });
   }, []);
 
-  const setCustomImage = useCallback((dataUrl: string) => {
-    setSetting({ kind: "custom", color: null, customImage: dataUrl });
+  const setCustomImage = useCallback((slot: WallpaperSlot, dataUrl: string) => {
+    setSetting(previous => ({
+      kind: "custom",
+      color: null,
+      customPortrait: slot === "portrait" ? dataUrl : previous.customPortrait,
+      customLandscape: slot === "landscape" ? dataUrl : previous.customLandscape,
+    }));
+  }, []);
+
+  const clearCustomImage = useCallback((slot: WallpaperSlot) => {
+    setSetting(previous => {
+      const next: WallpaperSetting = {
+        ...previous,
+        customPortrait: slot === "portrait" ? null : previous.customPortrait,
+        customLandscape: slot === "landscape" ? null : previous.customLandscape,
+      };
+      const empty = !next.customPortrait && !next.customLandscape;
+      return empty ? DEFAULT_SETTING : next;
+    });
   }, []);
 
   const resetWallpaper = useCallback(() => setSetting(DEFAULT_SETTING), []);
@@ -190,7 +244,11 @@ export function WallpaperProvider({ children }: { children: ReactNode }) {
         ? prefersLandscapeWallpaper
           ? theme === "dark" ? SAVANNA_WALLPAPERS[1].darkImage : SAVANNA_WALLPAPERS[1].lightImage
           : theme === "dark" ? SAVANNA_WALLPAPERS[0].darkImage : SAVANNA_WALLPAPERS[0].lightImage
-          : setting.kind === "custom" ? setting.customImage : null;
+        : setting.kind === "custom"
+          ? (prefersLandscapeWallpaper
+              ? setting.customLandscape ?? setting.customPortrait
+              : setting.customPortrait ?? setting.customLandscape)
+          : null;
     return {
       setting,
       activeImage,
@@ -198,9 +256,10 @@ export function WallpaperProvider({ children }: { children: ReactNode }) {
       setColor,
       setSavannaWallpaper,
       setCustomImage,
+      clearCustomImage,
       resetWallpaper,
     };
-  }, [prefersLandscapeWallpaper, setting, theme, setColor, setSavannaWallpaper, setCustomImage, resetWallpaper]);
+  }, [prefersLandscapeWallpaper, setting, theme, setColor, setSavannaWallpaper, setCustomImage, clearCustomImage, resetWallpaper]);
 
   return <WallpaperContext.Provider value={value}>{children}</WallpaperContext.Provider>;
 }

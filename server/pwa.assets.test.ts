@@ -644,6 +644,7 @@ describe("Savanna PWA assets", () => {
       profile,
       wallpaperSection,
       wallpaperContext,
+      wallpaperImage,
       styles,
       animatedIcons,
       shops,
@@ -686,6 +687,7 @@ describe("Savanna PWA assets", () => {
       readFile(resolve(projectRoot, "client/src/pages/ProfilePage.tsx"), "utf8"),
       readFile(resolve(projectRoot, "client/src/components/WallpaperSection.tsx"), "utf8"),
       readFile(resolve(projectRoot, "client/src/contexts/WallpaperContext.tsx"), "utf8"),
+      readFile(resolve(projectRoot, "client/src/lib/wallpaper-image.ts"), "utf8"),
       readFile(resolve(projectRoot, "client/src/index.css"), "utf8"),
       readFile(resolve(projectRoot, "client/src/components/AnimatedNavIcons.tsx"), "utf8"),
       readFile(resolve(projectRoot, "client/src/pages/ShopsPage.tsx"), "utf8"),
@@ -1129,7 +1131,28 @@ describe("Savanna PWA assets", () => {
     expect(wallpaperSection).toContain("MAX_CUSTOM_WALLPAPER_BYTES");
     expect(wallpaperSection).toContain("SAVANNA_WALLPAPERS");
     expect(wallpaperSection).toContain("WALLPAPER_COLOR_SWATCHES");
-    expect(wallpaperSection).toContain("setCustomImage(reader.result)");
+    // Uploads are downscaled before they are stored. The browser silently drops
+    // an inline style value past 2^21 characters, so a raw photo's data URL
+    // (about 1.37x the file size) left large custom wallpapers with no
+    // background at all — no error, just `background-image: none`.
+    expect(wallpaperSection).toContain("encodeWallpaperForSlot(file, slot)");
+    expect(wallpaperSection).toContain("inlineStyleAccepts(");
+    expect(wallpaperImage).toContain("MAX_STORED_WALLPAPER_CHARS = 1_400_000");
+    expect(wallpaperImage).toContain('imageOrientation: "from-image"');
+    expect(wallpaperImage).toContain("inlineStyleAccepts");
+    // Portrait and landscape uploads are independent; each borrows the other
+    // when only one has been provided.
+    expect(wallpaperContext).toContain("customPortrait");
+    expect(wallpaperContext).toContain("customLandscape");
+    expect(wallpaperContext).toContain("setting.customPortrait ?? setting.customLandscape");
+    expect(wallpaperContext).toContain("setting.customLandscape ?? setting.customPortrait");
+    expect(wallpaperContext).toContain("clearCustomImage");
+    // A single `customImage` written by an older build migrates to portrait.
+    expect(wallpaperContext).toContain("parsed.customImage");
+    // Uploaded art is tagged distinctly so it is not tiled like the bundled
+    // seamless pattern, which would repeat the photo across the thread.
+    expect(wallpaperContext).toContain('setting.kind === "custom" ? "custom" : "image"');
+    expect(styles).toContain(':root[data-wallpaper="custom"] body .savanna-app .savanna-mobile-conversation');
     expect(wallpaperContext).toContain('window.matchMedia("(min-width: 768px), (orientation: landscape)")');
     expect(wallpaperContext).toContain("prefersLandscapeWallpaper ? landscapeImage : portraitImage");
     expect(wallpaperContext).toContain("setting.kind === \"savanna-mobile\" || setting.kind === \"savanna-web\"");

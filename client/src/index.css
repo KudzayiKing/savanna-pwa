@@ -3669,6 +3669,24 @@ body:has(.savanna-login-screen) {
   }
 }
 
+/* Uploaded art gets `data-wallpaper="custom"` instead of `"image"`, because a
+   person's photo is not the seamless bundled pattern. The tiling treatment
+   above (`contain` + `repeat`) exists so the Savanna motif reads as an all-over
+   print; applied to a photograph it repeats the same picture across the thread.
+   A custom image fills the panel instead. */
+@media (min-width: 768px), (orientation: landscape) {
+  :root[data-wallpaper="custom"] body .savanna-app .savanna-mobile-conversation,
+  :root[data-wallpaper="custom"] body .savanna-app .savanna-desktop-conversation-panel,
+  :root[data-wallpaper="custom"] body .savanna-app .savanna-community-chat-room,
+  .dark[data-wallpaper="custom"] body .savanna-app .savanna-mobile-conversation,
+  .dark[data-wallpaper="custom"] body .savanna-app .savanna-desktop-conversation-panel,
+  .dark[data-wallpaper="custom"] body .savanna-app .savanna-community-chat-room {
+    background-size: cover !important;
+    background-position: center !important;
+    background-repeat: no-repeat !important;
+  }
+}
+
 /* Final chat text contrast guard.
    This lives last because broad dark-mode compatibility rules repaint generic
    paragraph and utility text. Outgoing gold bubbles must keep white copy in
