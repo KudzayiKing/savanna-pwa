@@ -192,6 +192,11 @@ export function WallpaperSection({
             Add a portrait image for phones and a landscape one for desktop — they are independent, and
             leaving one empty makes it reuse the other.
           </p>
+          <p className="mt-1 text-xs text-[#5F6861] dark:text-[#9AA1A6]">
+            Best fit: <span className="font-semibold">1080 × 2340</span> (9:19.5) portrait,{" "}
+            <span className="font-semibold">1800 × 1500</span> (6:5) landscape. Anything close works —
+            the chat is a tall, narrow panel, so a 16:9 image loses about a third of its width.
+          </p>
           <div className="mt-3 space-y-2.5">
             {CUSTOM_SLOTS.map(({ slot, label, audience, thumbClassName, inUse }) => {
               const own = slot === "portrait" ? portrait : landscape;

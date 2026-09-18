@@ -45,8 +45,10 @@ export type WallpaperSlot = "portrait" | "landscape";
  *   than the 16:9 people reach for first. A 16:9 export only shows ~64% of its
  *   width here.
  * - Phones (`.savanna-mobile-conversation`, `h-[100dvh]`): the panel is the
- *   whole viewport, so ~0.45-0.46 on every real handset. That is close to 1:2;
- *   a 9:16 export shows ~82% of its width.
+ *   whole viewport — the bottom nav is `fixed` and floats over it, so it does
+ *   not shorten the box. Real handsets measure **0.450-0.462, i.e. about
+ *   9:19.5**. A 9:16 export shows only ~81% of its width; 1:2 shows ~92%;
+ *   9:19.5 shows ~99%.
  *
  * These are bounding boxes, not crops — the source ratio is preserved, but a box
  * whose ratio matches the container lets the image keep far more pixels. A 6:5
@@ -54,7 +56,7 @@ export type WallpaperSlot = "portrait" | "landscape";
  * 1500px.
  */
 const SLOT_MAX: Record<WallpaperSlot, { width: number; height: number }> = {
-  portrait: { width: 1080, height: 2160 },
+  portrait: { width: 1080, height: 2340 },
   landscape: { width: 1800, height: 1500 },
 };
 
