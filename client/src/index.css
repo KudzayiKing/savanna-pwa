@@ -2430,7 +2430,6 @@ body:has(.savanna-login-screen) {
 
   .dark .savanna-app .savanna-desktop-chat-search svg,
   .dark .savanna-app .savanna-mobile-chat-search svg,
-  .dark .savanna-app .savanna-desktop-chat-search input::placeholder,
   .dark .savanna-app .savanna-desktop-composer input::placeholder {
     color: var(--chat-gold) !important;
     opacity: 1;
@@ -3696,7 +3695,10 @@ body .savanna-app .savanna-chat-search-with-gold-icon input {
 
 body .savanna-app .savanna-desktop-chat-search input::placeholder,
 body .savanna-app .savanna-chat-search-with-gold-icon input::placeholder,
-body .savanna-app input[aria-label="Search conversations"]::placeholder {
+body .savanna-app input[aria-label="Search conversations"]::placeholder,
+.dark body .savanna-app .savanna-desktop-chat-search input::placeholder,
+.dark body .savanna-app .savanna-chat-search-with-gold-icon input::placeholder,
+.dark body .savanna-app input[aria-label="Search conversations"]::placeholder {
   color: #9aa1a6 !important;
   opacity: 1 !important;
 }
