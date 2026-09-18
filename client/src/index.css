@@ -3703,6 +3703,20 @@ body .savanna-app input[aria-label="Search conversations"]::placeholder,
   opacity: 1 !important;
 }
 
+/* The same control on phones. The mobile hierarchy block inside
+   `@media (max-width: 1023px)` remaps
+   `label:has(input[aria-label="Search chats or people"])` — which IS the mobile
+   search — onto `--chat-text-secondary`, and the `:has()` argument gives that
+   selector one more element than the guard above, so it wins on specificity
+   alone. Repeating `body` in the chain restores the margin and keeps the
+   placeholder at `#9aa1a6`, matching the `dark:placeholder:text-[#9AA1A6]`
+   class on the input itself. Light mode deliberately keeps its own `#5F6861`
+   cream-pill tone, so this guard is dark-only. */
+.dark body .savanna-app label:has(input[aria-label="Search chats or people"]) input::placeholder {
+  color: #9aa1a6 !important;
+  opacity: 1 !important;
+}
+
 .dark body .savanna-app .savanna-chat-search-with-gold-icon input {
   color: #F0F2F5 !important;
 }
